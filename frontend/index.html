@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#071626" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="AquaPulse - App PWA inteligente para acuaristas de arrecife y agua dulce. Predicción de consumo y cambios de agua." />
+    <link rel="manifest" href="/manifest.json" />
+    <title>AquaPulse | Smart Aquarium & Reef Assistant</title>
+  </head>
+  <body class="bg-ocean-950 text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white antialiased font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Registro de Service Worker para capacidades PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(
+            (reg) => console.log('AquaPulse PWA Service Worker registrado con éxito:', reg.scope),
+            (err) => console.log('Fallo al registrar Service Worker:', err)
+          );
+        });
+      }
+    </script>
+  </body>
+</html>

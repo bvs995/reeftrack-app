@@ -1,0 +1,24 @@
+{
+  "name": "AquaPulse - Aquarium & Reef Tracker",
+  "short_name": "AquaPulse",
+  "description": "PWA predictiva para acuaristas de arrecife y agua dulce con cálculo de tasas de consumo y cambios de agua.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071626",
+  "theme_color": "#0d253f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

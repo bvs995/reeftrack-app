@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 🐘 Base de Datos PostgreSQL para entorno local o staging
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: aquapulse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aquatracker
+      POSTGRES_USER: aquapulse
+      POSTGRES_PASSWORD: aquapulse_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aquapulse -d aquatracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # 🌊 AquaPulse Backend FastAPI
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aquapulse-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://aquapulse:aquapulse_dev_password@postgres:5432/aquatracker
+      - ALLOWED_ORIGINS=*
+      - PORT=8000
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=20
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    driver: local

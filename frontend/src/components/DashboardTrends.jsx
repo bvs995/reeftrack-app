@@ -1,0 +1,664 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+import {
+  TrendingDown,
+  TrendingUp,
+  AlertTriangle,
+  Droplets,
+  Calendar,
+  Sparkles,
+  ShieldCheck,
+  ShieldAlert,
+  Activity,
+  ArrowRight,
+  RefreshCw,
+  Info,
+  Camera
+} from 'lucide-react';
+import { fetchPredictions, fetchMeasurements } from '../api';
+
+// Registrar plugins requeridos de Chart.js
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+export default function DashboardTrends({
+  predictions: propPredictions = null,
+  measurements: propMeasurements = null,
+  onOpenQuickLog = null,
+  onOpenWaterChange = null
+}) {
+  const [predictions, setPredictions] = useState(propPredictions);
+  const [measurements, setMeasurements] = useState(propMeasurements || []);
+  const [loading, setLoading] = useState(!propPredictions);
+  const [activeParam, setActiveParam] = useState('dkh'); // 'dkh', 'calcium', 'nitrate', 'magnesium', 'phosphate', 'salinity'
+
+  const triggerHaptic = (ms = 15) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(ms);
+    }
+  };
+
+  useEffect(() => {
+    if (!propPredictions || !propMeasurements) {
+      loadData();
+    } else {
+      setPredictions(propPredictions);
+      setMeasurements(propMeasurements);
+      setLoading(false);
+    }
+  }, [propPredictions, propMeasurements]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [preds, meas] = await Promise.all([
+        fetchPredictions(),
+        fetchMeasurements(50, 'asc')
+      ]);
+      setPredictions(preds);
+      setMeasurements(meas);
+    } catch (err) {
+      console.error('Error al cargar datos de tendencias:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Parámetros disponibles y sus configuraciones
+  const PARAM_CONFIG = {
+    dkh: {
+      key: 'alkalinity_dkh',
+      name: 'Alcalinidad (dKH)',
+      shortName: 'Alcalinidad',
+      unit: 'dKH',
+      safeMin: 7.5,
+      safeMax: 9.0,
+      step: 0.1,
+      color: '#00f2fe',
+      predictionData: predictions?.alkalinity
+    },
+    calcium: {
+      key: 'calcium_ppm',
+      name: 'Calcio (Ca)',
+      shortName: 'Calcio',
+      unit: 'ppm',
+      safeMin: 400.0,
+      safeMax: 450.0,
+      step: 1.0,
+      color: '#10b981',
+      predictionData: predictions?.calcium
+    },
+    nitrate: {
+      key: 'nitrate_ppm',
+      name: 'Nitratos (NO3)',
+      shortName: 'Nitratos',
+      unit: 'ppm',
+      safeMin: 2.0,
+      safeMax: 20.0,
+      step: 0.1,
+      color: '#f59e0b',
+      predictionData: null
+    },
+    magnesium: {
+      key: 'magnesium_ppm',
+      name: 'Magnesio (Mg)',
+      shortName: 'Magnesio',
+      unit: 'ppm',
+      safeMin: 1280.0,
+      safeMax: 1420.0,
+      step: 5.0,
+      color: '#38bdf8',
+      predictionData: null
+    },
+    phosphate: {
+      key: 'phosphate_ppm',
+      name: 'Fosfatos (PO4)',
+      shortName: 'Fosfatos',
+      unit: 'ppm',
+      safeMin: 0.02,
+      safeMax: 0.08,
+      step: 0.01,
+      color: '#c084fc',
+      predictionData: null
+    },
+    salinity: {
+      key: 'salinity_ppt',
+      name: 'Salinidad (SG / ppt)',
+      shortName: 'Salinidad',
+      unit: 'SG / ppt',
+      safeMin: 1.024,
+      safeMax: 1.026,
+      step: 0.001,
+      color: '#0ea5e9',
+      predictionData: null
+    }
+  };
+
+  const currentParam = PARAM_CONFIG[activeParam] || PARAM_CONFIG.dkh;
+
+  // Filtrar lecturas válidas para el parámetro activo
+  const validReadings = useMemo(() => {
+    return measurements
+      .filter(m => m[currentParam.key] !== null && m[currentParam.key] !== undefined)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }, [measurements, currentParam.key]);
+
+  // Calcular la pendiente local para proyección de 3 días si no viene precalculada
+  const localSlope = useMemo(() => {
+    if (validReadings.length < 2) return 0;
+    const recent = validReadings.slice(-5);
+    const t0 = new Date(recent[0].timestamp).getTime() / 86400000;
+    const points = recent.map(r => [
+      (new Date(r.timestamp).getTime() / 86400000) - t0,
+      Number(r[currentParam.key])
+    ]);
+    const n = points.length;
+    const sumX = points.reduce((acc, p) => acc + p[0], 0);
+    const sumY = points.reduce((acc, p) => acc + p[1], 0);
+    const sumXY = points.reduce((acc, p) => acc + p[0] * p[1], 0);
+    const sumX2 = points.reduce((acc, p) => acc + p[0] ** 2, 0);
+    const den = (n * sumX2 - sumX ** 2);
+    if (Math.abs(den) < 1e-9) return 0;
+    return (n * sumXY - sumX * sumY) / den;
+  }, [validReadings, currentParam.key]);
+
+  // Configurar datasets de Chart.js con la zona segura sombreada y línea punteada de 3 días
+  const chartData = useMemo(() => {
+    if (validReadings.length === 0) return null;
+
+    // 1. Fechas reales
+    const realLabels = validReadings.map(r => {
+      const d = new Date(r.timestamp);
+      return `${d.getDate()}/${d.getMonth() + 1}`;
+    });
+    const realValues = validReadings.map(r => Number(r[currentParam.key]));
+
+    // 2. Fechas de proyección para los próximos 3 días
+    const lastDate = new Date(validReadings[validReadings.length - 1].timestamp);
+    const projLabels = [];
+    const projValues = new Array(realValues.length - 1).fill(null);
+    const lastValue = realValues[realValues.length - 1];
+
+    // Conectar el último punto real con el inicio de la línea de proyección
+    projValues.push(lastValue);
+
+    for (let day = 1; day <= 3; day++) {
+      const futureDate = new Date(lastDate);
+      futureDate.setDate(futureDate.getDate() + day);
+      projLabels.push(`+${day}d (${futureDate.getDate()}/${futureDate.getMonth() + 1})`);
+      
+      const projectedVal = lastValue + localSlope * day;
+      projValues.push(Number(projectedVal.toFixed(3)));
+    }
+
+    const allLabels = [...realLabels, ...projLabels];
+
+    // 3. Zona Segura (Banda sombreada horizontal en verde traslúcido)
+    const safeZoneMaxArray = new Array(allLabels.length).fill(currentParam.safeMax);
+    const safeZoneMinArray = new Array(allLabels.length).fill(currentParam.safeMin);
+
+    return {
+      labels: allLabels,
+      datasets: [
+        // Banda Superior de Zona Segura (invisible, sirve de techo para el fill)
+        {
+          label: 'Límite Superior Seguro',
+          data: safeZoneMaxArray,
+          borderColor: 'rgba(16, 185, 129, 0.35)',
+          borderWidth: 1,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+        },
+        // Banda Inferior de Zona Segura con sombreado verde claro traslúcido hasta la banda superior (-1)
+        {
+          label: 'Rango Seguro',
+          data: safeZoneMinArray,
+          borderColor: 'rgba(16, 185, 129, 0.35)',
+          borderWidth: 1,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+          fill: '-1', // Rellena hacia el dataset anterior (Límite Superior)
+        },
+        // Medición Real del Acuarista
+        {
+          label: `Medición Real (${currentParam.unit})`,
+          data: [...realValues, null, null, null],
+          borderColor: currentParam.color,
+          backgroundColor: `${currentParam.color}22`,
+          borderWidth: 3,
+          pointBackgroundColor: currentParam.color,
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          tension: 0.3,
+          fill: false,
+        },
+        // Línea Punteada de Proyección a 3 Días
+        {
+          label: `Proyección 3 Días (${localSlope >= 0 ? '+' : ''}${localSlope.toFixed(2)} ${currentParam.unit}/día)`,
+          data: projValues,
+          borderColor: localSlope < 0 ? '#f59e0b' : '#38bdf8',
+          borderWidth: 2.5,
+          borderDash: [6, 6],
+          pointBackgroundColor: localSlope < 0 ? '#f59e0b' : '#38bdf8',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1.5,
+          pointRadius: 4.5,
+          pointHoverRadius: 7,
+          tension: 0.1,
+          fill: false,
+        }
+      ]
+    };
+  }, [validReadings, currentParam, localSlope]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: '#cbd5e1',
+          font: { size: 11, weight: '700' },
+          usePointStyle: true,
+          filter: (legendItem) => legendItem.text !== 'Límite Superior Seguro'
+        }
+      },
+      tooltip: {
+        backgroundColor: '#0f172a',
+        titleColor: '#00f2fe',
+        bodyColor: '#f8fafc',
+        borderColor: '#334155',
+        borderWidth: 1.5,
+        padding: 12,
+        callbacks: {
+          label: (context) => {
+            if (context.parsed.y === null) return null;
+            return `${context.dataset.label}: ${context.parsed.y} ${currentParam.unit}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
+      },
+      y: {
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
+        suggestedMin: currentParam.safeMin * 0.9,
+        suggestedMax: currentParam.safeMax * 1.1
+      }
+    }
+  };
+
+  // Datos para las tarjetas predictivas superiores
+  const alk = predictions?.alkalinity;
+  const wc = predictions?.water_change_prediction;
+
+  // Formatear recomendación de próxima medición para dKH
+  const formatNextTestRecommendation = () => {
+    if (!alk?.latest_value) {
+      return 'Registrar primera medición';
+    }
+    if (alk?.days_remaining_safe === null || alk?.days_remaining_safe === undefined) {
+      return 'Medir en 24 a 48 horas (Monitoreo)';
+    }
+    const days = Number(alk.days_remaining_safe);
+    const testDay = new Date();
+    testDay.setDate(testDay.getDate() + Math.max(1, Math.floor(days * 0.7)));
+    const weekday = testDay.toLocaleDateString('es-ES', { weekday: 'long' });
+    const dayDate = testDay.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    return `Medir de nuevo el ${capitalizedWeekday}, ${dayDate}`;
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 py-4 pb-28">
+      {/* Banner de Estado de Confianza Estadística para Nuevas Bases de Datos */}
+      {predictions && (predictions.confidence_level === 'low' || (predictions.total_measurements || 0) < 3) && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Info className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              {predictions.confidence_message || 'Se necesitan al menos 3 mediciones recientes para proyectar con alta confianza estadística.'}
+            </span>
+          </div>
+          {onOpenQuickLog && (
+            <button
+              type="button"
+              onClick={onOpenQuickLog}
+              className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-marine-950 font-black rounded-lg text-[11px] self-start sm:self-auto shrink-0 active:scale-95 transition"
+            >
+              + Registrar Medición
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ---------------- 1. TARJETAS DE ALERTA PREDICTIVA (ARRIBA) ---------------- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Tarjeta 1: Consumo Diario de Alcalinidad / Buffer */}
+        <div className="glass-panel rounded-3xl p-5 border border-cyan-500/40 bg-gradient-to-br from-marine-900/95 via-marine-850 to-marine-900 shadow-neon-cyan relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="space-y-3 relative z-10">
+            {/* Header con tasa de consumo */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
+                  Consumo de Alcalinidad
+                </span>
+              </div>
+
+              {/* Tasa calculada en formato destacado */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80">
+                {alk?.daily_slope !== null && alk?.daily_slope !== undefined && alk.daily_slope < 0 ? (
+                  <TrendingDown className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <TrendingUp className="w-4 h-4 text-cyan-400" />
+                )}
+                <span className="text-xs sm:text-sm font-black text-white">
+                  {alk?.daily_consumption_rate !== null && alk?.daily_consumption_rate !== undefined
+                    ? `Consumo: -${alk.daily_consumption_rate} dKH / día`
+                    : 'Consumo: Sin datos suficientes'}
+                </span>
+              </div>
+            </div>
+
+            {/* Mensaje Predictivo Dinámico */}
+            <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1.5">
+              <p className="text-xs sm:text-sm text-slate-200 font-semibold leading-relaxed">
+                {alk?.latest_value === null || alk?.latest_value === undefined ? (
+                  'Aún no hay mediciones registradas. Ingresa lecturas de dKH para activar el cálculo de consumo.'
+                ) : alk?.days_remaining_safe !== null && alk?.days_remaining_safe !== undefined ? (
+                  <>
+                    A este ritmo, tu alcalinidad alcanzará el límite inferior de{' '}
+                    <strong className="text-amber-400">7.5 dKH</strong> en{' '}
+                    <strong className="text-cyan-300">
+                      {alk.days_remaining_safe} {alk.days_remaining_safe === 1 ? 'día' : 'días'}
+                    </strong>.
+                  </>
+                ) : alk?.status === 'insufficient_data' ? (
+                  'Se requieren al menos 2 mediciones consecutivas para deducir la tasa de consumo diario.'
+                ) : (
+                  'Tu alcalinidad se encuentra actualmente dentro del rango seguro (7.5 - 9.0 dKH).'
+                )}
+              </p>
+
+              <div className="pt-1 flex items-center gap-1.5 text-xs font-extrabold text-cyan-400">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>Recomendación: {formatNextTestRecommendation()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-marine-800 flex items-center justify-between text-xs">
+            <span className="text-slate-400 font-medium">
+              Última lectura:{' '}
+              <strong className="text-white">
+                {alk?.latest_value !== null && alk?.latest_value !== undefined ? `${alk.latest_value} dKH` : 'Sin mediciones'}
+              </strong>
+            </span>
+            <button
+              onClick={() => {
+                triggerHaptic();
+                setActiveParam('dkh');
+              }}
+              className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
+            >
+              Ver curva <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Tarjeta 2: Predicción de Nitratos & Cambio de Agua */}
+        <div className="glass-panel rounded-3xl p-5 border border-amber-500/40 bg-gradient-to-br from-marine-900/95 via-marine-850 to-marine-900 shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="space-y-3 relative z-10">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                  <Droplets className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                  Acumulación de Nitratos
+                </span>
+              </div>
+
+              {wc?.daily_accumulation_rate !== null && wc?.daily_accumulation_rate !== undefined ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80">
+                  <TrendingUp className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs sm:text-sm font-black text-amber-300">
+                    +{Number((wc.daily_accumulation_rate * 7).toFixed(1))} ppm / semana
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80 text-xs text-slate-400 font-semibold">
+                  <span>Sin tendencia</span>
+                </div>
+              )}
+            </div>
+
+            {/* Mensaje de Alerta de Cambio de Agua */}
+            <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1.5">
+              <p className="text-xs sm:text-sm text-slate-200 font-semibold leading-relaxed">
+                {wc?.current_nitrate_ppm === null || wc?.current_nitrate_ppm === undefined ? (
+                  'Sin registros de nitratos. Ingresa lecturas de NO3 para predecir la acumulación y cambios de agua.'
+                ) : wc?.urgency === 'immediate' ? (
+                  <>
+                    <strong className="text-coral-400">Atención:</strong> Nitratos por encima de 20 ppm ({wc.current_nitrate_ppm} ppm). Cambio de agua del {wc.suggested_percentage || 20}% sugerido de inmediato.
+                  </>
+                ) : wc?.days_until_threshold !== null && wc?.days_until_threshold !== undefined ? (
+                  <>
+                    Nitratos en tendencia alcista (
+                    <strong className="text-amber-400">
+                      +{Number(((wc.daily_accumulation_rate || 0) * 7).toFixed(1))} ppm/semana
+                    </strong>
+                    ). Cambio de agua sugerido en{' '}
+                    <strong className="text-cyan-300">
+                      {wc.days_until_threshold} {wc.days_until_threshold === 1 ? 'día' : 'días'}
+                    </strong>{' '}
+                    {wc.suggested_water_change_date ? `(${wc.suggested_water_change_date})` : ''}.
+                  </>
+                ) : (
+                  'Nivel de nitratos controlado y dentro del umbral de bioseguridad (< 20 ppm).'
+                )}
+              </p>
+
+              <div className="pt-1 flex items-center gap-1.5 text-xs font-extrabold text-amber-400">
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Fecha estimada:{' '}
+                  {wc?.suggested_water_change_date
+                    ? wc.suggested_water_change_date
+                    : wc?.current_nitrate_ppm !== null && wc?.current_nitrate_ppm !== undefined
+                    ? 'Rutina en 14 días'
+                    : 'Pendiente de mediciones'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-marine-800 flex items-center justify-between text-xs">
+            <span className="text-slate-400 font-medium">
+              Lectura actual:{' '}
+              <strong className="text-white">
+                {wc?.current_nitrate_ppm !== null && wc?.current_nitrate_ppm !== undefined
+                  ? `${wc.current_nitrate_ppm} ppm`
+                  : 'Sin datos'}
+              </strong>
+            </span>
+            <button
+              onClick={() => {
+                triggerHaptic();
+                setActiveParam('nitrate');
+              }}
+              className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
+            >
+              Ver acumulación <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------- 2. SELECTOR DE PARÁMETRO INTERACTIVO ---------------- */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {Object.entries(PARAM_CONFIG).map(([key, config]) => {
+          const isSelected = activeParam === key;
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                triggerHaptic();
+                setActiveParam(key);
+              }}
+              className={`min-h-[46px] flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all border select-none active:scale-95 ${
+                isSelected
+                  ? 'bg-cyan-500/25 border-cyan-400 text-white shadow-neon-cyan ring-2 ring-cyan-400/40'
+                  : 'bg-marine-900 border-marine-700/80 text-slate-400 hover:text-slate-200 hover:bg-marine-850'
+              }`}
+            >
+              <span>{config.shortName}</span>
+              <span className="text-[11px] font-bold text-cyan-400">({config.unit})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ---------------- 3. GRÁFICA INTERACTIVA CON ZONA SEGURA & PROYECCIÓN ---------------- */}
+      <div className="glass-panel rounded-3xl p-5 sm:p-7 border border-marine-700/80 space-y-4 shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-marine-800">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                {currentParam.name}
+              </h2>
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                Zona Segura: {currentParam.safeMin} - {currentParam.safeMax} {currentParam.unit}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 font-medium">
+              Serie histórica con <strong className="text-emerald-400">franja verde de rango seguro</strong> y <strong className="text-amber-400">proyección punteada a 3 días</strong>.
+            </p>
+          </div>
+
+          {/* Quick Metrics & Actions */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {onOpenQuickLog && (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(25);
+                  onOpenQuickLog();
+                }}
+                className="btn-touch py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-marine-950 font-black text-xs shadow-neon-cyan flex items-center gap-1.5 active:scale-95"
+              >
+                <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Escanear / Registrar</span>
+              </button>
+            )}
+
+            <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right">
+              <span className="block text-[10px] font-black uppercase text-slate-400">Pendiente Diaria</span>
+              <span className={`text-sm font-black flex items-center justify-end gap-1 ${
+                localSlope < 0 ? 'text-amber-400' : 'text-cyan-400'
+              }`}>
+                {localSlope < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
+                {localSlope > 0 ? '+' : ''}{localSlope.toFixed(3)} {currentParam.unit}/d
+              </span>
+            </div>
+
+            <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right">
+              <span className="block text-[10px] font-black uppercase text-slate-400">Proyección +3 Días</span>
+              <span className="text-sm font-black text-white">
+                {validReadings.length > 0
+                  ? `${(Number(validReadings[validReadings.length - 1][currentParam.key]) + localSlope * 3).toFixed(2)} ${currentParam.unit}`
+                  : '--'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Canvas de Chart.js */}
+        <div className="h-80 sm:h-96 w-full pt-1">
+          {loading ? (
+            <div className="h-full flex items-center justify-center text-slate-400 gap-2">
+              <Activity className="w-6 h-6 animate-spin text-cyan-400" />
+              <span className="text-xs font-semibold">Generando proyección matemática...</span>
+            </div>
+          ) : !chartData ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+              <Info className="w-8 h-8 text-slate-500" />
+              <p className="text-xs font-semibold">No hay mediciones registradas para {currentParam.name}.</p>
+            </div>
+          ) : (
+            <Line data={chartData} options={chartOptions} />
+          )}
+        </div>
+
+        {/* Leyenda Explicativa de la Gráfica */}
+        <div className="pt-3 border-t border-marine-800 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-cyan-400" />
+              <span className="text-slate-300 font-semibold">Medición Real</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400" />
+              <span className="text-slate-300 font-semibold">Proyección Punteada (+3 días)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/40" />
+              <span className="text-slate-300 font-semibold">Zona de Rango Seguro</span>
+            </div>
+          </div>
+
+          <button
+            onClick={loadData}
+            className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-cyan-300 transition"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Actualizar Gráfica</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,43 @@
+services:
+  # ============================================================================
+  # 🌊 AquaPulse Backend - FastAPI Predictive Service
+  # ============================================================================
+  - type: web
+    name: aquapulse-backend
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 2
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aquapulse-postgres
+          property: connectionString
+      - key: ALLOWED_ORIGINS
+        value: "*" # Configura aquí la URL de tu frontend en Vercel (ej: https://aquapulse.vercel.app)
+      - key: GEMINI_API_KEY
+        sync: false # Pega aquí tu API Key de Gemini en el panel de Render
+      - key: VISION_MODEL
+        value: gemini-3.1-flash-lite
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "10"
+
+databases:
+  # ============================================================================
+  # 🐘 PostgreSQL Database en Render
+  # ============================================================================
+  - name: aquapulse-postgres
+    databaseName: aquatracker
+    user: aquapulse_admin
+    region: oregon
+    plan: free
+    postgresMajorVersion: 16

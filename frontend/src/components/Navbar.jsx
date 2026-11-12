@@ -1,0 +1,107 @@
+import React from 'react';
+import { Waves, Plus, ChevronDown, Sparkles, RefreshCw, Bell } from 'lucide-react';
+
+export default function Navbar({
+  tanks,
+  activeTank,
+  onSelectTank,
+  onOpenNewTankModal,
+  onOpenNotificationModal,
+  onRefresh,
+  loading
+}) {
+  const triggerHaptic = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(15);
+    }
+  };
+
+  return (
+    <header className="sticky top-0 z-40 bg-marine-950/90 backdrop-blur-xl border-b border-marine-800/90 px-3 sm:px-6 py-3 shadow-lg">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+        {/* Brand Náutico Neón */}
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-400 to-emerald-400 flex items-center justify-center shadow-neon-cyan border border-white/20">
+            <Waves className="w-6 h-6 text-marine-950 stroke-[2.5]" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-black text-xl tracking-tight bg-gradient-to-r from-cyan-300 via-sky-200 to-emerald-300 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(6,182,212,0.5)]">
+                AquaPulse
+              </span>
+              <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">
+                PWA
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+              Panel Inteligente para Acuarios de Arrecife y Agua Dulce
+            </p>
+          </div>
+        </div>
+
+        {/* Selector de Acuario & Acciones Táctiles */}
+        <div className="flex items-center gap-2">
+          {tanks.length > 0 && (
+            <div className="relative">
+              <select
+                value={activeTank ? activeTank.id : ''}
+                onChange={(e) => {
+                  triggerHaptic();
+                  const selected = tanks.find(t => t.id === parseInt(e.target.value));
+                  if (selected) onSelectTank(selected);
+                }}
+                className="appearance-none min-h-[44px] bg-marine-900 text-slate-100 text-xs sm:text-sm font-bold pl-3.5 pr-9 py-2 rounded-2xl border border-marine-700 hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 cursor-pointer transition shadow-inner"
+              >
+                {tanks.map((tank) => (
+                  <option key={tank.id} value={tank.id}>
+                    {tank.name} ({tank.volume_liters}L)
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-cyan-400 absolute right-3 top-3.5 pointer-events-none" />
+            </div>
+          )}
+
+          {/* Botón de Notificaciones */}
+          <button
+            onClick={() => {
+              triggerHaptic();
+              if (onOpenNotificationModal) onOpenNotificationModal();
+            }}
+            title="Configurar recordatorios de medición"
+            className="w-11 h-11 rounded-2xl bg-marine-900 border border-marine-700/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-400 flex items-center justify-center transition active:scale-90"
+            aria-label="Configurar recordatorios"
+          >
+            <Bell className="w-4 h-4 text-cyan-400" />
+          </button>
+
+          {/* Botón de Recarga */}
+          <button
+            onClick={() => {
+              triggerHaptic();
+              onRefresh();
+            }}
+            disabled={loading}
+            title="Recargar telemetría"
+            className="w-11 h-11 rounded-2xl bg-marine-900 border border-marine-700/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-400 flex items-center justify-center transition active:scale-90 disabled:opacity-50"
+            aria-label="Recargar telemetría"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
+          </button>
+
+          {/* Botón Nuevo Acuario */}
+          <button
+            onClick={() => {
+              triggerHaptic();
+              onOpenNewTankModal();
+            }}
+            className="min-h-[44px] px-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-marine-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-neon-cyan active:scale-95 transition"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span className="hidden sm:inline">Nuevo Acuario</span>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}

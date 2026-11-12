@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-marine-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* Glassmorphism Náutico Neón */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+}
+
+.glass-panel-hover {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: rgba(6, 182, 212, 0.55);
+  box-shadow: 0 10px 30px -5px rgba(6, 182, 212, 0.18);
+}
+
+/* Estilos de Botones Táctiles para Dedos Mojados */
+.btn-touch {
+  @apply min-h-[50px] px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2.5 transition-all select-none active:scale-[0.97] active:ring-4 text-sm sm:text-base cursor-pointer;
+}
+
+.btn-touch-primary {
+  @apply btn-touch bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-marine-950 font-black shadow-neon-cyan active:ring-cyan-400/40;
+}
+
+.btn-touch-secondary {
+  @apply btn-touch bg-marine-800 hover:bg-marine-700 text-slate-200 border border-marine-700/80 active:ring-cyan-500/20;
+}
+
+.btn-touch-danger {
+  @apply btn-touch bg-coral-500/20 text-coral-400 border border-coral-500/40 hover:bg-coral-500/30 active:ring-coral-500/30;
+}
+
+/* Botones de incremento rápido para mediciones con una sola mano */
+.quick-bump {
+  @apply min-h-[46px] min-w-[54px] px-3 py-2 text-sm font-extrabold rounded-xl bg-marine-800 text-slate-200 border border-marine-700 hover:border-cyan-400 hover:text-cyan-300 transition-all active:scale-95 active:bg-cyan-500 active:text-marine-950 flex items-center justify-center cursor-pointer shadow-sm;
+}
+.quick-bump.active {
+  @apply bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-neon-cyan;
+}
+
+/* Botón de Teclado Numérico Táctil Virtual */
+.numpad-key {
+  @apply min-h-[54px] rounded-xl bg-marine-800/90 hover:bg-marine-700 border border-marine-700/80 active:bg-cyan-500 active:text-marine-950 text-white font-extrabold text-lg sm:text-xl flex items-center justify-center transition-all select-none shadow-sm cursor-pointer;
+}
+
+/* Scrollbars Náuticas */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+}
+
+/* Safe areas para pantallas modernas con Notch */
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+}
