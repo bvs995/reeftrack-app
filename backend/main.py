@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, status
@@ -7,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("aquapulse.main")
 
 from backend.database import get_db, init_db, check_db_connection
 from backend.models import (
@@ -87,13 +90,21 @@ async def validation_exception_handler(request, exc: RequestValidationError):
 
 @app.on_event("startup")
 def startup_event():
-    # Inicializa las tablas de SQLAlchemy y agrega datos iniciales si está vacía
-    init_db()
-    db = next(get_db())
+    # Inicializa las tablas de SQLAlchemy y auto-migraciones de forma defensiva
     try:
-        seed_database_if_empty(db)
-    finally:
-        db.close()
+        init_db()
+    except Exception as e:
+        logger.error(f"Error durante init_db en startup: {e}")
+
+    # Sembrado inicial de datos seguro y no bloqueante
+    try:
+        db = next(get_db())
+        try:
+            seed_database_if_empty(db)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Aviso durante seed_database_if_empty en startup: {e}")
 
 @app.get("/api/health")
 def health_check():

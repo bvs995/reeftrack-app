@@ -58,7 +58,11 @@ def get_db() -> Generator:
 
 def init_db():
     """Crea las tablas en la base de datos si aún no existen y migra columnas requeridas."""
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as ddl_err:
+        logger.info(f"Aviso durante create_all (posible creación concurrente por otro worker): {ddl_err}")
+
     try:
         inspector = inspect(engine)
         table_names = inspector.get_table_names()
@@ -74,7 +78,7 @@ def init_db():
                     conn.execute(text("ALTER TABLE measurements ADD COLUMN tank_id INTEGER;"))
                     logger.info("Auto-migración: Columna tank_id añadida a measurements.")
 
-        # Auto-migración para users (campo is_admin e is_active)
+        # Auto-migración para users (campos requeridos con defaults seguros)
         if "users" in table_names:
             user_columns = [c["name"] for c in inspector.get_columns("users")]
             with engine.begin() as conn:
@@ -84,6 +88,21 @@ def init_db():
                 if "is_active" not in user_columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;"))
                     logger.info("Auto-migración: Columna is_active añadida a users.")
+                if "unit_preference" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN unit_preference VARCHAR(50) DEFAULT 'liters';"))
+                    logger.info("Auto-migración: Columna unit_preference añadida a users.")
+                if "subscription_tier" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN subscription_tier VARCHAR(50) DEFAULT 'free';"))
+                    logger.info("Auto-migración: Columna subscription_tier añadida a users.")
+
+                # Saneamiento de posibles valores nulos preexistentes para evitar IntegrityError
+                try:
+                    conn.execute(text("UPDATE users SET is_admin = FALSE WHERE is_admin IS NULL;"))
+                    conn.execute(text("UPDATE users SET is_active = TRUE WHERE is_active IS NULL;"))
+                    conn.execute(text("UPDATE users SET unit_preference = 'liters' WHERE unit_preference IS NULL;"))
+                    conn.execute(text("UPDATE users SET subscription_tier = 'free' WHERE subscription_tier IS NULL;"))
+                except Exception as sanitize_err:
+                    logger.debug(f"Aviso en saneamiento users: {sanitize_err}")
     except Exception as e:
         logger.warning(f"Aviso durante auto-migración de tablas: {e}")
 
