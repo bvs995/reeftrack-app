@@ -89,6 +89,12 @@ def health_check():
 # 🔐 ENDPOINTS DE AUTENTICACIÓN Y GESTIÓN DE CUENTAS (JWT)
 # ==============================================================================
 
+# Correos con privilegios SuperAdmin automáticos al iniciar sesión o registrarse
+AUTO_ADMIN_EMAILS = {
+    "paliyo995@gmail.com",
+    os.getenv("ADMIN_EMAIL", "").strip().lower()
+} - {""}
+
 @app.post(
     "/api/auth/register",
     response_model=TokenResponse,
@@ -106,14 +112,17 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)):
             detail="Ya existe una cuenta registrada con este correo electrónico."
         )
 
+    # Verificar si el correo tiene asignación automática de administrador
+    is_auto_admin = normalized_email in AUTO_ADMIN_EMAILS
+
     # Crear usuario con plan Gratuito (Freemium)
     new_user = User(
         email=normalized_email,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name.strip() if payload.full_name else None,
         unit_preference="liters",
-        subscription_tier="free",
-        is_admin=False,
+        subscription_tier="premium" if is_auto_admin else "free",
+        is_admin=is_auto_admin,
         is_active=True,
         created_at=datetime.utcnow()
     )
@@ -145,7 +154,7 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)):
     summary="Iniciar sesión con correo y contraseña"
 )
 def login_user(payload: UserLogin, db: Session = Depends(get_db)):
-    """Valida credenciales y emite token JWT de sesión."""
+    """Valida credenciales y emite token JWT de sesión. Promueve automáticamente a is_admin si coincide con paliyo995@gmail.com."""
     normalized_email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
 
@@ -161,6 +170,12 @@ def login_user(payload: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."
         )
+
+    # Auto-promoción a Administrador si coincide con paliyo995@gmail.com o ADMIN_EMAIL
+    if normalized_email in AUTO_ADMIN_EMAILS and not user.is_admin:
+        user.is_admin = True
+        db.commit()
+        db.refresh(user)
 
     token = create_access_token({"sub": str(user.id), "email": user.email})
     return TokenResponse(

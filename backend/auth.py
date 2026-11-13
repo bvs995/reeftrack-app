@@ -102,6 +102,16 @@ def get_current_user(
             detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."
         )
 
+    # Auto-promoción a Administrador si coincide con paliyo995@gmail.com o ADMIN_EMAIL
+    auto_admin_emails = {
+        "paliyo995@gmail.com",
+        os.getenv("ADMIN_EMAIL", "").strip().lower()
+    } - {""}
+    if user.email and user.email.lower() in auto_admin_emails and not user.is_admin:
+        user.is_admin = True
+        db.commit()
+        db.refresh(user)
+
     return user
 
 def get_current_admin_user(
