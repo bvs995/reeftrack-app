@@ -189,7 +189,22 @@
     "errorEmpty": "Please enter your email and password.",
     "errorFields": "Please fill out all required fields.",
     "errorShortPass": "Password must be at least 6 characters long.",
-    "registerSuccess": "Account created successfully! Welcome to AquaPulse."
+    "registerSuccess": "Account created successfully! Welcome to AquaPulse.",
+    "forgotPassword": "Forgot your password?",
+    "forgotTitle": "Reset Password",
+    "forgotSubtitle": "Enter your email address to receive a secure password recovery link.",
+    "btnSendReset": "Send Recovery Link",
+    "backToLogin": "Back to Login",
+    "devLinkNotice": "Test link (Local Mode without SMTP):",
+    "devLinkAction": "Reset Password Now",
+    "resetTitle": "Reset Password",
+    "resetSubtitle": "Enter a new secure password for your AquaPulse account.",
+    "newPassLabel": "New Password",
+    "confirmPassLabel": "Confirm Password",
+    "btnResetPassword": "Update Password",
+    "errorPassMismatch": "Passwords do not match.",
+    "resetSuccess": "Password updated successfully! You can now log in with your new password.",
+    "resetLinkSent": "If your email is registered, we have generated the reset link."
   },
   "waterChange": {
     "title": "Water Changes & Dilution",

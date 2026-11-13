@@ -83,6 +83,20 @@ function AppContent() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Abrir modal de autenticación o restablecimiento si la URL contiene parámetro
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const resetToken = params.get('reset_token') || params.get('token');
+      const authParam = params.get('auth');
+      if (resetToken) {
+        openAuthModal('reset');
+      } else if (authParam) {
+        openAuthModal(authParam);
+      }
+    }
+  }, [openAuthModal]);
+
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
   const [preselectedCode, setPreselectedCode] = useState(null);
   const [isNewTankOpen, setIsNewTankOpen] = useState(false);

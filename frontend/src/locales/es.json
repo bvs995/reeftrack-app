@@ -189,7 +189,22 @@
     "errorEmpty": "Por favor ingresa tu correo y contraseña.",
     "errorFields": "Por favor completa los campos requeridos.",
     "errorShortPass": "La contraseña debe tener al menos 6 caracteres.",
-    "registerSuccess": "¡Cuenta creada exitosamente! Bienvenido a AquaPulse."
+    "registerSuccess": "¡Cuenta creada exitosamente! Bienvenido a AquaPulse.",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "forgotTitle": "Recuperar Contraseña",
+    "forgotSubtitle": "Ingresa tu correo y te enviaremos un enlace seguro para restablecer tu acceso.",
+    "btnSendReset": "Enviar Enlace de Recuperación",
+    "backToLogin": "Volver a Iniciar Sesión",
+    "devLinkNotice": "Enlace de prueba (Modo Local sin SMTP):",
+    "devLinkAction": "Restablecer Contraseña Ahora",
+    "resetTitle": "Restablecer Contraseña",
+    "resetSubtitle": "Define una nueva contraseña segura para tu cuenta de AquaPulse.",
+    "newPassLabel": "Nueva Contraseña",
+    "confirmPassLabel": "Confirmar Contraseña",
+    "btnResetPassword": "Actualizar Contraseña",
+    "errorPassMismatch": "Las contraseñas no coinciden.",
+    "resetSuccess": "¡Contraseña actualizada con éxito! Ya puedes iniciar sesión con tu nueva contraseña.",
+    "resetLinkSent": "Si tu correo está registrado, hemos generado el enlace de restablecimiento."
   },
   "waterChange": {
     "title": "Cambios de Agua & Dilución",

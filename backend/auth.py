@@ -39,11 +39,46 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Genera un token JWT firmado con expiración estándar."""
+    """Genera un token JWT firmado con expiración estándar para autenticación."""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS))
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "purpose": "access"})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def create_password_reset_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
+    """Genera un token criptográfico firmado temporal (30 min) para restablecimiento de contraseña."""
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=30))
+    payload = {
+        "sub": str(user_id),
+        "email": email.strip().lower(),
+        "purpose": "password_reset",
+        "exp": expire,
+        "iat": datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_password_reset_token(token: str) -> dict:
+    """Valida estrictamente un token de restablecimiento de contraseña."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de restablecimiento ha expirado. Por favor solicita uno nuevo."
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de restablecimiento es inválido o está corrupto."
+        )
+
+    if payload.get("purpose") != "password_reset" or "sub" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token proporcionado no es válido para restablecimiento de contraseña."
+        )
+
+    return payload
 
 def decode_access_token(token: str) -> Optional[dict]:
     """Decodifica y valida la firma y expiración de un token JWT."""
@@ -76,6 +111,14 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sesión expirada o token inválido. Inicia sesión nuevamente.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # Protección de propósito: un token de password_reset NO puede utilizarse como token de acceso
+    if payload.get("purpose") and payload.get("purpose") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tipo de credencial inválido para autenticación.",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
@@ -117,11 +160,18 @@ def get_current_user(
 def get_current_admin_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
-    """Verifica estrictamente que el usuario autenticado tenga privilegios de Administrador."""
-    if not current_user.is_admin:
+    """
+    Verificación criptográfica y estricta de autorización SuperAdmin.
+    Garantiza que ningún usuario normal ni cuenta suspendida acceda a datos protegidos de otros usuarios.
+    """
+    if not current_user or not getattr(current_user, "is_admin", False):
+        logger.warning(
+            f"Intento no autorizado de acceso admin bloqueado por usuario ID: {getattr(current_user, 'id', 'Desconocido')} ({getattr(current_user, 'email', 'Sin correo')})"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso restringido: Se requieren privilegios de Administrador para esta operación."
+            detail="Acceso restringido: Se requieren privilegios de Administrador para esta operación.",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     return current_user
 

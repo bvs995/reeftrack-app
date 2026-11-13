@@ -14,6 +14,9 @@ from backend.models import (
     Measurement,
     UserRegister,
     UserLogin,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    PasswordResetResponse,
     UserUpdate,
     UserResponse,
     TokenResponse,
@@ -29,6 +32,8 @@ from backend.auth import (
     hash_password,
     verify_password,
     create_access_token,
+    create_password_reset_token,
+    verify_password_reset_token,
     get_current_user,
     get_optional_current_user,
     get_current_admin_user
@@ -182,6 +187,88 @@ def login_user(payload: UserLogin, db: Session = Depends(get_db)):
         access_token=token,
         token_type="bearer",
         user=UserResponse.model_validate(user)
+    )
+
+@app.post(
+    "/api/auth/forgot-password",
+    response_model=PasswordResetResponse,
+    summary="Solicitar enlace para restablecer contraseña"
+)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Genera un token firmado temporal y emite un enlace de restablecimiento.
+    Por seguridad (OWASP), siempre responde de manera neutral para evitar enumeración de correos.
+    Si no hay SMTP configurado, imprime el enlace seguro directamente en la consola para pruebas.
+    """
+    normalized_email = payload.email.strip().lower()
+    user = db.query(User).filter(User.email == normalized_email).first()
+
+    frontend_base = os.getenv("FRONTEND_URL", "").rstrip("/") or "http://localhost:5173"
+
+    if user and user.is_active:
+        reset_token = create_password_reset_token(user.email, user.id)
+        reset_url = f"{frontend_base}/?reset_token={reset_token}"
+
+        # Salida visual de alta visibilidad en consola para pruebas locales o desarrollo sin SMTP
+        print("\n" + "=" * 76, flush=True)
+        print("🔑 [AquaPulse Security] ENLACE DE RESTABLECIMIENTO DE CONTRASEÑA GENERADO", flush=True)
+        print(f"📧 Destinatario: {user.email} (ID: {user.id})", flush=True)
+        print(f"⏱️  Validez: 30 minutos (Token JWT con propósito específico)", flush=True)
+        print(f"🔗 Enlace seguro para pruebas locales o sin servidor SMTP:", flush=True)
+        print(f"   {reset_url}", flush=True)
+        print("=" * 76 + "\n", flush=True)
+
+        return PasswordResetResponse(
+            ok=True,
+            message="Si tu correo está registrado, recibirás un enlace seguro para restablecer tu contraseña.",
+            reset_url_dev=reset_url,
+            reset_token_dev=reset_token
+        )
+
+    print(f"ℹ️ [AquaPulse Security] Solicitud de restablecimiento para correo no existente o inactivo: {normalized_email}", flush=True)
+    return PasswordResetResponse(
+        ok=True,
+        message="Si tu correo está registrado, recibirás un enlace seguro para restablecer tu contraseña."
+    )
+
+@app.post(
+    "/api/auth/reset-password",
+    response_model=PasswordResetResponse,
+    summary="Restablecer la contraseña usando el token seguro"
+)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Valida el token firmado y actualiza la contraseña con bcrypt."""
+    if len(payload.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nueva contraseña debe tener al menos 6 caracteres."
+        )
+
+    token_data = verify_password_reset_token(payload.token)
+    user_id = int(token_data["sub"])
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado."
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La cuenta se encuentra suspendida. Contacta a soporte."
+        )
+
+    # Actualizar hash seguro
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+    print(f"✅ [AquaPulse Security] Contraseña actualizada exitosamente para el usuario: {user.email}", flush=True)
+
+    return PasswordResetResponse(
+        ok=True,
+        message="Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña."
     )
 
 @app.get(

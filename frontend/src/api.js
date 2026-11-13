@@ -80,6 +80,32 @@ export async function registerUser(email, password, fullName = null) {
   return data;
 }
 
+export async function requestPasswordReset(email) {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al solicitar restablecimiento de contraseña');
+  }
+  return res.json();
+}
+
+export async function confirmPasswordReset(token, newPassword) {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: token.trim(), new_password: newPassword }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al restablecer la contraseña');
+  }
+  return res.json();
+}
+
 export async function fetchUserProfile() {
   const res = await authFetch('/auth/me');
   if (!res.ok) {

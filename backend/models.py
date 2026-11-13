@@ -74,6 +74,19 @@ class UserLogin(BaseModel):
     email: str = Field(..., example="acuarista@reef.com")
     password: str = Field(..., example="PasswordSeguro123")
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., example="acuarista@reef.com", description="Correo para restablecer contraseña")
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., description="Token seguro de restablecimiento")
+    new_password: str = Field(..., min_length=6, description="Nueva contraseña (mínimo 6 caracteres)")
+
+class PasswordResetResponse(BaseModel):
+    ok: bool = True
+    message: str
+    reset_url_dev: Optional[str] = None
+    reset_token_dev: Optional[str] = None
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     unit_preference: Optional[str] = Field(None, pattern="^(liters|gallons)$", description="'liters' o 'gallons'")
