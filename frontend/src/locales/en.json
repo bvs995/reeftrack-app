@@ -204,7 +204,16 @@
     "btnResetPassword": "Update Password",
     "errorPassMismatch": "Passwords do not match.",
     "resetSuccess": "Password updated successfully! You can now log in with your new password.",
-    "resetLinkSent": "If your email is registered, we have generated the reset link."
+    "resetLinkSent": "If your email is registered, we have generated the reset link.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "passwordStrength": "Password requirements:",
+    "reqMinLength": "8+ characters",
+    "reqUppercase": "1 Uppercase letter (A-Z)",
+    "reqNumber": "1 Number (0-9)",
+    "reqSpecial": "1 Special character (!@#$)",
+    "passwordsMatch": "Passwords match",
+    "passwordsDontMatch": "Passwords do not match"
   },
   "waterChange": {
     "title": "Water Changes & Dilution",

@@ -1,9 +1,27 @@
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
 from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from backend.database import Base
+
+PASSWORD_REGEX = r"^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]).{8,}$"
+PASSWORD_REQUIREMENTS_ERROR = (
+    "La contraseña debe tener al menos 8 caracteres, incluir al menos una letra mayúscula, "
+    "un número y un carácter especial (!@#$%^&* etc.)."
+)
+
+def check_password_complexity(password: str) -> None:
+    """Valida los requisitos estrictos de complejidad para contraseñas usando Regex."""
+    if len(password) < 8:
+        raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("La contraseña debe incluir al menos una letra mayúscula.")
+    if not re.search(r"\d", password):
+        raise ValueError("La contraseña debe incluir al menos un número.")
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]", password):
+        raise ValueError("La contraseña debe incluir al menos un carácter especial (!@#$%^&* etc.).")
 
 # ==============================================================================
 # MODELOS SQLALCHEMY ORM (Multi-usuario y Aislamiento en PostgreSQL / SQLite)
@@ -67,8 +85,18 @@ class Measurement(Base):
 
 class UserRegister(BaseModel):
     email: str = Field(..., example="acuarista@reef.com", description="Correo electrónico del usuario")
-    password: str = Field(..., min_length=6, example="PasswordSeguro123", description="Contraseña mínimo 6 caracteres")
+    password: str = Field(
+        ...,
+        example="PasswordSeguro123!",
+        description="Contraseña estricta: mínimo 8 caracteres, 1 mayúscula, 1 número y 1 carácter especial"
+    )
     full_name: Optional[str] = Field(None, example="Alex Valadez", description="Nombre del acuarista")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        check_password_complexity(v)
+        return v
 
 class UserLogin(BaseModel):
     email: str = Field(..., example="acuarista@reef.com")
@@ -79,7 +107,17 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., description="Token seguro de restablecimiento")
-    new_password: str = Field(..., min_length=6, description="Nueva contraseña (mínimo 6 caracteres)")
+    new_password: str = Field(
+        ...,
+        example="NuevaPassSegura2026!",
+        description="Nueva contraseña estricta (mínimo 8 caracteres, 1 mayúscula, 1 número y 1 carácter especial)"
+    )
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_strength(cls, v: str) -> str:
+        check_password_complexity(v)
+        return v
 
 class PasswordResetResponse(BaseModel):
     ok: bool = True

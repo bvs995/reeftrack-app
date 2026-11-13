@@ -2,9 +2,10 @@ import os
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, init_db, check_db_connection
@@ -26,7 +27,9 @@ from backend.models import (
     MeasurementResponse,
     PredictionResponse,
     AdminUserUpdate,
-    AdminUserListItem
+    AdminUserListItem,
+    check_password_complexity,
+    PASSWORD_REQUIREMENTS_ERROR
 )
 from backend.auth import (
     hash_password,
@@ -68,6 +71,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    """Convierte errores de validación de Pydantic en HTTP 400 Bad Request con detalle claro."""
+    errors = exc.errors()
+    first_error = errors[0] if errors else {}
+    msg = first_error.get("msg", "Error de validación en los datos enviados.")
+    if msg.startswith("Value error, "):
+        msg = msg[len("Value error, "):]
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": msg}
+    )
 
 @app.on_event("startup")
 def startup_event():
@@ -237,11 +253,13 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     summary="Restablecer la contraseña usando el token seguro"
 )
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """Valida el token firmado y actualiza la contraseña con bcrypt."""
-    if len(payload.new_password) < 6:
+    """Valida el token firmado y actualiza la contraseña con bcrypt exigiendo complejidad estricta."""
+    try:
+        check_password_complexity(payload.new_password)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contraseña debe tener al menos 6 caracteres."
+            detail=str(e)
         )
 
     token_data = verify_password_reset_token(payload.token)

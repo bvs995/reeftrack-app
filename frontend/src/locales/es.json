@@ -204,7 +204,16 @@
     "btnResetPassword": "Actualizar Contraseña",
     "errorPassMismatch": "Las contraseñas no coinciden.",
     "resetSuccess": "¡Contraseña actualizada con éxito! Ya puedes iniciar sesión con tu nueva contraseña.",
-    "resetLinkSent": "Si tu correo está registrado, hemos generado el enlace de restablecimiento."
+    "resetLinkSent": "Si tu correo está registrado, hemos generado el enlace de restablecimiento.",
+    "showPassword": "Ver contraseña",
+    "hidePassword": "Ocultar contraseña",
+    "passwordStrength": "Requisitos de seguridad:",
+    "reqMinLength": "8+ caracteres",
+    "reqUppercase": "1 Mayúscula (A-Z)",
+    "reqNumber": "1 Número (0-9)",
+    "reqSpecial": "1 Especial (!@#$)",
+    "passwordsMatch": "Las contraseñas coinciden",
+    "passwordsDontMatch": "Las contraseñas no coinciden"
   },
   "waterChange": {
     "title": "Cambios de Agua & Dilución",
