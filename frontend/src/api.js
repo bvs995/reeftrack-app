@@ -244,10 +244,43 @@ export async function fetchChartData(tankId, parameterCode = null) {
 }
 
 export async function recordMeasurement(tankId, data) {
-  const res = await authFetch(`/tanks/${tankId}/measurements`, {
+  // Asegurar inclusión explícita del ID del acuario
+  const payload = { ...data };
+  if (tankId && !payload.tank_id) {
+    payload.tank_id = tankId;
+  }
+
+  // Mapear código de parámetro numérico si viene en formato individual
+  if (payload.parameter_code && payload.value !== undefined) {
+    const codeMap = {
+      dkh: 'alkalinity_dkh',
+      alkalinity: 'alkalinity_dkh',
+      alkalinity_dkh: 'alkalinity_dkh',
+      ca: 'calcium_ppm',
+      calcium: 'calcium_ppm',
+      calcium_ppm: 'calcium_ppm',
+      mg: 'magnesium_ppm',
+      magnesium: 'magnesium_ppm',
+      magnesium_ppm: 'magnesium_ppm',
+      no3: 'nitrate_ppm',
+      nitrate: 'nitrate_ppm',
+      nitrate_ppm: 'nitrate_ppm',
+      po4: 'phosphate_ppm',
+      phosphate: 'phosphate_ppm',
+      phosphate_ppm: 'phosphate_ppm',
+      salinity: 'salinity_ppt',
+      salinity_ppt: 'salinity_ppt'
+    };
+    const field = codeMap[payload.parameter_code] || payload.parameter_code;
+    payload[field] = parseFloat(payload.value);
+  }
+
+  // Soporta tanto la ruta /api/tanks/:id/measurements como /api/measurements
+  const targetUrl = tankId ? `/tanks/${tankId}/measurements` : '/measurements';
+  const res = await authFetch(targetUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

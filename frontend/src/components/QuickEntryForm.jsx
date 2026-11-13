@@ -18,6 +18,8 @@ import { saveMeasurement, fetchMeasurements } from '../api';
 import CameraScannerModal from './CameraScannerModal';
 
 export default function QuickEntryForm({
+  tank = null,
+  tankId = null,
   onSuccess,
   onCancel,
   initialLastMeasurement = null
@@ -137,6 +139,11 @@ export default function QuickEntryForm({
 
     if (formData.timestamp) {
       fieldsToSubmit.timestamp = new Date(formData.timestamp).toISOString();
+    }
+
+    const targetTankId = tank?.id || tankId;
+    if (targetTankId) {
+      fieldsToSubmit.tank_id = targetTankId;
     }
 
     setLoading(true);

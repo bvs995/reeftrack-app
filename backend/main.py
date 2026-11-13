@@ -571,7 +571,17 @@ def create_measurement(
 
     if not target_tank_id:
         user_tank = db.query(Tank).filter(Tank.user_id == current_user.id).first()
-        target_tank_id = user_tank.id if user_tank else None
+        if not user_tank:
+            user_tank = Tank(
+                user_id=current_user.id,
+                name="Mi Acuario Principal",
+                tank_type="reef",
+                volume_liters=280.0
+            )
+            db.add(user_tank)
+            db.commit()
+            db.refresh(user_tank)
+        target_tank_id = user_tank.id
 
     db_measurement = Measurement(
         user_id=current_user.id,
@@ -589,6 +599,47 @@ def create_measurement(
     db.commit()
     db.refresh(db_measurement)
     return db_measurement
+
+@app.post(
+    "/api/tanks/{tank_id}/measurements",
+    response_model=MeasurementResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Guardar una nueva medición vinculada a un acuario específico"
+)
+def create_tank_measurement(
+    tank_id: int,
+    payload: MeasurementCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Guarda una medición vinculada al acuario especificado por tank_id y al usuario activo.
+    """
+    payload.tank_id = tank_id
+    return create_measurement(payload=payload, current_user=current_user, db=db)
+
+@app.get(
+    "/api/tanks/{tank_id}/measurements",
+    response_model=List[MeasurementResponse],
+    summary="Listar mediciones de un acuario específico"
+)
+def get_tank_measurements(
+    tank_id: int,
+    limit: int = Query(100, ge=1, le=500, description="Número máximo de registros"),
+    order: str = Query("desc", pattern="^(asc|desc)$", description="Orden cronológico"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retorna las mediciones pertenecientes al acuario especificado y al usuario activo."""
+    query = db.query(Measurement).filter(
+        Measurement.user_id == current_user.id,
+        Measurement.tank_id == tank_id
+    )
+    if order == "desc":
+        query = query.order_by(Measurement.timestamp.desc())
+    else:
+        query = query.order_by(Measurement.timestamp.asc())
+    return query.limit(limit).all()
 
 @app.get(
     "/api/measurements",

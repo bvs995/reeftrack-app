@@ -98,11 +98,38 @@ export default function QuickLogModal({
     setLoading(true);
     setError(null);
     try {
+      const codeMap = {
+        dkh: 'alkalinity_dkh',
+        alkalinity: 'alkalinity_dkh',
+        alkalinity_dkh: 'alkalinity_dkh',
+        ca: 'calcium_ppm',
+        calcium: 'calcium_ppm',
+        calcium_ppm: 'calcium_ppm',
+        mg: 'magnesium_ppm',
+        magnesium: 'magnesium_ppm',
+        magnesium_ppm: 'magnesium_ppm',
+        no3: 'nitrate_ppm',
+        nitrate: 'nitrate_ppm',
+        nitrate_ppm: 'nitrate_ppm',
+        po4: 'phosphate_ppm',
+        phosphate: 'phosphate_ppm',
+        phosphate_ppm: 'phosphate_ppm',
+        salinity: 'salinity_ppt',
+        salinity_ppt: 'salinity_ppt'
+      };
+
+      const fieldKey = codeMap[selectedParam?.code] || selectedParam?.code || 'alkalinity_dkh';
+      const numVal = parseFloat(value);
+      const isoTimestamp = measuredAt ? new Date(measuredAt).toISOString() : new Date().toISOString();
+
       await recordMeasurement(tank.id, {
-        parameter_code: selectedParam.code,
-        value: parseFloat(value),
-        measured_at: measuredAt ? new Date(measuredAt).toISOString() : new Date().toISOString(),
-        notes: notes || undefined
+        tank_id: tank.id,
+        [fieldKey]: numVal,
+        parameter_code: selectedParam?.code,
+        value: numVal,
+        timestamp: isoTimestamp,
+        measured_at: isoTimestamp,
+        notes: notes?.trim() || undefined
       });
       triggerHaptic(40);
       if (onSuccess) onSuccess();
@@ -179,6 +206,8 @@ export default function QuickLogModal({
           {mode === 'form' ? (
             /* COMPONENTE QUICK ENTRY FORM */
             <QuickEntryForm
+              tank={tank}
+              tankId={tank?.id}
               onSuccess={() => {
                 if (onSuccess) onSuccess();
                 onClose();

@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
 from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -203,6 +203,41 @@ class MeasurementBase(BaseModel):
     phosphate_ppm: Optional[float] = Field(None, example=0.04, description="Fosfato (PO4) en ppm")
     salinity_ppt: Optional[float] = Field(None, example=35.0, description="Salinidad en ppt o Gravedad Específica")
     notes: Optional[str] = Field(None, example="Test Hanna Checker HI772", description="Notas o kit de test")
+
+    # Campos de compatibilidad con entrada rápida Numpad
+    parameter_code: Optional[str] = Field(None, description="Código de parámetro rápido (ej: dkh, ca, mg, no3, po4, salinity)")
+    value: Optional[float] = Field(None, description="Valor numérico de la medición individual")
+    measured_at: Optional[datetime] = Field(None, description="Timestamp alternativo de medición")
+
+    @model_validator(mode="after")
+    def map_parameter_code_if_present(self):
+        """Mapea automáticamente campos individuales tipo {parameter_code: 'dkh', value: 8.3} a la columna correcta."""
+        code_map = {
+            "dkh": "alkalinity_dkh",
+            "alkalinity": "alkalinity_dkh",
+            "alkalinity_dkh": "alkalinity_dkh",
+            "ca": "calcium_ppm",
+            "calcium": "calcium_ppm",
+            "calcium_ppm": "calcium_ppm",
+            "mg": "magnesium_ppm",
+            "magnesium": "magnesium_ppm",
+            "magnesium_ppm": "magnesium_ppm",
+            "no3": "nitrate_ppm",
+            "nitrate": "nitrate_ppm",
+            "nitrate_ppm": "nitrate_ppm",
+            "po4": "phosphate_ppm",
+            "phosphate": "phosphate_ppm",
+            "phosphate_ppm": "phosphate_ppm",
+            "salinity": "salinity_ppt",
+            "salinity_ppt": "salinity_ppt",
+        }
+        if self.parameter_code and self.value is not None:
+            field_name = code_map.get(str(self.parameter_code).lower().strip())
+            if field_name:
+                setattr(self, field_name, self.value)
+        if not self.timestamp and self.measured_at:
+            self.timestamp = self.measured_at
+        return self
 
 class MeasurementCreate(MeasurementBase):
     pass
