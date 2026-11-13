@@ -5,32 +5,138 @@ const API_BASE = rawUrl
   ? (rawUrl.endsWith('/api') ? rawUrl : `${rawUrl.replace(/\/+$/, '')}/api`)
   : '/api';
 
+// ----------------- GESTIÓN DE TOKEN Y AUTENTICACIÓN -----------------
+
+export function getAuthToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('aquapulse_token');
+}
+
+export function setAuthToken(token) {
+  if (typeof window === 'undefined') return;
+  if (token) {
+    localStorage.setItem('aquapulse_token', token);
+  } else {
+    localStorage.removeItem('aquapulse_token');
+  }
+}
+
+export function getAuthHeaders(customHeaders = {}) {
+  const headers = { ...customHeaders };
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+async function authFetch(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const headers = getAuthHeaders(options.headers || {});
+  const res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('aquapulse:unauthorized'));
+    }
+  }
+
+  return res;
+}
+
+// ----------------- ENDPOINTS DE AUTENTICACIÓN -----------------
+
+export async function loginUser(email, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al iniciar sesión');
+  }
+  const data = await res.json();
+  if (data.access_token) {
+    setAuthToken(data.access_token);
+  }
+  return data;
+}
+
+export async function registerUser(email, password, fullName = null) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, full_name: fullName }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al registrar la cuenta');
+  }
+  const data = await res.json();
+  if (data.access_token) {
+    setAuthToken(data.access_token);
+  }
+  return data;
+}
+
+export async function fetchUserProfile() {
+  const res = await authFetch('/auth/me');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener perfil de usuario');
+  }
+  return res.json();
+}
+
+export async function updateUserProfile(profileData) {
+  const res = await authFetch('/auth/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profileData),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al actualizar perfil');
+  }
+  return res.json();
+}
+
 // ----------------- ENDPOINTS DIRECTOS SOLICITADOS -----------------
 
 export async function saveMeasurement(data) {
-  const res = await fetch(`${API_BASE}/measurements`, {
+  const res = await authFetch('/measurements', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Error al guardar medición');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al guardar medición');
+  }
   return res.json();
 }
 
 export async function fetchMeasurements(limit = 100, order = 'desc') {
-  const res = await fetch(`${API_BASE}/measurements?limit=${limit}&order=${order}`);
-  if (!res.ok) throw new Error('Error al obtener historial de mediciones');
+  const res = await authFetch(`/measurements?limit=${limit}&order=${order}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener historial de mediciones');
+  }
   return res.json();
 }
 
 export async function fetchPredictions() {
-  const res = await fetch(`${API_BASE}/predictions`);
-  if (!res.ok) throw new Error('Error al obtener cálculo de consumo y predicciones');
+  const res = await authFetch('/predictions');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener cálculo de consumo y predicciones');
+  }
   return res.json();
 }
 
 export async function scanMeasurement(imageBase64, preferredParameter = null) {
-  const res = await fetch(`${API_BASE}/scan-measurement`, {
+  const res = await authFetch('/scan-measurement', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -46,93 +152,126 @@ export async function scanMeasurement(imageBase64, preferredParameter = null) {
   return res.json();
 }
 
-// ----------------- MÉTODOS DE COMPATIBILIDAD -----------------
+// ----------------- MÉTODOS DE ACUARIOS Y COMPATIBILIDAD -----------------
 
 export async function fetchTanks() {
-  const res = await fetch(`${API_BASE}/tanks`);
-  if (!res.ok) throw new Error('Error al obtener acuarios');
+  const res = await authFetch('/tanks');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener acuarios');
+  }
   return res.json();
 }
 
 export async function createTank(data) {
-  const res = await fetch(`${API_BASE}/tanks`, {
+  const res = await authFetch('/tanks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Error al crear acuario');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al crear acuario');
+  }
   return res.json();
 }
 
 export async function deleteTank(tankId) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}`, {
+  const res = await authFetch(`/tanks/${tankId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Error al eliminar acuario');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al eliminar acuario');
+  }
   return true;
 }
 
 export async function fetchTankAnalytics(tankId) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}/analytics`);
-  if (!res.ok) throw new Error('Error al obtener análisis y predicciones');
+  const res = await authFetch(`/tanks/${tankId}/analytics`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener análisis y predicciones');
+  }
   return res.json();
 }
 
 export async function fetchTankParameters(tankId) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}/parameters`);
-  if (!res.ok) throw new Error('Error al obtener parámetros del acuario');
+  const res = await authFetch(`/tanks/${tankId}/parameters`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener parámetros del acuario');
+  }
   return res.json();
 }
 
 export async function fetchChartData(tankId, parameterCode = null) {
   const url = parameterCode
-    ? `${API_BASE}/tanks/${tankId}/chart-data?parameter_code=${parameterCode}`
-    : `${API_BASE}/tanks/${tankId}/chart-data`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Error al obtener datos históricos para gráficas');
+    ? `/tanks/${tankId}/chart-data?parameter_code=${parameterCode}`
+    : `/tanks/${tankId}/chart-data`;
+  const res = await authFetch(url);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener datos históricos para gráficas');
+  }
   return res.json();
 }
 
 export async function recordMeasurement(tankId, data) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}/measurements`, {
+  const res = await authFetch(`/tanks/${tankId}/measurements`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Error al registrar medición');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al registrar medición');
+  }
   return res.json();
 }
 
 export async function recordBatchMeasurements(tankId, batchData) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}/measurements/batch`, {
+  const res = await authFetch(`/tanks/${tankId}/measurements/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(batchData),
   });
-  if (!res.ok) throw new Error('Error al registrar lote de mediciones');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al registrar lote de mediciones');
+  }
   return res.json();
 }
 
 export async function deleteMeasurement(measurementId) {
-  const res = await fetch(`${API_BASE}/measurements/${measurementId}`, {
+  const res = await authFetch(`/measurements/${measurementId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Error al eliminar medición');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al eliminar medición');
+  }
   return true;
 }
 
 export async function fetchWaterChanges(tankId) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}/water-changes`);
-  if (!res.ok) throw new Error('Error al obtener cambios de agua');
+  const res = await authFetch(`/tanks/${tankId}/water-changes`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener cambios de agua');
+  }
   return res.json();
 }
 
 export async function recordWaterChange(tankId, data) {
-  const res = await fetch(`${API_BASE}/tanks/${tankId}/water-changes`, {
+  const res = await authFetch(`/tanks/${tankId}/water-changes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Error al registrar cambio de agua');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al registrar cambio de agua');
+  }
   return res.json();
 }

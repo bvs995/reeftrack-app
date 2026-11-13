@@ -30,6 +30,8 @@ services:
         value: "5"
       - key: DB_MAX_OVERFLOW
         value: "10"
+      - key: JWT_SECRET
+        generateValue: true
 
 databases:
   # ============================================================================

@@ -1,15 +1,51 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, Integer, Float, String, DateTime
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
 from backend.database import Base
 
-# ----------------- MODELO SQLALCHEMY ORM -----------------
+# ==============================================================================
+# MODELOS SQLALCHEMY ORM (Multi-usuario y Aislamiento en PostgreSQL / SQLite)
+# ==============================================================================
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    unit_preference = Column(String(50), default="liters", nullable=False) # 'liters' o 'gallons'
+    subscription_tier = Column(String(50), default="free", nullable=False) # 'free', 'premium'
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relaciones estrictas por usuario
+    tanks = relationship("Tank", back_populates="owner", cascade="all, delete-orphan")
+    measurements = relationship("Measurement", back_populates="user", cascade="all, delete-orphan")
+
+
+class Tank(Base):
+    __tablename__ = "tanks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    tank_type = Column(String(50), default="reef", nullable=False) # 'reef', 'freshwater_planted', 'freshwater_community'
+    volume_liters = Column(Float, default=280.0, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    owner = relationship("User", back_populates="tanks")
+    measurements = relationship("Measurement", back_populates="tank", cascade="all, delete-orphan")
+
 
 class Measurement(Base):
     __tablename__ = "measurements"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="SET NULL"), nullable=True, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     alkalinity_dkh = Column(Float, nullable=True)
     calcium_ppm = Column(Float, nullable=True)
@@ -17,12 +53,73 @@ class Measurement(Base):
     nitrate_ppm = Column(Float, nullable=True)
     phosphate_ppm = Column(Float, nullable=True)
     salinity_ppt = Column(Float, nullable=True)
-    notes = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    user = relationship("User", back_populates="measurements")
+    tank = relationship("Tank", back_populates="measurements")
 
 
-# ----------------- ESQUEMAS PYDANTIC v2 -----------------
+# ==============================================================================
+# ESQUEMAS PYDANTIC v2 - AUTENTICACIÓN Y USUARIOS
+# ==============================================================================
+
+class UserRegister(BaseModel):
+    email: str = Field(..., example="acuarista@reef.com", description="Correo electrónico del usuario")
+    password: str = Field(..., min_length=6, example="PasswordSeguro123", description="Contraseña mínimo 6 caracteres")
+    full_name: Optional[str] = Field(None, example="Alex Valadez", description="Nombre del acuarista")
+
+class UserLogin(BaseModel):
+    email: str = Field(..., example="acuarista@reef.com")
+    password: str = Field(..., example="PasswordSeguro123")
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    unit_preference: Optional[str] = Field(None, pattern="^(liters|gallons)$", description="'liters' o 'gallons'")
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    unit_preference: str = "liters"
+    subscription_tier: str = "free"
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+# ==============================================================================
+# ESQUEMAS PYDANTIC v2 - ACUARIOS (TANKS)
+# ==============================================================================
+
+class TankCreate(BaseModel):
+    name: str = Field(..., example="Arrecife Mixto SPS/LPS")
+    tank_type: str = Field("reef", example="reef")
+    volume_liters: float = Field(280.0, example=280.0)
+    notes: Optional[str] = None
+
+class TankResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    tank_type: str
+    volume_liters: float
+    notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==============================================================================
+# ESQUEMAS PYDANTIC v2 - MEDICIONES (MEASUREMENTS)
+# ==============================================================================
 
 class MeasurementBase(BaseModel):
+    tank_id: Optional[int] = None
     timestamp: Optional[datetime] = None
     alkalinity_dkh: Optional[float] = Field(None, example=8.2, description="Alcalinidad en dKH")
     calcium_ppm: Optional[float] = Field(None, example=420.0, description="Calcio en ppm")
@@ -37,12 +134,15 @@ class MeasurementCreate(MeasurementBase):
 
 class MeasurementResponse(MeasurementBase):
     id: int
+    user_id: Optional[int] = None
     timestamp: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# ----------------- ESQUEMAS DE PREDICCIÓN Y ALERTAS -----------------
+# ==============================================================================
+# ESQUEMAS PYDANTIC v2 - PREDICCIONES Y ALERTAS
+# ==============================================================================
 
 class ParameterConsumption(BaseModel):
     parameter: str

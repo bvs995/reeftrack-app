@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import Generator
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 logger = logging.getLogger("aquapulse.database")
@@ -57,8 +57,21 @@ def get_db() -> Generator:
         db.close()
 
 def init_db():
-    """Crea las tablas en la base de datos si aún no existen."""
+    """Crea las tablas en la base de datos si aún no existen y migra columnas requeridas."""
     Base.metadata.create_all(bind=engine)
+    try:
+        inspector = inspect(engine)
+        if "measurements" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("measurements")]
+            with engine.begin() as conn:
+                if "user_id" not in columns:
+                    conn.execute(text("ALTER TABLE measurements ADD COLUMN user_id INTEGER;"))
+                    logger.info("Auto-migración: Columna user_id añadida a measurements.")
+                if "tank_id" not in columns:
+                    conn.execute(text("ALTER TABLE measurements ADD COLUMN tank_id INTEGER;"))
+                    logger.info("Auto-migración: Columna tank_id añadida a measurements.")
+    except Exception as e:
+        logger.warning(f"Aviso durante auto-migración de tablas: {e}")
 
 def check_db_connection() -> bool:
     """Verifica si la base de datos está alcanzable para health checks."""

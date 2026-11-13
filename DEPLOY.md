@@ -78,6 +78,7 @@ AquaPulse incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual p
 | `ALLOWED_ORIGINS` | Orígenes CORS autorizados | `https://tu-app.vercel.app` (o `*`) |
 | `DB_POOL_SIZE` | Tamaño del pool de conexiones persistentes | `10` |
 | `DB_MAX_OVERFLOW` | Conexiones adicionales en ráfagas | `20` |
+| `JWT_SECRET` | Clave criptográfica para tokens de autenticación JWT | Autogenerada por Render o clave secreta de 64 caracteres |
 
 ### Variables en Vercel (Frontend):
 | Variable | Descripción | Valor recomendado |

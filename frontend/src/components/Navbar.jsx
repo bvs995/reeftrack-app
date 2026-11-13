@@ -1,5 +1,6 @@
 import React from 'react';
-import { Waves, Plus, ChevronDown, Sparkles, RefreshCw, Bell } from 'lucide-react';
+import { Waves, Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Crown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({
   tanks,
@@ -7,13 +8,31 @@ export default function Navbar({
   onSelectTank,
   onOpenNewTankModal,
   onOpenNotificationModal,
+  onOpenSettings,
   onRefresh,
   loading
 }) {
+  const { user, isAuthenticated, openAuthModal, unitPreference } = useAuth();
+
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
     }
+  };
+
+  const initials = (user?.full_name || user?.email || 'A')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  const formatTankVolume = (liters) => {
+    if (unitPreference === 'gallons') {
+      const gallons = Math.round(liters * 0.264172);
+      return `${gallons} gal`;
+    }
+    return `${liters}L`;
   };
 
   return (
@@ -21,7 +40,7 @@ export default function Navbar({
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         {/* Brand Náutico Neón */}
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-400 to-emerald-400 flex items-center justify-center shadow-neon-cyan border border-white/20">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-400 to-emerald-400 flex items-center justify-center shadow-neon-cyan border border-white/20 shrink-0">
             <Waves className="w-6 h-6 text-marine-950 stroke-[2.5]" />
           </div>
           <div>
@@ -34,7 +53,7 @@ export default function Navbar({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              Panel Inteligente para Acuarios de Arrecife y Agua Dulce
+              Gestión Predictiva Multi-Usuario para Acuarios de Arrecife
             </p>
           </div>
         </div>
@@ -47,14 +66,14 @@ export default function Navbar({
                 value={activeTank ? activeTank.id : ''}
                 onChange={(e) => {
                   triggerHaptic();
-                  const selected = tanks.find(t => t.id === parseInt(e.target.value));
+                  const selected = tanks.find((t) => t.id === parseInt(e.target.value));
                   if (selected) onSelectTank(selected);
                 }}
                 className="appearance-none min-h-[44px] bg-marine-900 text-slate-100 text-xs sm:text-sm font-bold pl-3.5 pr-9 py-2 rounded-2xl border border-marine-700 hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 cursor-pointer transition shadow-inner"
               >
                 {tanks.map((tank) => (
                   <option key={tank.id} value={tank.id}>
-                    {tank.name} ({tank.volume_liters}L)
+                    {tank.name} ({formatTankVolume(tank.volume_liters)})
                   </option>
                 ))}
               </select>
@@ -100,6 +119,36 @@ export default function Navbar({
             <Plus className="w-4 h-4 stroke-[3]" />
             <span className="hidden sm:inline">Nuevo Acuario</span>
           </button>
+
+          {/* Perfil de Usuario / Iniciar Sesión */}
+          {isAuthenticated ? (
+            <button
+              onClick={() => {
+                triggerHaptic();
+                if (onOpenSettings) onOpenSettings();
+              }}
+              title={`Perfil: ${user?.email} (Plan: ${user?.subscription_tier?.toUpperCase()})`}
+              className="min-h-[44px] px-2.5 sm:px-3 rounded-2xl bg-marine-900 border border-marine-700/80 hover:border-cyan-400/80 flex items-center gap-2 transition active:scale-95"
+            >
+              <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-600 to-emerald-500 text-marine-950 font-black text-xs flex items-center justify-center">
+                {initials}
+              </div>
+              <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden sm:inline">
+                {user?.subscription_tier || 'FREE'}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                triggerHaptic();
+                openAuthModal('login');
+              }}
+              className="min-h-[44px] px-3 rounded-2xl bg-marine-900 border border-cyan-500/50 text-cyan-300 font-bold text-xs flex items-center gap-1.5 hover:bg-cyan-500/10 active:scale-95 transition"
+            >
+              <LogIn className="w-4 h-4" />
+              <span className="hidden sm:inline">Entrar</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

@@ -4,11 +4,14 @@ import Dashboard from './components/Dashboard';
 import DashboardTrends from './components/DashboardTrends';
 import TrendsView from './components/TrendsView';
 import WaterChangesView from './components/WaterChangesView';
+import SettingsView from './components/SettingsView';
 import QuickLogModal from './components/QuickLogModal';
 import TankManagementModal from './components/TankManagementModal';
 import NotificationModal from './components/NotificationModal';
 import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/ErrorBoundary';
+import AuthModal from './components/AuthModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   fetchTanks,
   fetchTankParameters,
@@ -20,11 +23,23 @@ import {
   LayoutDashboard,
   LineChart,
   Droplets,
+  Settings,
   WifiOff,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-react';
 
-export default function App() {
+function AppContent() {
+  const {
+    user,
+    isAuthenticated,
+    loading: authLoading,
+    isAuthModalOpen,
+    closeAuthModal,
+    openAuthModal,
+    loginDemo
+  } = useAuth();
+
   const [tanks, setTanks] = useState([]);
   const [activeTank, setActiveTank] = useState(null);
   const [parameters, setParameters] = useState([]);
@@ -54,6 +69,7 @@ export default function App() {
 
   // Temporizador para evaluar recordatorios locales programados
   useEffect(() => {
+    if (!isAuthenticated) return;
     const checkReminder = async () => {
       try {
         const preds = await fetchPredictions();
@@ -65,11 +81,10 @@ export default function App() {
       }
     };
 
-    // Evaluar al cargar y luego cada 60 segundos
     checkReminder();
     const interval = setInterval(checkReminder, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -82,15 +97,25 @@ export default function App() {
     };
   }, []);
 
+  // Recargar datos cuando cambia el usuario autenticado
   useEffect(() => {
-    loadTanks();
-  }, []);
+    if (authLoading) return;
+    if (isAuthenticated) {
+      loadTanks();
+    } else {
+      setTanks([]);
+      setActiveTank(null);
+      setParameters([]);
+      setAnalytics(null);
+      setLoading(false);
+    }
+  }, [isAuthenticated, user?.id, authLoading]);
 
   useEffect(() => {
-    if (activeTank) {
+    if (activeTank && isAuthenticated) {
       loadTankDetails(activeTank.id);
     }
-  }, [activeTank?.id]);
+  }, [activeTank?.id, isAuthenticated]);
 
   const loadTanks = async () => {
     setLoading(true);
@@ -99,6 +124,8 @@ export default function App() {
       setTanks(data);
       if (data.length > 0) {
         setActiveTank(data[0]);
+      } else {
+        setActiveTank(null);
       }
     } catch (err) {
       console.error('Error al cargar acuarios:', err);
@@ -128,6 +155,10 @@ export default function App() {
 
   const handleOpenQuickLog = (code = null) => {
     triggerHaptic();
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
     setPreselectedCode(code);
     setIsQuickLogOpen(true);
   };
@@ -161,8 +192,15 @@ export default function App() {
           setActiveTank(tank);
           setSelectedCodeForChart(null);
         }}
-        onOpenNewTankModal={() => setIsNewTankOpen(true)}
+        onOpenNewTankModal={() => {
+          if (!isAuthenticated) {
+            openAuthModal('login');
+          } else {
+            setIsNewTankOpen(true);
+          }
+        }}
         onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
+        onOpenSettings={() => setActiveTab('settings')}
         onRefresh={handleDataUpdated}
         loading={loading}
       />
@@ -214,37 +252,95 @@ export default function App() {
             <Droplets className="w-4 h-4" />
             <span>Cambios de Agua & Dilución</span>
           </button>
+
+          <button
+            onClick={() => {
+              triggerHaptic();
+              setActiveTab('settings');
+            }}
+            className={`min-h-[48px] flex items-center gap-2 text-xs sm:text-sm font-extrabold border-b-2 transition-all ${
+              activeTab === 'settings'
+                ? 'border-cyan-400 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Ajustes & Freemium</span>
+          </button>
         </div>
       </div>
 
       {/* Main Content Area con ErrorBoundary */}
       <main className="flex-1">
         <ErrorBoundary>
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              analytics={analytics}
-              loading={loading}
-              onOpenQuickLog={handleOpenQuickLog}
-              onOpenWaterChange={() => setActiveTab('water')}
-              onSelectTab={setActiveTab}
-              onSelectParameterForChart={(code) => setSelectedCodeForChart(code)}
-              onMeasurementSaved={handleDataUpdated}
-            />
-          )}
+          {!isAuthenticated && activeTab !== 'settings' ? (
+            <div className="max-w-4xl mx-auto px-4 py-12 text-center">
+              <div className="bg-marine-900/90 border border-marine-800 rounded-3xl p-8 sm:p-12 shadow-2xl relative overflow-hidden">
+                <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto mb-4 border border-cyan-400/40">
+                  <Lock className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white mb-2">
+                  Bienvenido a AquaPulse Commercial
+                </h2>
+                <p className="text-sm text-slate-400 max-w-lg mx-auto mb-6">
+                  La plataforma predictiva para acuaristas de arrecife y agua dulce. Para acceder a tus telemetrías y proyecciones de consumo coralino, inicia sesión o ingresa como usuario de prueba.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    onClick={() => openAuthModal('login')}
+                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-cyan-400 text-marine-950 font-black text-sm shadow-neon-cyan hover:brightness-110 active:scale-95 transition"
+                  >
+                    Iniciar Sesión
+                  </button>
+                  <button
+                    onClick={() => openAuthModal('register')}
+                    className="px-6 py-3 rounded-2xl bg-marine-950 border border-marine-700 text-slate-200 font-bold text-sm hover:border-cyan-400 active:scale-95 transition"
+                  >
+                    Crear Cuenta Free
+                  </button>
+                  <button
+                    onClick={loginDemo}
+                    className="px-6 py-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 font-bold text-sm hover:bg-cyan-500/20 active:scale-95 transition flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    <span>Probar Demo (1 Click)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <Dashboard
+                  analytics={analytics}
+                  loading={loading}
+                  onOpenQuickLog={handleOpenQuickLog}
+                  onOpenWaterChange={() => setActiveTab('water')}
+                  onSelectTab={setActiveTab}
+                  onSelectParameterForChart={(code) => setSelectedCodeForChart(code)}
+                  onMeasurementSaved={handleDataUpdated}
+                />
+              )}
 
-          {activeTab === 'trends' && (
-            <DashboardTrends
-              onOpenQuickLog={handleOpenQuickLog}
-              onOpenWaterChange={() => setActiveTab('water')}
-            />
-          )}
+              {activeTab === 'trends' && (
+                <DashboardTrends
+                  onOpenQuickLog={handleOpenQuickLog}
+                  onOpenWaterChange={() => setActiveTab('water')}
+                />
+              )}
 
-          {activeTab === 'water' && activeTank && (
-            <WaterChangesView
-              tank={activeTank}
-              analytics={analytics}
-              onWaterChangeLogged={handleDataUpdated}
-            />
+              {activeTab === 'water' && activeTank && (
+                <WaterChangesView
+                  tank={activeTank}
+                  analytics={analytics}
+                  onWaterChangeLogged={handleDataUpdated}
+                />
+              )}
+
+              {activeTab === 'settings' && (
+                <SettingsView onOpenAuthModal={openAuthModal} />
+              )}
+            </>
           )}
         </ErrorBoundary>
       </main>
@@ -278,6 +374,20 @@ export default function App() {
         isOpen={isNotificationModalOpen}
         onClose={() => setIsNotificationModalOpen(false)}
       />
+
+      {/* Authentication Modal (Login / Register) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
+      />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
