@@ -108,6 +108,8 @@ export function AuthProvider({ children }) {
     token,
     user,
     isAuthenticated: Boolean(user && token),
+    isAdmin: Boolean(user?.is_admin),
+    isActive: Boolean(user?.is_active ?? true),
     loading,
     unitPreference: user?.unit_preference || 'liters',
     subscriptionTier: user?.subscription_tier || 'free',

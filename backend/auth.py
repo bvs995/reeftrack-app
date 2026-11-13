@@ -96,7 +96,24 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."
+        )
+
     return user
+
+def get_current_admin_user(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Verifica estrictamente que el usuario autenticado tenga privilegios de Administrador."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios de Administrador para esta operación."
+        )
+    return current_user
 
 def get_optional_current_user(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),

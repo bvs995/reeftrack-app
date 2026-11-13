@@ -275,3 +275,38 @@ export async function recordWaterChange(tankId, data) {
   }
   return res.json();
 }
+
+// ----------------- PANEL DE CONTROL DE ADMINISTRADOR -----------------
+
+export async function fetchAdminUsers() {
+  const res = await authFetch('/admin/users');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener usuarios para administración');
+  }
+  return res.json();
+}
+
+export async function updateAdminUser(userId, data) {
+  const res = await authFetch(`/admin/users/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al actualizar usuario');
+  }
+  return res.json();
+}
+
+export async function deleteAdminUser(userId) {
+  const res = await authFetch(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al eliminar usuario');
+  }
+  return res.json();
+}

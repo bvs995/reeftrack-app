@@ -61,7 +61,10 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     try:
         inspector = inspect(engine)
-        if "measurements" in inspector.get_table_names():
+        table_names = inspector.get_table_names()
+
+        # Auto-migración para measurements
+        if "measurements" in table_names:
             columns = [c["name"] for c in inspector.get_columns("measurements")]
             with engine.begin() as conn:
                 if "user_id" not in columns:
@@ -70,6 +73,17 @@ def init_db():
                 if "tank_id" not in columns:
                     conn.execute(text("ALTER TABLE measurements ADD COLUMN tank_id INTEGER;"))
                     logger.info("Auto-migración: Columna tank_id añadida a measurements.")
+
+        # Auto-migración para users (campo is_admin e is_active)
+        if "users" in table_names:
+            user_columns = [c["name"] for c in inspector.get_columns("users")]
+            with engine.begin() as conn:
+                if "is_admin" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;"))
+                    logger.info("Auto-migración: Columna is_admin añadida a users.")
+                if "is_active" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;"))
+                    logger.info("Auto-migración: Columna is_active añadida a users.")
     except Exception as e:
         logger.warning(f"Aviso durante auto-migración de tablas: {e}")
 

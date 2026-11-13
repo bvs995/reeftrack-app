@@ -219,5 +219,62 @@
     "reminderTime": "Hora de Recordatorio",
     "testBtn": "Enviar Notificación de Prueba",
     "permissionDenied": "Permiso de notificaciones denegado en tu navegador."
+  },
+  "admin": {
+    "title": "Panel de Control de Administración",
+    "subtitle": "Supervisión global de usuarios registrados, acuarios y límites de planes Freemium.",
+    "adminBadge": "MODO ADMINISTRADOR",
+    "accessDeniedTitle": "Acceso Restringido",
+    "accessDeniedDesc": "Esta sección está reservada exclusivamente para administradores autorizados de AquaPulse. Si consideras que deberías tener acceso, solicita la elevación a través del CLI make_admin.py.",
+    "backToDashboard": "Volver al Dashboard",
+    "stats": {
+      "totalUsers": "Usuarios Totales",
+      "activeUsers": "Cuentas Activas",
+      "premiumUsers": "Planes Pro / Premium",
+      "totalTanks": "Acuarios Gestionados",
+      "totalMeasurements": "Mediciones Registradas"
+    },
+    "filters": {
+      "searchPlaceholder": "Buscar por nombre o correo electrónico...",
+      "allPlans": "Todos los Planes",
+      "freePlan": "Plan Free",
+      "premiumPlan": "Plan Premium",
+      "allStatuses": "Todos los Estados",
+      "activeOnly": "Solo Activos",
+      "suspendedOnly": "Solo Suspendidos",
+      "refresh": "Actualizar"
+    },
+    "table": {
+      "user": "Usuario",
+      "role": "Rol",
+      "plan": "Plan Freemium",
+      "tanks": "Acuarios",
+      "measurements": "Mediciones",
+      "status": "Estado",
+      "actions": "Acciones",
+      "adminRole": "ADMIN",
+      "userRole": "USUARIO",
+      "activeStatus": "Activo",
+      "suspendedStatus": "Suspendido",
+      "joined": "Registrado",
+      "emptyTitle": "No se encontraron usuarios",
+      "emptyDesc": "No hay usuarios que coincidan con el término de búsqueda o filtros seleccionados."
+    },
+    "actions": {
+      "suspend": "Suspender",
+      "activate": "Reactivar",
+      "setPremium": "Hacer Premium",
+      "setFree": "Bajar a Free",
+      "delete": "Eliminar",
+      "selfProtect": "Tu propia cuenta (Protegida)",
+      "confirmDeleteTitle": "¿Eliminar Usuario?",
+      "confirmDeleteMsg": "¿Estás seguro de que deseas eliminar permanentemente la cuenta de {{email}}? Esta acción borrará todos sus acuarios y registros de mediciones asociados de la base de datos.",
+      "deleteSuccess": "Usuario eliminado exitosamente.",
+      "statusSuccess": "Estado del usuario actualizado correctamente.",
+      "tierSuccess": "Plan de usuario actualizado correctamente."
+    },
+    "navLink": "Panel Admin",
+    "settingsShortcut": "Abrir Panel de Control Admin",
+    "settingsShortcutDesc": "Gestiona cuentas de usuario, suspende accesos y actualiza niveles de suscripción Freemium."
   }
 }

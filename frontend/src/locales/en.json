@@ -219,5 +219,62 @@
     "reminderTime": "Reminder Time",
     "testBtn": "Send Test Notification",
     "permissionDenied": "Notification permission was denied in your browser."
+  },
+  "admin": {
+    "title": "Admin Control Center",
+    "subtitle": "Global oversight of registered users, aquariums, and Freemium tier quotas.",
+    "adminBadge": "ADMINISTRATOR MODE",
+    "accessDeniedTitle": "Access Restricted",
+    "accessDeniedDesc": "This section is exclusively reserved for authorized AquaPulse administrators. If you require access, request privilege escalation via the make_admin.py CLI.",
+    "backToDashboard": "Back to Dashboard",
+    "stats": {
+      "totalUsers": "Total Users",
+      "activeUsers": "Active Accounts",
+      "premiumUsers": "Pro / Premium Plans",
+      "totalTanks": "Managed Tanks",
+      "totalMeasurements": "Logged Measurements"
+    },
+    "filters": {
+      "searchPlaceholder": "Search by name or email address...",
+      "allPlans": "All Plans",
+      "freePlan": "Free Tier",
+      "premiumPlan": "Premium Tier",
+      "allStatuses": "All Statuses",
+      "activeOnly": "Active Only",
+      "suspendedOnly": "Suspended Only",
+      "refresh": "Refresh"
+    },
+    "table": {
+      "user": "User",
+      "role": "Role",
+      "plan": "Freemium Plan",
+      "tanks": "Tanks",
+      "measurements": "Measurements",
+      "status": "Status",
+      "actions": "Actions",
+      "adminRole": "ADMIN",
+      "userRole": "USER",
+      "activeStatus": "Active",
+      "suspendedStatus": "Suspended",
+      "joined": "Joined",
+      "emptyTitle": "No users found",
+      "emptyDesc": "No registered users match your search query or selected filters."
+    },
+    "actions": {
+      "suspend": "Suspend",
+      "activate": "Reactivate",
+      "setPremium": "Make Premium",
+      "setFree": "Demote to Free",
+      "delete": "Delete",
+      "selfProtect": "Your Account (Protected)",
+      "confirmDeleteTitle": "Delete User?",
+      "confirmDeleteMsg": "Are you sure you want to permanently delete the account for {{email}}? This will cascade-delete all of their tanks and measurement logs from the database.",
+      "deleteSuccess": "User account successfully deleted.",
+      "statusSuccess": "User status updated successfully.",
+      "tierSuccess": "Freemium plan tier updated successfully."
+    },
+    "navLink": "Admin Panel",
+    "settingsShortcut": "Open Admin Control Center",
+    "settingsShortcutDesc": "Manage user accounts, suspend access, and upgrade Freemium plan tiers."
   }
 }

@@ -6,6 +6,7 @@ import DashboardTrends from './components/DashboardTrends';
 import TrendsView from './components/TrendsView';
 import WaterChangesView from './components/WaterChangesView';
 import SettingsView from './components/SettingsView';
+import AdminDashboard from './components/AdminDashboard';
 import QuickLogModal from './components/QuickLogModal';
 import TankManagementModal from './components/TankManagementModal';
 import NotificationModal from './components/NotificationModal';
@@ -27,7 +28,8 @@ import {
   Settings,
   WifiOff,
   Sparkles,
-  Lock
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 function AppContent() {
@@ -49,11 +51,37 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
+      if (window.location.pathname === '/admin') return 'admin';
       const paramTab = new URLSearchParams(window.location.search).get('tab');
       if (paramTab) return paramTab;
     }
     return 'trends';
   });
+
+  const handleSelectTab = (tab) => {
+    triggerHaptic();
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      if (tab === 'admin') {
+        window.history.pushState(null, '', '/admin');
+      } else if (window.location.pathname === '/admin') {
+        window.history.pushState(null, '', `/?tab=${tab}`);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname === '/admin') {
+        setActiveTab('admin');
+      } else {
+        const pTab = new URLSearchParams(window.location.search).get('tab');
+        setActiveTab(pTab || 'trends');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
   const [preselectedCode, setPreselectedCode] = useState(null);
@@ -202,7 +230,8 @@ function AppContent() {
           }
         }}
         onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
-        onOpenSettings={() => setActiveTab('settings')}
+        onOpenSettings={() => handleSelectTab('settings')}
+        onOpenAdmin={() => handleSelectTab('admin')}
         onRefresh={handleDataUpdated}
         loading={loading}
       />
@@ -211,10 +240,7 @@ function AppContent() {
       <div className="hidden sm:block border-b border-marine-800/80 bg-marine-900/60 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 flex items-center gap-8">
           <button
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('dashboard');
-            }}
+            onClick={() => handleSelectTab('dashboard')}
             className={`min-h-[48px] flex items-center gap-2 text-xs sm:text-sm font-extrabold border-b-2 transition-all ${
               activeTab === 'dashboard'
                 ? 'border-cyan-400 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
@@ -226,10 +252,7 @@ function AppContent() {
           </button>
 
           <button
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('trends');
-            }}
+            onClick={() => handleSelectTab('trends')}
             className={`min-h-[48px] flex items-center gap-2 text-xs sm:text-sm font-extrabold border-b-2 transition-all ${
               activeTab === 'trends'
                 ? 'border-cyan-400 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
@@ -241,10 +264,7 @@ function AppContent() {
           </button>
 
           <button
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('water');
-            }}
+            onClick={() => handleSelectTab('water')}
             className={`min-h-[48px] flex items-center gap-2 text-xs sm:text-sm font-extrabold border-b-2 transition-all ${
               activeTab === 'water'
                 ? 'border-cyan-400 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
@@ -256,10 +276,7 @@ function AppContent() {
           </button>
 
           <button
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('settings');
-            }}
+            onClick={() => handleSelectTab('settings')}
             className={`min-h-[48px] flex items-center gap-2 text-xs sm:text-sm font-extrabold border-b-2 transition-all ${
               activeTab === 'settings'
                 ? 'border-cyan-400 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
@@ -269,13 +286,27 @@ function AppContent() {
             <Settings className="w-4 h-4" />
             <span>{t('nav.settingsTab')}</span>
           </button>
+
+          {user?.is_admin && (
+            <button
+              onClick={() => handleSelectTab('admin')}
+              className={`min-h-[48px] flex items-center gap-2 text-xs sm:text-sm font-extrabold border-b-2 transition-all ${
+                activeTab === 'admin'
+                  ? 'border-amber-400 text-amber-300 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]'
+                  : 'border-transparent text-amber-400/80 hover:text-amber-300'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span>{t('admin.navLink')}</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Content Area con ErrorBoundary */}
       <main className="flex-1">
         <ErrorBoundary>
-          {!isAuthenticated && activeTab !== 'settings' ? (
+          {!isAuthenticated && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="max-w-4xl mx-auto px-4 py-12 text-center">
               <div className="bg-marine-900/90 border border-marine-800 rounded-3xl p-8 sm:p-12 shadow-2xl relative overflow-hidden">
                 <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto mb-4 border border-cyan-400/40">
@@ -317,8 +348,8 @@ function AppContent() {
                   analytics={analytics}
                   loading={loading}
                   onOpenQuickLog={handleOpenQuickLog}
-                  onOpenWaterChange={() => setActiveTab('water')}
-                  onSelectTab={setActiveTab}
+                  onOpenWaterChange={() => handleSelectTab('water')}
+                  onSelectTab={handleSelectTab}
                   onSelectParameterForChart={(code) => setSelectedCodeForChart(code)}
                   onMeasurementSaved={handleDataUpdated}
                 />
@@ -327,7 +358,7 @@ function AppContent() {
               {activeTab === 'trends' && (
                 <DashboardTrends
                   onOpenQuickLog={handleOpenQuickLog}
-                  onOpenWaterChange={() => setActiveTab('water')}
+                  onOpenWaterChange={() => handleSelectTab('water')}
                 />
               )}
 
@@ -340,7 +371,16 @@ function AppContent() {
               )}
 
               {activeTab === 'settings' && (
-                <SettingsView onOpenAuthModal={openAuthModal} />
+                <SettingsView
+                  onOpenAuthModal={openAuthModal}
+                  onOpenAdmin={() => handleSelectTab('admin')}
+                />
+              )}
+
+              {activeTab === 'admin' && (
+                <AdminDashboard
+                  onBackToDashboard={() => handleSelectTab('dashboard')}
+                />
               )}
             </>
           )}
@@ -350,7 +390,7 @@ function AppContent() {
       {/* Mobile Bottom Navigation Bar */}
       <BottomNav
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectTab}
         onOpenQuickLog={() => handleOpenQuickLog()}
       />
 

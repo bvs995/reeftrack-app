@@ -19,7 +19,7 @@ import {
   Layers
 } from 'lucide-react';
 
-export default function SettingsView({ onOpenAuthModal }) {
+export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
   const { t, i18n } = useTranslation();
   const {
     user,
@@ -414,6 +414,42 @@ export default function SettingsView({ onOpenAuthModal }) {
           </button>
         </div>
       </section>
+
+      {/* ACCESO AL PANEL DE ADMINISTRADOR (SOLO SI ES ADMIN) */}
+      {user?.is_admin && (
+        <section className="bg-gradient-to-r from-amber-950/40 via-marine-900/90 to-cyan-950/40 border border-amber-500/40 rounded-3xl p-5 sm:p-7 shadow-xl relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-white">{t('admin.title')}</h3>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    SUPERADMIN
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5 max-w-xl">
+                  {t('admin.settingsShortcutDesc')}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                if (onOpenAdmin) onOpenAdmin();
+              }}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-cyan-400 hover:brightness-110 text-marine-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-neon-amber transition active:scale-95 shrink-0"
+            >
+              <ShieldCheck className="w-4 h-4 text-marine-950 stroke-[2.5]" />
+              <span>{t('admin.settingsShortcut')}</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 4. SECCIÓN DE SEGURIDAD Y CIERRE DE SESIÓN */}
       <section className="bg-marine-900/90 border border-marine-800/90 rounded-3xl p-5 sm:p-7 shadow-xl">

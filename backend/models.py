@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -18,6 +18,8 @@ class User(Base):
     full_name = Column(String(255), nullable=True)
     unit_preference = Column(String(50), default="liters", nullable=False) # 'liters' o 'gallons'
     subscription_tier = Column(String(50), default="free", nullable=False) # 'free', 'premium'
+    is_admin = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relaciones estrictas por usuario
@@ -82,6 +84,28 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     unit_preference: str = "liters"
     subscription_tier: str = "free"
+    is_admin: bool = False
+    is_active: bool = True
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AdminUserUpdate(BaseModel):
+    subscription_tier: Optional[str] = Field(None, pattern="^(free|premium)$", description="'free' o 'premium'")
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
+    full_name: Optional[str] = None
+
+class AdminUserListItem(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    unit_preference: str = "liters"
+    subscription_tier: str = "free"
+    is_admin: bool = False
+    is_active: bool = True
+    tank_count: int = 0
+    measurement_count: int = 0
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

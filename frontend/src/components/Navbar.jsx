@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Waves, Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Globe } from 'lucide-react';
+import { Waves, Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Globe, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({
@@ -10,6 +10,7 @@ export default function Navbar({
   onOpenNewTankModal,
   onOpenNotificationModal,
   onOpenSettings,
+  onOpenAdmin,
   onRefresh,
   loading
 }) {
@@ -162,6 +163,21 @@ export default function Navbar({
             <Plus className="w-4 h-4 stroke-[3]" />
             <span className="hidden sm:inline">{t('nav.newTank')}</span>
           </button>
+
+          {/* Botón Acceso Admin (Solo si is_admin = true) */}
+          {isAuthenticated && user?.is_admin && (
+            <button
+              onClick={() => {
+                triggerHaptic();
+                if (onOpenAdmin) onOpenAdmin();
+              }}
+              title="Panel de Control de Administrador"
+              className="min-h-[44px] px-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-amber-500/10 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-black text-xs flex items-center gap-1.5 shadow-neon-amber transition active:scale-95"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span className="hidden md:inline">{t('admin.navLink')}</span>
+            </button>
+          )}
 
           {/* Perfil de Usuario / Iniciar Sesión */}
           {isAuthenticated ? (
