@@ -1,7 +1,10 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, LineChart, Plus, Droplets, Settings } from 'lucide-react';
 
 export default function BottomNav({ activeTab, onSelectTab, onOpenQuickLog }) {
+  const { t } = useTranslation();
+
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
@@ -9,13 +12,13 @@ export default function BottomNav({ activeTab, onSelectTab, onOpenQuickLog }) {
   };
 
   const leftTabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'trends', label: 'Tendencias', icon: LineChart },
+    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'trends', label: t('nav.trends'), icon: LineChart },
   ];
 
   const rightTabs = [
-    { id: 'water', label: 'Cambios', icon: Droplets },
-    { id: 'settings', label: 'Ajustes', icon: Settings },
+    { id: 'water', label: t('nav.water'), icon: Droplets },
+    { id: 'settings', label: t('nav.settings'), icon: Settings },
   ];
 
   return (
@@ -52,8 +55,8 @@ export default function BottomNav({ activeTab, onSelectTab, onOpenQuickLog }) {
               onOpenQuickLog();
             }}
             className="w-13 h-13 sm:w-14 sm:h-14 p-3 rounded-2xl bg-gradient-to-tr from-cyan-500 via-cyan-400 to-emerald-400 text-marine-950 flex items-center justify-center shadow-neon-cyan active:scale-90 transition-all border-2 border-white/30"
-            title="Registrar Test Rápido"
-            aria-label="Registrar Test Rápido"
+            title={t('nav.quickLog')}
+            aria-label={t('nav.quickLog')}
           >
             <Plus className="w-7 h-7 stroke-[3]" />
           </button>

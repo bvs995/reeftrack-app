@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Waves,
   Check,
@@ -21,6 +22,7 @@ export default function QuickEntryForm({
   onCancel,
   initialLastMeasurement = null
 }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     alkalinity_dkh: '',
     calcium_ppm: '',
@@ -124,7 +126,7 @@ export default function QuickEntryForm({
     });
 
     if (!hasValue) {
-      setErrorMessage('Ingresa al menos un parámetro para registrar la medición.');
+      setErrorMessage(t('quickEntry.emptyError'));
       triggerHaptic([50, 50, 50]);
       return;
     }
@@ -174,7 +176,7 @@ export default function QuickEntryForm({
   const PARAM_CARDS = [
     {
       key: 'alkalinity_dkh',
-      label: 'Alcalinidad',
+      label: t('quickEntry.alkLabel'),
       unit: 'dKH',
       step: '0.1',
       placeholder: '8.3',
@@ -185,7 +187,7 @@ export default function QuickEntryForm({
     },
     {
       key: 'calcium_ppm',
-      label: 'Calcio',
+      label: t('quickEntry.caLabel'),
       unit: 'ppm',
       step: '1',
       placeholder: '420',
@@ -196,7 +198,7 @@ export default function QuickEntryForm({
     },
     {
       key: 'magnesium_ppm',
-      label: 'Magnesio',
+      label: t('quickEntry.mgLabel'),
       unit: 'ppm',
       step: '5',
       placeholder: '1350',
@@ -207,7 +209,7 @@ export default function QuickEntryForm({
     },
     {
       key: 'nitrate_ppm',
-      label: 'Nitratos (NO3)',
+      label: t('quickEntry.no3Label'),
       unit: 'ppm',
       step: '0.1',
       placeholder: '5.0',
@@ -218,7 +220,7 @@ export default function QuickEntryForm({
     },
     {
       key: 'phosphate_ppm',
-      label: 'Fosfatos (PO4)',
+      label: t('quickEntry.po4Label'),
       unit: 'ppm',
       step: '0.01',
       placeholder: '0.04',
@@ -229,7 +231,7 @@ export default function QuickEntryForm({
     },
     {
       key: 'salinity_ppt',
-      label: 'Salinidad / Gravedad',
+      label: t('quickEntry.salinityLabel'),
       unit: 'SG / ppt',
       step: '0.001',
       placeholder: '1.025 o 35.0',
@@ -250,13 +252,13 @@ export default function QuickEntryForm({
           </div>
           <div>
             <div className="text-xs font-black text-white flex items-center gap-2">
-              <span>Captura Rápida por Fotografía</span>
+              <span>{t('quickEntry.cameraBannerTitle')}</span>
               <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" /> IA Vision
               </span>
             </div>
             <div className="text-[11px] text-slate-400">
-              Usa la cámara trasera para leer pantallas Hanna Checker o viales Salifert
+              {t('quickEntry.cameraBannerDesc')}
             </div>
           </div>
         </div>
@@ -267,7 +269,7 @@ export default function QuickEntryForm({
           className="btn-touch py-2.5 px-4 bg-gradient-to-r from-cyan-500 via-cyan-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-marine-950 font-black text-xs rounded-xl shadow-neon-cyan active:scale-95 flex items-center justify-center gap-2"
         >
           <Camera className="w-4 h-4 stroke-[2.5]" />
-          <span>Escanear Lectura</span>
+          <span>{t('quickEntry.scanButton')}</span>
         </button>
       </div>
 
@@ -278,10 +280,10 @@ export default function QuickEntryForm({
             <Sparkles className="w-5 h-5 text-cyan-400 shrink-0 animate-pulse" />
             <div className="min-w-0">
               <div className="font-extrabold text-white text-xs truncate">
-                ¡Parámetro detectado por foto: <span className="text-cyan-300 font-mono">{scannedHighlight.value}</span>!
+                {t('quickEntry.detectedParam', { val: scannedHighlight.value })}
               </div>
               <div className="text-[11px] text-slate-300">
-                Se completó automáticamente en el formulario. Revisa el valor antes de guardar.
+                {t('quickEntry.detectedDesc')}
                 {scannedHighlight.kit_detected && (
                   <span className="text-cyan-300 ml-1.5 font-bold">({scannedHighlight.kit_detected})</span>
                 )}
@@ -292,7 +294,7 @@ export default function QuickEntryForm({
             type="button"
             onClick={() => setScannedHighlight(null)}
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-marine-800 transition-colors shrink-0"
-            title="Descartar aviso"
+            title={t('common.close')}
           >
             ✕
           </button>
@@ -367,11 +369,11 @@ export default function QuickEntryForm({
 
               {/* Valor de la última medición justo debajo como referencia gris clara */}
               <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400 select-none">
-                <span className="font-medium">Última lectura:</span>
+                <span className="font-medium">{t('common.lastReading')}:</span>
                 <span className="font-bold text-slate-300 bg-marine-950 px-2 py-0.5 rounded-lg border border-marine-800">
                   {card.lastValue !== null && card.lastValue !== undefined
                     ? `${card.lastValue} ${card.unit}`
-                    : 'Sin registro previo'}
+                    : t('common.noPriorRecord')}
                 </span>
               </div>
             </div>
@@ -385,7 +387,7 @@ export default function QuickEntryForm({
           <Calendar className="w-4 h-4 text-cyan-400 shrink-0" />
           <div className="flex-1 min-w-0">
             <label className="block text-[10px] font-bold uppercase text-slate-400">
-              Fecha y Hora de la Prueba
+              {t('quickEntry.testDate')}
             </label>
             <input
               type="datetime-local"
@@ -400,13 +402,13 @@ export default function QuickEntryForm({
           <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
           <div className="flex-1 min-w-0">
             <label className="block text-[10px] font-bold uppercase text-slate-400">
-              Observaciones / Test Kit
+              {t('quickEntry.notesLabel')}
             </label>
             <input
               type="text"
               value={formData.notes}
               onChange={(e) => handleChange('notes', e.target.value)}
-              placeholder="Ej. Hanna Checker, Salifert, Tropic Marin..."
+              placeholder={t('quickEntry.notesPlaceholder')}
               className="w-full bg-transparent text-xs font-semibold text-slate-200 focus:outline-none placeholder:text-slate-500"
             />
           </div>
@@ -421,7 +423,7 @@ export default function QuickEntryForm({
             onClick={onCancel}
             className="btn-touch-secondary flex-1 sm:flex-none"
           >
-            Cancelar
+            {t('common.cancel')}
           </button>
         )}
 
@@ -437,17 +439,17 @@ export default function QuickEntryForm({
           {successStatus ? (
             <>
               <CheckCircle2 className="w-6 h-6 stroke-[3] animate-bounce" />
-              <span>¡Mediciones Registradas con Éxito!</span>
+              <span>{t('quickEntry.successBtn')}</span>
             </>
           ) : loading ? (
             <>
               <div className="w-5 h-5 border-2 border-marine-950 border-t-transparent rounded-full animate-spin" />
-              <span>Guardando Mediciones...</span>
+              <span>{t('quickEntry.savingBtn')}</span>
             </>
           ) : (
             <>
               <Check className="w-6 h-6 stroke-[3]" />
-              <span>Registrar Mediciones</span>
+              <span>{t('quickEntry.submitBtn')}</span>
             </>
           )}
         </button>

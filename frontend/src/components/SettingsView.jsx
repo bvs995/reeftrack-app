@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import {
   User,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 
 export default function SettingsView({ onOpenAuthModal }) {
+  const { t, i18n } = useTranslation();
   const {
     user,
     isAuthenticated,
@@ -50,10 +52,10 @@ export default function SettingsView({ onOpenAuthModal }) {
         full_name: fullName.trim() || null,
         unit_preference: selectedUnits
       });
-      setStatusMessage({ type: 'success', text: '¡Ajustes guardados correctamente!' });
+      setStatusMessage({ type: 'success', text: t('settings.savedSuccess') });
       setTimeout(() => setStatusMessage(null), 3500);
     } catch (err) {
-      setStatusMessage({ type: 'error', text: err.message || 'Error al guardar los ajustes' });
+      setStatusMessage({ type: 'error', text: err.message || t('settings.saveError') });
     } finally {
       setSaving(false);
     }
@@ -71,11 +73,13 @@ export default function SettingsView({ onOpenAuthModal }) {
       });
       setStatusMessage({
         type: 'success',
-        text: `Preferencia actualizada a ${unit === 'liters' ? 'Litros (L)' : 'Galones US (gal)'}`
+        text: t('settings.unitUpdated', {
+          unit: unit === 'liters' ? t('settings.metricUnit') : t('settings.imperialUnit')
+        })
       });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err) {
-      setStatusMessage({ type: 'error', text: 'Error al cambiar la unidad de medida' });
+      setStatusMessage({ type: 'error', text: t('settings.saveError') });
     } finally {
       setSaving(false);
     }
@@ -83,7 +87,7 @@ export default function SettingsView({ onOpenAuthModal }) {
 
   const handleLogoutClick = () => {
     triggerHaptic();
-    if (window.confirm('¿Seguro que deseas cerrar la sesión en AquaPulse?')) {
+    if (window.confirm(t('settings.confirmLogout'))) {
       logout();
     }
   };
@@ -96,22 +100,22 @@ export default function SettingsView({ onOpenAuthModal }) {
           <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto mb-4 border border-cyan-400/40">
             <Lock className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-black text-white mb-2">Sesión Requerida</h2>
+          <h2 className="text-2xl font-black text-white mb-2">{t('settings.sessionRequiredTitle')}</h2>
           <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
-            Inicia sesión o crea tu cuenta gratuita para personalizar tus unidades de medida, gestionar tu perfil y acceder a tu suscripción.
+            {t('settings.sessionRequiredDesc')}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => openAuthModal('login')}
               className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-cyan-400 text-marine-950 font-black text-sm shadow-neon-cyan hover:brightness-110 active:scale-95 transition"
             >
-              Iniciar Sesión
+              {t('app.loginBtn')}
             </button>
             <button
               onClick={() => openAuthModal('register')}
               className="px-6 py-3 rounded-2xl bg-marine-950 border border-marine-700 text-slate-200 font-bold text-sm hover:border-cyan-400 active:scale-95 transition"
             >
-              Crear Cuenta Free
+              {t('app.registerBtn')}
             </button>
           </div>
         </div>
@@ -127,25 +131,25 @@ export default function SettingsView({ onOpenAuthModal }) {
     .toUpperCase();
 
   const formattedDate = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('es-ES', {
+    ? new Date(user.created_at).toLocaleDateString(i18n.language || 'es', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       })
-    : 'Activo';
+    : t('common.active');
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 pb-28 sm:pb-12 space-y-6 sm:space-y-8 animate-fadeIn">
       {/* Encabezado */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
-          <span>Ajustes de la Cuenta</span>
+          <span>{t('settings.title')}</span>
           <span className="text-xs uppercase font-black px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/40">
-            Freemium
+            {t('settings.badge')}
           </span>
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Configuración personal, unidades volumétricas y estado de suscripción comercial.
+          {t('settings.subtitle')}
         </p>
       </div>
 
@@ -171,7 +175,7 @@ export default function SettingsView({ onOpenAuthModal }) {
       <section className="bg-marine-900/90 border border-marine-800/90 rounded-3xl p-5 sm:p-7 shadow-xl">
         <div className="flex items-center gap-2.5 pb-4 border-b border-marine-800">
           <User className="w-5 h-5 text-cyan-400" />
-          <h2 className="text-base sm:text-lg font-black text-white">Perfil de Acuarista</h2>
+          <h2 className="text-base sm:text-lg font-black text-white">{t('settings.profileTitle')}</h2>
         </div>
 
         <form onSubmit={handleSaveProfile} className="mt-5 space-y-4">
@@ -180,11 +184,11 @@ export default function SettingsView({ onOpenAuthModal }) {
               {initials}
             </div>
             <div>
-              <p className="text-sm font-black text-white">{user?.full_name || 'Acuarista Reef'}</p>
+              <p className="text-sm font-black text-white">{user?.full_name || t('settings.defaultName')}</p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-slate-400 font-mono">{user?.email}</span>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Activo
+                  {t('common.active')}
                 </span>
               </div>
             </div>
@@ -193,20 +197,20 @@ export default function SettingsView({ onOpenAuthModal }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-extrabold uppercase text-slate-400 mb-1.5">
-                Nombre Completo
+                {t('settings.fullName')}
               </label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Tu nombre o alias"
+                placeholder={t('settings.fullNamePlaceholder')}
                 className="w-full bg-marine-950 border border-marine-700 rounded-2xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-400 transition"
               />
             </div>
 
             <div>
               <label className="block text-xs font-extrabold uppercase text-slate-400 mb-1.5">
-                Correo Electrónico (Solo Lectura)
+                {t('settings.emailReadOnly')}
               </label>
               <div className="relative">
                 <input
@@ -223,7 +227,7 @@ export default function SettingsView({ onOpenAuthModal }) {
           <div className="flex items-center justify-between pt-2">
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <Calendar className="w-3.5 h-3.5" />
-              <span>Miembro desde: {formattedDate}</span>
+              <span>{t('settings.memberSince')} {formattedDate}</span>
             </div>
 
             <button
@@ -232,7 +236,7 @@ export default function SettingsView({ onOpenAuthModal }) {
               className="px-5 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-marine-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-neon-cyan active:scale-95 transition disabled:opacity-50"
             >
               <Save className="w-4 h-4 stroke-[2.5]" />
-              <span>{saving ? 'Guardando...' : 'Guardar Perfil'}</span>
+              <span>{saving ? t('settings.savingBtn') : t('settings.saveProfileBtn')}</span>
             </button>
           </div>
         </form>
@@ -242,11 +246,11 @@ export default function SettingsView({ onOpenAuthModal }) {
       <section className="bg-marine-900/90 border border-marine-800/90 rounded-3xl p-5 sm:p-7 shadow-xl">
         <div className="flex items-center gap-2.5 pb-4 border-b border-marine-800">
           <Scale className="w-5 h-5 text-cyan-400" />
-          <h2 className="text-base sm:text-lg font-black text-white">Unidades de Medida</h2>
+          <h2 className="text-base sm:text-lg font-black text-white">{t('settings.unitsTitle')}</h2>
         </div>
 
         <p className="text-xs sm:text-sm text-slate-400 mt-4 mb-4">
-          Selecciona el sistema de volumen para el cálculo de dosificaciones, capacidad de acuarios y diluciones en cambios de agua:
+          {t('settings.unitsDesc')}
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -261,16 +265,16 @@ export default function SettingsView({ onOpenAuthModal }) {
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-black text-white">Sistema Métrico</span>
+              <span className="text-sm font-black text-white">{t('settings.metricTitle')}</span>
               {selectedUnits === 'liters' && (
                 <div className="w-6 h-6 rounded-full bg-cyan-400 text-marine-950 flex items-center justify-center">
                   <Check className="w-4 h-4 stroke-[3]" />
                 </div>
               )}
             </div>
-            <div className="text-2xl font-black text-cyan-300">Litros (L)</div>
+            <div className="text-2xl font-black text-cyan-300">{t('settings.metricUnit')}</div>
             <p className="text-xs text-slate-400 mt-1">
-              Estándar internacional para volúmenes netos y concentración química.
+              {t('settings.metricDesc')}
             </p>
           </button>
 
@@ -285,16 +289,16 @@ export default function SettingsView({ onOpenAuthModal }) {
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-black text-white">Sistema Imperial US</span>
+              <span className="text-sm font-black text-white">{t('settings.imperialTitle')}</span>
               {selectedUnits === 'gallons' && (
                 <div className="w-6 h-6 rounded-full bg-cyan-400 text-marine-950 flex items-center justify-center">
                   <Check className="w-4 h-4 stroke-[3]" />
                 </div>
               )}
             </div>
-            <div className="text-2xl font-black text-cyan-300">Galones US (gal)</div>
+            <div className="text-2xl font-black text-cyan-300">{t('settings.imperialUnit')}</div>
             <p className="text-xs text-slate-400 mt-1">
-              Utilizado comúnmente en tanques comerciales de EE. UU. (1 gal ≈ 3.785 L).
+              {t('settings.imperialDesc')}
             </p>
           </button>
         </div>
@@ -308,10 +312,10 @@ export default function SettingsView({ onOpenAuthModal }) {
         <div className="flex items-center justify-between pb-4 border-b border-marine-800">
           <div className="flex items-center gap-2.5">
             <Crown className="w-5 h-5 text-amber-400" />
-            <h2 className="text-base sm:text-lg font-black text-white">Suscripción y Límites</h2>
+            <h2 className="text-base sm:text-lg font-black text-white">{t('settings.subTitle')}</h2>
           </div>
           <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-            Plan Actual: Gratuito (Free)
+            {t('settings.currentPlan')}
           </span>
         </div>
 
@@ -322,29 +326,29 @@ export default function SettingsView({ onOpenAuthModal }) {
             <div className="flex items-center gap-2 mb-3">
               <Layers className="w-4 h-4 text-cyan-400" />
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                Incluido en tu Plan Gratuito
+                {t('settings.includedTitle')}
               </h3>
             </div>
             <ul className="space-y-2.5 text-xs text-slate-300">
               <li className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span><strong>1 Acuario Activo</strong> con biometría completa</span>
+                <span><strong>{t('settings.incTank')}</strong></span>
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Predicción de consumo de <strong>dKH y Calcio</strong> a 14 días</span>
+                <span>{t('settings.incPred')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Escáner de tests con <strong>Inteligencia Artificial</strong></span>
+                <span>{t('settings.incAI')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Recordatorios locales con Web Notifications</span>
+                <span>{t('settings.incPush')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Persistencia en la nube PostgreSQL</span>
+                <span>{t('settings.incCloud')}</span>
               </li>
             </ul>
           </div>
@@ -355,33 +359,33 @@ export default function SettingsView({ onOpenAuthModal }) {
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 <h3 className="text-sm font-bold text-purple-300 uppercase tracking-wider">
-                  Beneficios AquaPulse Pro
+                  {t('settings.proTitle')}
                 </h3>
               </div>
               <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                Fase 2
+                {t('settings.phase2')}
               </span>
             </div>
             <ul className="space-y-2.5 text-xs text-slate-400">
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                <span><strong>Acuarios y Sumps Ilimitados</strong> en una sola cuenta</span>
+                <span>{t('settings.proTanks')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                <span>Exportación de informes a <strong>PDF y CSV</strong> para concursos</span>
+                <span>{t('settings.proReports')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                <span>Alertas push instantáneas vía <strong>Telegram / WhatsApp</strong></span>
+                <span>{t('settings.proAlerts')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                <span>Integración directa con controladores <strong>Apex / Hydros</strong></span>
+                <span>{t('settings.proControllers')}</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                <span>Soporte prioritario 24/7 para tanques SPS exigentes</span>
+                <span>{t('settings.proSupport')}</span>
               </li>
             </ul>
           </div>
@@ -392,10 +396,10 @@ export default function SettingsView({ onOpenAuthModal }) {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-extrabold text-white">AquaPulse Pro / Premium</span>
-              <span className="text-xs text-purple-300 font-bold">$9.99 USD / mes</span>
+              <span className="text-xs text-purple-300 font-bold">{t('settings.proPrice')}</span>
             </div>
             <p className="text-xs text-slate-400">
-              La pasarela de pago estará disponible en la próxima actualización comercial.
+              {t('settings.gatewayNotice')}
             </p>
           </div>
 
@@ -403,10 +407,10 @@ export default function SettingsView({ onOpenAuthModal }) {
             type="button"
             disabled
             className="w-full sm:w-auto min-h-[46px] px-6 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800 text-purple-200 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 opacity-60 cursor-not-allowed border border-purple-400/30 shadow-none"
-            title="La pasarela de pago estará disponible en la próxima fase comercial"
+            title={t('settings.gatewayNotice')}
           >
             <Lock className="w-4 h-4 text-purple-300" />
-            <span>Upgrade a Premium (Próximamente)</span>
+            <span>{t('settings.upgradeBtn')}</span>
           </button>
         </div>
       </section>
@@ -415,9 +419,9 @@ export default function SettingsView({ onOpenAuthModal }) {
       <section className="bg-marine-900/90 border border-marine-800/90 rounded-3xl p-5 sm:p-7 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-black text-white">Sesión Activa</h3>
+            <h3 className="text-sm font-black text-white">{t('settings.activeSession')}</h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Conectado como <strong className="text-cyan-300">{user?.email}</strong>. Todos los datos están aislados bajo tu cuenta.
+              {t('settings.sessionDesc', { email: user?.email })}
             </p>
           </div>
 
@@ -427,7 +431,7 @@ export default function SettingsView({ onOpenAuthModal }) {
             className="px-4 py-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/60 font-bold text-xs sm:text-sm flex items-center gap-2 active:scale-95 transition"
           >
             <LogOut className="w-4 h-4" />
-            <span>Cerrar Sesión</span>
+            <span>{t('settings.logoutBtn')}</span>
           </button>
         </div>
       </section>

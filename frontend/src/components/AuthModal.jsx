@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import {
   Waves,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function AuthModal({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const {
     login,
     register,
@@ -48,19 +50,19 @@ export default function AuthModal({ isOpen, onClose }) {
     try {
       if (authModalTab === 'login') {
         if (!email.trim() || !password) {
-          throw new Error('Por favor ingresa tu correo y contraseña.');
+          throw new Error(t('auth.errorEmpty'));
         }
         await login(email.trim(), password);
         if (onClose) onClose();
       } else {
         if (!email.trim() || !password) {
-          throw new Error('Por favor completa los campos requeridos.');
+          throw new Error(t('auth.errorFields'));
         }
         if (password.length < 6) {
-          throw new Error('La contraseña debe tener al menos 6 caracteres.');
+          throw new Error(t('auth.errorShortPass'));
         }
         await register(email.trim(), password, fullName.trim() || null);
-        setSuccessMsg('¡Cuenta creada exitosamente! Bienvenido a AquaPulse.');
+        setSuccessMsg(t('auth.registerSuccess'));
         setTimeout(() => {
           if (onClose) onClose();
         }, 800);
@@ -100,7 +102,7 @@ export default function AuthModal({ isOpen, onClose }) {
             if (onClose) onClose();
           }}
           className="absolute top-5 right-5 text-slate-400 hover:text-white p-2 rounded-xl hover:bg-marine-800 transition"
-          aria-label="Cerrar modal"
+          aria-label={t('common.close')}
         >
           <X className="w-5 h-5" />
         </button>
@@ -111,10 +113,10 @@ export default function AuthModal({ isOpen, onClose }) {
             <Waves className="w-8 h-8 text-marine-950 stroke-[2.5]" />
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            AquaPulse Commercial Cloud
+            {t('auth.headerTitle')}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Gestión predictiva y biometría para acuarios de arrecife
+            {t('auth.headerSubtitle')}
           </p>
         </div>
 
@@ -133,7 +135,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Iniciar Sesión
+            {t('auth.loginTab')}
           </button>
           <button
             type="button"
@@ -148,7 +150,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Crear Cuenta
+            {t('auth.registerTab')}
           </button>
         </div>
 
@@ -172,7 +174,7 @@ export default function AuthModal({ isOpen, onClose }) {
           {authModalTab === 'register' && (
             <div>
               <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1.5">
-                Nombre de Acuarista
+                {t('auth.nameLabel')}
               </label>
               <div className="relative">
                 <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
@@ -180,7 +182,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ej: Alex Valadez"
+                  placeholder={t('auth.namePlaceholder')}
                   className="w-full bg-marine-950/90 border border-marine-700 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-400 transition"
                 />
               </div>
@@ -189,7 +191,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
           <div>
             <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1.5">
-              Correo Electrónico
+              {t('auth.emailLabel')}
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
@@ -206,7 +208,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
           <div>
             <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1.5">
-              Contraseña
+              {t('auth.passLabel')}
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
@@ -220,7 +222,7 @@ export default function AuthModal({ isOpen, onClose }) {
               />
             </div>
             {authModalTab === 'register' && (
-              <p className="text-[11px] text-slate-500 mt-1">Mínimo 6 caracteres</p>
+              <p className="text-[11px] text-slate-500 mt-1">{t('auth.passHint')}</p>
             )}
           </div>
 
@@ -233,7 +235,7 @@ export default function AuthModal({ isOpen, onClose }) {
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>
-                <span>{authModalTab === 'login' ? 'Acceder a mi Acuario' : 'Registrar Cuenta Free'}</span>
+                <span>{authModalTab === 'login' ? t('auth.btnLogin') : t('auth.btnRegister')}</span>
                 <ArrowRight className="w-4 h-4 stroke-[3]" />
               </>
             )}
@@ -247,7 +249,7 @@ export default function AuthModal({ isOpen, onClose }) {
           </div>
           <div className="relative flex justify-center text-xs">
             <span className="bg-marine-900 px-3 text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-              o prueba inmediata
+              {t('auth.orImmediate')}
             </span>
           </div>
         </div>
@@ -260,13 +262,13 @@ export default function AuthModal({ isOpen, onClose }) {
           className="w-full min-h-[44px] rounded-2xl bg-marine-950/90 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-cyan-500/10 active:scale-98 transition"
         >
           <Sparkles className="w-4 h-4 text-cyan-400" />
-          <span>Entrar con Usuario Demo (demo@aquapulse.io)</span>
+          <span>{t('auth.btnDemo')}</span>
         </button>
 
         {/* Badge de seguridad */}
         <div className="mt-4 flex items-center justify-center gap-1.5 text-slate-500 text-[11px]">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Aislamiento estricto de datos con JWT y PostgreSQL</span>
+          <span>{t('auth.securityBadge')}</span>
         </div>
       </div>
     </div>

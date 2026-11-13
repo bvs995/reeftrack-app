@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -46,6 +47,7 @@ export default function DashboardTrends({
   onOpenQuickLog = null,
   onOpenWaterChange = null
 }) {
+  const { t, i18n } = useTranslation();
   const [predictions, setPredictions] = useState(propPredictions);
   const [measurements, setMeasurements] = useState(propMeasurements || []);
   const [loading, setLoading] = useState(!propPredictions);
@@ -329,18 +331,21 @@ export default function DashboardTrends({
   // Formatear recomendación de próxima medición para dKH
   const formatNextTestRecommendation = () => {
     if (!alk?.latest_value) {
-      return 'Registrar primera medición';
+      return t('trends.noMeasurementsYet');
     }
     if (alk?.days_remaining_safe === null || alk?.days_remaining_safe === undefined) {
-      return 'Medir en 24 a 48 horas (Monitoreo)';
+      return t('trends.routineIn14Days');
     }
     const days = Number(alk.days_remaining_safe);
     const testDay = new Date();
     testDay.setDate(testDay.getDate() + Math.max(1, Math.floor(days * 0.7)));
-    const weekday = testDay.toLocaleDateString('es-ES', { weekday: 'long' });
-    const dayDate = testDay.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    const weekday = testDay.toLocaleDateString(i18n.language || 'es', { weekday: 'long' });
+    const dayDate = testDay.toLocaleDateString(i18n.language || 'es', { day: 'numeric', month: 'short' });
     const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    return `Medir de nuevo el ${capitalizedWeekday}, ${dayDate}`;
+    if (days <= 1) {
+      return t('trends.measureToday');
+    }
+    return t('trends.measureDate', { date: `${capitalizedWeekday}, ${dayDate}` });
   };
 
   return (
@@ -351,7 +356,7 @@ export default function DashboardTrends({
           <div className="flex items-center gap-2.5 min-w-0">
             <Info className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              {predictions.confidence_message || 'Se necesitan al menos 3 mediciones recientes para proyectar con alta confianza estadística.'}
+              {predictions.confidence_message || t('trends.confidenceNotice')}
             </span>
           </div>
           {onOpenQuickLog && (
@@ -360,7 +365,7 @@ export default function DashboardTrends({
               onClick={onOpenQuickLog}
               className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-marine-950 font-black rounded-lg text-[11px] self-start sm:self-auto shrink-0 active:scale-95 transition"
             >
-              + Registrar Medición
+              {t('dashboard.quickLogCTA')}
             </button>
           )}
         </div>
@@ -380,7 +385,7 @@ export default function DashboardTrends({
                   <Activity className="w-4 h-4" />
                 </div>
                 <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
-                  Consumo de Alcalinidad
+                  {t('trends.alkConsumption')}
                 </span>
               </div>
 
@@ -393,8 +398,8 @@ export default function DashboardTrends({
                 )}
                 <span className="text-xs sm:text-sm font-black text-white">
                   {alk?.daily_consumption_rate !== null && alk?.daily_consumption_rate !== undefined
-                    ? `Consumo: -${alk.daily_consumption_rate} dKH / día`
-                    : 'Consumo: Sin datos suficientes'}
+                    ? `${t('trends.consumption')} -${alk.daily_consumption_rate} dKH ${t('common.perDay')}`
+                    : `${t('trends.consumption')} ${t('trends.noSufficientData')}`}
                 </span>
               </div>
             </div>
@@ -403,34 +408,34 @@ export default function DashboardTrends({
             <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1.5">
               <p className="text-xs sm:text-sm text-slate-200 font-semibold leading-relaxed">
                 {alk?.latest_value === null || alk?.latest_value === undefined ? (
-                  'Aún no hay mediciones registradas. Ingresa lecturas de dKH para activar el cálculo de consumo.'
+                  t('trends.noMeasurementsYet')
                 ) : alk?.days_remaining_safe !== null && alk?.days_remaining_safe !== undefined ? (
                   <>
-                    A este ritmo, tu alcalinidad alcanzará el límite inferior de{' '}
-                    <strong className="text-amber-400">7.5 dKH</strong> en{' '}
-                    <strong className="text-cyan-300">
-                      {alk.days_remaining_safe} {alk.days_remaining_safe === 1 ? 'día' : 'días'}
-                    </strong>.
+                    {t('trends.alkSafeMessage', {
+                      limit: '7.5 dKH',
+                      days: alk.days_remaining_safe,
+                      unit: alk.days_remaining_safe === 1 ? t('common.day') : t('common.days')
+                    })}
                   </>
                 ) : alk?.status === 'insufficient_data' ? (
-                  'Se requieren al menos 2 mediciones consecutivas para deducir la tasa de consumo diario.'
+                  t('trends.alkNeedConsecutive')
                 ) : (
-                  'Tu alcalinidad se encuentra actualmente dentro del rango seguro (7.5 - 9.0 dKH).'
+                  t('trends.alkNormal')
                 )}
               </p>
 
               <div className="pt-1 flex items-center gap-1.5 text-xs font-extrabold text-cyan-400">
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span>Recomendación: {formatNextTestRecommendation()}</span>
+                <span>{t('trends.recommendation')} {formatNextTestRecommendation()}</span>
               </div>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-marine-800 flex items-center justify-between text-xs">
             <span className="text-slate-400 font-medium">
-              Última lectura:{' '}
+              {t('trends.lastReading')}{' '}
               <strong className="text-white">
-                {alk?.latest_value !== null && alk?.latest_value !== undefined ? `${alk.latest_value} dKH` : 'Sin mediciones'}
+                {alk?.latest_value !== null && alk?.latest_value !== undefined ? `${alk.latest_value} dKH` : t('common.noPriorRecord')}
               </strong>
             </span>
             <button
@@ -440,7 +445,7 @@ export default function DashboardTrends({
               }}
               className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
             >
-              Ver curva <ArrowRight className="w-3 h-3" />
+              {t('trends.viewCurve')} <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         </div>
@@ -457,7 +462,7 @@ export default function DashboardTrends({
                   <Droplets className="w-4 h-4" />
                 </div>
                 <span className="text-xs font-black uppercase tracking-wider text-amber-300">
-                  Acumulación de Nitratos
+                  {t('trends.nitrateAccumulation')}
                 </span>
               </div>
 
@@ -465,12 +470,12 @@ export default function DashboardTrends({
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80">
                   <TrendingUp className="w-4 h-4 text-amber-400" />
                   <span className="text-xs sm:text-sm font-black text-amber-300">
-                    +{Number((wc.daily_accumulation_rate * 7).toFixed(1))} ppm / semana
+                    +{Number((wc.daily_accumulation_rate * 7).toFixed(1))} ppm {t('common.perWeek')}
                   </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80 text-xs text-slate-400 font-semibold">
-                  <span>Sin tendencia</span>
+                  <span>{t('trends.noTrend')}</span>
                 </div>
               )}
             </div>
@@ -479,37 +484,32 @@ export default function DashboardTrends({
             <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1.5">
               <p className="text-xs sm:text-sm text-slate-200 font-semibold leading-relaxed">
                 {wc?.current_nitrate_ppm === null || wc?.current_nitrate_ppm === undefined ? (
-                  'Sin registros de nitratos. Ingresa lecturas de NO3 para predecir la acumulación y cambios de agua.'
+                  t('trends.noNitrateData')
                 ) : wc?.urgency === 'immediate' ? (
-                  <>
-                    <strong className="text-coral-400">Atención:</strong> Nitratos por encima de 20 ppm ({wc.current_nitrate_ppm} ppm). Cambio de agua del {wc.suggested_percentage || 20}% sugerido de inmediato.
-                  </>
+                  t('trends.nitrateImmediate', { val: wc.current_nitrate_ppm, pct: wc.suggested_percentage || 20 })
                 ) : wc?.days_until_threshold !== null && wc?.days_until_threshold !== undefined ? (
                   <>
-                    Nitratos en tendencia alcista (
-                    <strong className="text-amber-400">
-                      +{Number(((wc.daily_accumulation_rate || 0) * 7).toFixed(1))} ppm/semana
-                    </strong>
-                    ). Cambio de agua sugerido en{' '}
-                    <strong className="text-cyan-300">
-                      {wc.days_until_threshold} {wc.days_until_threshold === 1 ? 'día' : 'días'}
-                    </strong>{' '}
+                    {t('trends.nitrateRising', {
+                      rate: Number(((wc.daily_accumulation_rate || 0) * 7).toFixed(1)),
+                      days: wc.days_until_threshold,
+                      unit: wc.days_until_threshold === 1 ? t('common.day') : t('common.days')
+                    })}{' '}
                     {wc.suggested_water_change_date ? `(${wc.suggested_water_change_date})` : ''}.
                   </>
                 ) : (
-                  'Nivel de nitratos controlado y dentro del umbral de bioseguridad (< 20 ppm).'
+                  t('trends.nitrateSafe')
                 )}
               </p>
 
               <div className="pt-1 flex items-center gap-1.5 text-xs font-extrabold text-amber-400">
                 <Calendar className="w-3.5 h-3.5 shrink-0" />
                 <span>
-                  Fecha estimada:{' '}
+                  {t('trends.estimatedDate')}{' '}
                   {wc?.suggested_water_change_date
                     ? wc.suggested_water_change_date
                     : wc?.current_nitrate_ppm !== null && wc?.current_nitrate_ppm !== undefined
-                    ? 'Rutina en 14 días'
-                    : 'Pendiente de mediciones'}
+                    ? t('trends.routineIn14Days')
+                    : t('trends.pendingMeasurements')}
                 </span>
               </div>
             </div>
@@ -517,11 +517,11 @@ export default function DashboardTrends({
 
           <div className="mt-4 pt-3 border-t border-marine-800 flex items-center justify-between text-xs">
             <span className="text-slate-400 font-medium">
-              Lectura actual:{' '}
+              {t('trends.currentReading')}{' '}
               <strong className="text-white">
                 {wc?.current_nitrate_ppm !== null && wc?.current_nitrate_ppm !== undefined
                   ? `${wc.current_nitrate_ppm} ppm`
-                  : 'Sin datos'}
+                  : t('trends.noSufficientData')}
               </strong>
             </span>
             <button
@@ -531,7 +531,7 @@ export default function DashboardTrends({
               }}
               className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
             >
-              Ver acumulación <ArrowRight className="w-3 h-3" />
+              {t('trends.viewAccumulation')} <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         </div>

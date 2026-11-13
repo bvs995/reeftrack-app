@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -28,6 +29,7 @@ export default function Dashboard({
   onSelectParameterForChart,
   onMeasurementSaved
 }) {
+  const { t } = useTranslation();
   const [showInlineForm, setShowInlineForm] = useState(false);
 
   const triggerHaptic = () => {
@@ -41,7 +43,7 @@ export default function Dashboard({
       <div className="py-24 flex flex-col items-center justify-center text-slate-400 gap-3">
         <Activity className="w-10 h-10 animate-spin text-cyan-400 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
         <p className="text-sm font-semibold tracking-wide text-slate-300">
-          Analizando telemetría y proyecciones del acuario...
+          {t('dashboard.analyzing')}
         </p>
       </div>
     );
@@ -65,6 +67,12 @@ export default function Dashboard({
     return 'text-coral-400 border-coral-500/50 bg-coral-500/10 shadow-neon-coral';
   };
 
+  const getTankTypeLabel = (type) => {
+    if (type === 'reef') return t('dashboard.reefType');
+    if (type === 'freshwater_planted') return t('dashboard.plantedType');
+    return t('dashboard.communityType');
+  };
+
   const criticalParams = parameters.filter(p => p.is_critical);
   const secondaryParams = parameters.filter(p => !p.is_critical);
 
@@ -79,17 +87,17 @@ export default function Dashboard({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-marine-800 text-cyan-300 border border-cyan-500/30">
-                {tank_type === 'reef' ? '🪸 Arrecife SPS/LPS' : tank_type === 'freshwater_planted' ? '🌿 Aquascaping Plantado' : '🐟 Dulce Comunitario'}
+                {getTankTypeLabel(tank_type)}
               </span>
               <span className="text-xs text-slate-400 font-medium">
-                Volumen Neto: <strong className="text-white font-bold">{volume_liters} Litros</strong>
+                {t('dashboard.netVolume')} <strong className="text-white font-bold">{volume_liters} {t('common.liters')}</strong>
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
               {tank_name}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-              Monitoreo biológico continuo con predicción de consumo (variación diaria) y balance iónico.
+              {t('dashboard.heroDesc')}
             </p>
           </div>
 
@@ -97,10 +105,10 @@ export default function Dashboard({
           <div className="flex items-center gap-4 self-stretch sm:self-auto justify-between sm:justify-start bg-marine-950/90 p-4 rounded-2xl border border-marine-700/80 shadow-inner">
             <div className="flex flex-col">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                Estabilidad Biológica
+                {t('dashboard.biologicalStability')}
               </span>
               <span className="text-xs font-bold text-slate-200">
-                {health_score >= 85 ? 'Ecosistema Estable' : health_score >= 70 ? 'Desviación Menor' : 'Acción Inmediata'}
+                {health_score >= 85 ? t('common.optimal') : health_score >= 70 ? t('common.warning') : t('common.danger')}
               </span>
             </div>
             <div className={`w-16 h-16 rounded-2xl border-2 flex items-center justify-center font-black text-2xl ${getScoreColor(health_score)}`}>
@@ -113,7 +121,7 @@ export default function Dashboard({
         <div className="mt-6 pt-5 border-t border-marine-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
             <Clock className="w-4 h-4 text-cyan-400" />
-            <span>Última sincronización y análisis predictivo: Hoy</span>
+            <span>{t('dashboard.biologicalStability')}</span>
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
@@ -125,7 +133,7 @@ export default function Dashboard({
               className="btn-touch-secondary flex-1 sm:flex-none text-xs"
             >
               <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
-              <span>{showInlineForm ? 'Ocultar Formulario' : 'Entrada Rápida'}</span>
+              <span>{showInlineForm ? t('common.close') : t('dashboard.logMeasurement')}</span>
               {showInlineForm ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
             <button
@@ -136,7 +144,7 @@ export default function Dashboard({
               className="btn-touch-primary flex-1 sm:flex-none text-xs"
             >
               <Plus className="w-5 h-5 stroke-[3]" />
-              <span>Test Rápido</span>
+              <span>{t('nav.quickLog')}</span>
             </button>
             <button
               onClick={() => {
@@ -146,7 +154,7 @@ export default function Dashboard({
               className="btn-touch-secondary flex-1 sm:flex-none text-xs"
             >
               <Droplets className="w-5 h-5 text-cyan-400" />
-              <span>Cambio de Agua</span>
+              <span>{t('nav.water')}</span>
             </button>
           </div>
         </div>
@@ -159,17 +167,14 @@ export default function Dashboard({
             <div>
               <h3 className="font-black text-lg text-white flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-                Formulario de Entrada Rápida de Parámetros
+                {t('dashboard.logMeasurement')}
               </h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">
-                Ingresa tus mediciones del agua. El valor anterior se muestra como referencia bajo cada campo.
-              </p>
             </div>
             <button
               onClick={() => setShowInlineForm(false)}
               className="text-xs text-slate-400 hover:text-white font-bold p-1 rounded-lg"
             >
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
 
@@ -188,7 +193,7 @@ export default function Dashboard({
         <div className="space-y-3">
           <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-amber-400" />
-            Alertas Predictivas Activas ({alerts.length})
+            <span>Alertas ({alerts.length})</span>
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -224,7 +229,7 @@ export default function Dashboard({
                           }}
                           className="min-h-[36px] px-2 text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 active:scale-95"
                         >
-                          Ver Gráfica <ArrowRight className="w-3.5 h-3.5" />
+                          {t('trends.viewCurve')} <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
                       <p className="text-xs text-slate-300 leading-relaxed font-medium">
@@ -232,7 +237,7 @@ export default function Dashboard({
                       </p>
                       {alert.action && (
                         <div className="pt-2 flex items-start gap-2 text-xs font-semibold text-cyan-300 bg-marine-950/80 p-2.5 rounded-xl border border-marine-800">
-                          <span className="text-cyan-400 font-bold shrink-0">Acción:</span>
+                          <span className="text-cyan-400 font-bold shrink-0">{t('common.warning')}:</span>
                           <span>{alert.action}</span>
                         </div>
                       )}
@@ -256,14 +261,14 @@ export default function Dashboard({
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400">
-                    Predicción de Cambio de Agua
+                    {t('nav.water')}
                   </span>
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold">
                     {water_change_prediction.suggested_date}
                   </span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-black text-white">
-                  {water_change_prediction.recommended_percentage}% del volumen ({water_change_prediction.recommended_liters} Litros)
+                  {water_change_prediction.recommended_percentage}% ({water_change_prediction.recommended_liters} {t('common.liters')})
                 </h3>
                 <p className="text-xs text-slate-300 max-w-xl font-medium">
                   {water_change_prediction.reason}
@@ -279,7 +284,7 @@ export default function Dashboard({
                 }}
                 className="btn-touch-secondary flex-1 sm:flex-none text-xs"
               >
-                Simulador
+                {t('common.view')}
               </button>
               <button
                 onClick={() => {
@@ -288,7 +293,7 @@ export default function Dashboard({
                 }}
                 className="btn-touch-primary flex-1 sm:flex-none text-xs"
               >
-                Registrar
+                {t('dashboard.logMeasurement')}
               </button>
             </div>
           </div>
@@ -300,11 +305,8 @@ export default function Dashboard({
         <div className="flex items-center justify-between">
           <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
             <Activity className="w-4 h-4 text-cyan-400" />
-            Parámetros Críticos y Consumo Diario ({criticalParams.length})
+            {t('dashboard.criticalParameters')} ({criticalParams.length})
           </h2>
-          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-            Regresión lineal sobre lecturas consecutivas
-          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
@@ -332,7 +334,7 @@ export default function Dashboard({
           <div className="flex items-center justify-between">
             <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-slate-400" />
-              Otros Parámetros de Control ({secondaryParams.length})
+              {t('dashboard.secondaryParameters')} ({secondaryParams.length})
             </h2>
           </div>
 
@@ -360,6 +362,7 @@ export default function Dashboard({
 }
 
 function ParameterCard({ param, onQuickLog, onViewTrend }) {
+  const { t } = useTranslation();
   const isDanger = param.status === 'danger_low' || param.status === 'danger_high';
   const isOptimal = param.status === 'optimal';
 
@@ -367,7 +370,7 @@ function ParameterCard({ param, onQuickLog, onViewTrend }) {
     if (rate === null || rate === undefined || isNaN(Number(rate))) return null;
     const num = Number(rate);
     const sign = num > 0 ? '+' : '';
-    return `${sign}${num.toFixed(2)} ${unit}/día`;
+    return `${sign}${num.toFixed(2)} ${unit}${t('common.perDay')}`;
   };
 
   return (
@@ -389,7 +392,7 @@ function ParameterCard({ param, onQuickLog, onViewTrend }) {
                 : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
             }`}
           >
-            {param.status === 'optimal' ? 'Óptimo' : isDanger ? 'Alerta' : 'Seguro'}
+            {param.status === 'optimal' ? t('common.optimal') : isDanger ? t('common.danger') : t('common.safeRange')}
           </span>
         </div>
 
@@ -426,8 +429,8 @@ function ParameterCard({ param, onQuickLog, onViewTrend }) {
         {/* Mensaje de Diagnóstico / Objetivo */}
         <div className="text-xs text-slate-300 bg-marine-950/80 p-3 rounded-xl border border-marine-800 space-y-1">
           <div className="text-[11px] text-slate-400 flex items-center justify-between">
-            <span>Objetivo: <strong className="text-emerald-400 font-bold">{param.target} {param.unit}</strong></span>
-            <span>Rango: {param.min_safe} - {param.max_safe}</span>
+            <span>{t('dashboard.target')}: <strong className="text-emerald-400 font-bold">{param.target} {param.unit}</strong></span>
+            <span>{t('dashboard.safeLimits')}: {param.min_safe} - {param.max_safe}</span>
           </div>
           <p className="text-[11px] leading-snug text-slate-300 font-medium">
             {param.prediction_message}
@@ -442,7 +445,7 @@ function ParameterCard({ param, onQuickLog, onViewTrend }) {
           className="min-h-[44px] px-3 rounded-xl text-xs font-bold text-slate-400 hover:text-cyan-300 flex items-center gap-1.5 active:scale-95 transition"
         >
           <Activity className="w-4 h-4 text-cyan-400" />
-          <span>Ver Tendencia</span>
+          <span>{t('trends.viewCurve')}</span>
         </button>
 
         <button

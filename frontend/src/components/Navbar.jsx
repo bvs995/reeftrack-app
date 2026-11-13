@@ -1,5 +1,6 @@
 import React from 'react';
-import { Waves, Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Crown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Waves, Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({
@@ -12,12 +13,20 @@ export default function Navbar({
   onRefresh,
   loading
 }) {
+  const { t, i18n } = useTranslation();
   const { user, isAuthenticated, openAuthModal, unitPreference } = useAuth();
+
+  const currentLang = (i18n.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
 
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
     }
+  };
+
+  const handleLanguageChange = (lang) => {
+    triggerHaptic();
+    i18n.changeLanguage(lang);
   };
 
   const initials = (user?.full_name || user?.email || 'A')
@@ -30,9 +39,9 @@ export default function Navbar({
   const formatTankVolume = (liters) => {
     if (unitPreference === 'gallons') {
       const gallons = Math.round(liters * 0.264172);
-      return `${gallons} gal`;
+      return `${gallons} ${t('common.gallonsShort')}`;
     }
-    return `${liters}L`;
+    return `${liters}${t('common.litersShort')}`;
   };
 
   return (
@@ -46,14 +55,14 @@ export default function Navbar({
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-black text-xl tracking-tight bg-gradient-to-r from-cyan-300 via-sky-200 to-emerald-300 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(6,182,212,0.5)]">
-                AquaPulse
+                {t('nav.brand')}
               </span>
               <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">
-                PWA
+                {t('nav.pwa')}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              Gestión Predictiva Multi-Usuario para Acuarios de Arrecife
+              {t('nav.subtitle')}
             </p>
           </div>
         </div>
@@ -81,15 +90,49 @@ export default function Navbar({
             </div>
           )}
 
+          {/* Selector Discreto de Idioma (ES / EN) */}
+          <div
+            className="flex items-center bg-marine-900 border border-marine-700/80 rounded-2xl p-1 shadow-inner"
+            role="group"
+            aria-label="Selector de idioma"
+          >
+            <button
+              type="button"
+              onClick={() => handleLanguageChange('es')}
+              className={`min-h-[32px] px-2.5 py-1 rounded-xl text-xs font-black transition-all ${
+                currentLang === 'es'
+                  ? 'bg-gradient-to-r from-cyan-500 to-cyan-400 text-marine-950 shadow-neon-cyan/50 font-black'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Español"
+              aria-label="Cambiar idioma a Español"
+            >
+              ES
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLanguageChange('en')}
+              className={`min-h-[32px] px-2.5 py-1 rounded-xl text-xs font-black transition-all ${
+                currentLang === 'en'
+                  ? 'bg-gradient-to-r from-cyan-500 to-cyan-400 text-marine-950 shadow-neon-cyan/50 font-black'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="English (US)"
+              aria-label="Switch language to English (US)"
+            >
+              EN
+            </button>
+          </div>
+
           {/* Botón de Notificaciones */}
           <button
             onClick={() => {
               triggerHaptic();
               if (onOpenNotificationModal) onOpenNotificationModal();
             }}
-            title="Configurar recordatorios de medición"
+            title={t('nav.notificationsTitle')}
             className="w-11 h-11 rounded-2xl bg-marine-900 border border-marine-700/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-400 flex items-center justify-center transition active:scale-90"
-            aria-label="Configurar recordatorios"
+            aria-label={t('nav.notificationsTitle')}
           >
             <Bell className="w-4 h-4 text-cyan-400" />
           </button>
@@ -101,9 +144,9 @@ export default function Navbar({
               onRefresh();
             }}
             disabled={loading}
-            title="Recargar telemetría"
+            title={t('nav.refreshTitle')}
             className="w-11 h-11 rounded-2xl bg-marine-900 border border-marine-700/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-400 flex items-center justify-center transition active:scale-90 disabled:opacity-50"
-            aria-label="Recargar telemetría"
+            aria-label={t('nav.refreshTitle')}
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
           </button>
@@ -117,7 +160,7 @@ export default function Navbar({
             className="min-h-[44px] px-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-marine-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-neon-cyan active:scale-95 transition"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span className="hidden sm:inline">Nuevo Acuario</span>
+            <span className="hidden sm:inline">{t('nav.newTank')}</span>
           </button>
 
           {/* Perfil de Usuario / Iniciar Sesión */}
@@ -127,14 +170,14 @@ export default function Navbar({
                 triggerHaptic();
                 if (onOpenSettings) onOpenSettings();
               }}
-              title={`Perfil: ${user?.email} (Plan: ${user?.subscription_tier?.toUpperCase()})`}
+              title={`Perfil: ${user?.email} (${t('common.free')})`}
               className="min-h-[44px] px-2.5 sm:px-3 rounded-2xl bg-marine-900 border border-marine-700/80 hover:border-cyan-400/80 flex items-center gap-2 transition active:scale-95"
             >
               <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-600 to-emerald-500 text-marine-950 font-black text-xs flex items-center justify-center">
                 {initials}
               </div>
               <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden sm:inline">
-                {user?.subscription_tier || 'FREE'}
+                {user?.subscription_tier?.toUpperCase() || t('common.free')}
               </span>
             </button>
           ) : (
@@ -146,7 +189,7 @@ export default function Navbar({
               className="min-h-[44px] px-3 rounded-2xl bg-marine-900 border border-cyan-500/50 text-cyan-300 font-bold text-xs flex items-center gap-1.5 hover:bg-cyan-500/10 active:scale-95 transition"
             >
               <LogIn className="w-4 h-4" />
-              <span className="hidden sm:inline">Entrar</span>
+              <span className="hidden sm:inline">{t('nav.login')}</span>
             </button>
           )}
         </div>

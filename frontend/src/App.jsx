@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import DashboardTrends from './components/DashboardTrends';
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 
 function AppContent() {
+  const { t } = useTranslation();
   const {
     user,
     isAuthenticated,
@@ -180,7 +182,7 @@ function AppContent() {
       {!isOnline && (
         <div className="bg-amber-500/20 text-amber-300 border-b border-amber-500/40 px-4 py-2 text-xs font-bold flex items-center justify-center gap-2">
           <WifiOff className="w-4 h-4" />
-          <span>Modo Sin Conexión activo. Las lecturas se conservan en caché local.</span>
+          <span>{t('app.offlineBanner')}</span>
         </div>
       )}
 
@@ -220,7 +222,7 @@ function AppContent() {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span>Dashboard & Biometría</span>
+            <span>{t('nav.dashboardTab')}</span>
           </button>
 
           <button
@@ -235,7 +237,7 @@ function AppContent() {
             }`}
           >
             <LineChart className="w-4 h-4" />
-            <span>Gráficas & Proyección de Consumo</span>
+            <span>{t('nav.trendsTab')}</span>
           </button>
 
           <button
@@ -250,7 +252,7 @@ function AppContent() {
             }`}
           >
             <Droplets className="w-4 h-4" />
-            <span>Cambios de Agua & Dilución</span>
+            <span>{t('nav.waterTab')}</span>
           </button>
 
           <button
@@ -265,7 +267,7 @@ function AppContent() {
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>Ajustes & Freemium</span>
+            <span>{t('nav.settingsTab')}</span>
           </button>
         </div>
       </div>
@@ -280,30 +282,30 @@ function AppContent() {
                   <Lock className="w-8 h-8" />
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-white mb-2">
-                  Bienvenido a AquaPulse Commercial
+                  {t('app.welcomeTitle')}
                 </h2>
                 <p className="text-sm text-slate-400 max-w-lg mx-auto mb-6">
-                  La plataforma predictiva para acuaristas de arrecife y agua dulce. Para acceder a tus telemetrías y proyecciones de consumo coralino, inicia sesión o ingresa como usuario de prueba.
+                  {t('app.welcomeDesc')}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <button
                     onClick={() => openAuthModal('login')}
                     className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-cyan-400 text-marine-950 font-black text-sm shadow-neon-cyan hover:brightness-110 active:scale-95 transition"
                   >
-                    Iniciar Sesión
+                    {t('app.loginBtn')}
                   </button>
                   <button
                     onClick={() => openAuthModal('register')}
                     className="px-6 py-3 rounded-2xl bg-marine-950 border border-marine-700 text-slate-200 font-bold text-sm hover:border-cyan-400 active:scale-95 transition"
                   >
-                    Crear Cuenta Free
+                    {t('app.registerBtn')}
                   </button>
                   <button
                     onClick={loginDemo}
                     className="px-6 py-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 font-bold text-sm hover:bg-cyan-500/20 active:scale-95 transition flex items-center justify-center gap-2"
                   >
                     <Sparkles className="w-4 h-4 text-cyan-400" />
-                    <span>Probar Demo (1 Click)</span>
+                    <span>{t('app.demoBtn')}</span>
                   </button>
                 </div>
               </div>
