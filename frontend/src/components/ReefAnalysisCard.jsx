@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { fetchPredictiveAnalysis } from '../api';
 
-export default function ReefAnalysisCard({ aquariumData = {}, backendUrl = null }) {
+const ReefAnalysisCard = forwardRef(function ReefAnalysisCard({ aquariumData = {}, backendUrl = null }, ref) {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState(null);
@@ -45,6 +45,12 @@ export default function ReefAnalysisCard({ aquariumData = {}, backendUrl = null 
       setLoading(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    fetchAiAnalysis,
+    loading,
+    analysis
+  }), [loading, analysis, aquariumData, backendUrl]);
 
   // Función para determinar el color de la tarjeta según el nivel de riesgo
   const getRiskBadgeColor = (nivel) => {
@@ -128,4 +134,6 @@ export default function ReefAnalysisCard({ aquariumData = {}, backendUrl = null 
       )}
     </div>
   );
-}
+});
+
+export default ReefAnalysisCard;

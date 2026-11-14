@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Chart as ChartJS,
@@ -54,11 +54,23 @@ export default function DashboardTrends({
   const [predictions, setPredictions] = useState(propPredictions);
   const [measurements, setMeasurements] = useState(propMeasurements || []);
   const [loading, setLoading] = useState(!propPredictions);
-  const [activeParam, setActiveParam] = useState('dkh'); // 'dkh', 'calcium', 'nitrate', 'magnesium', 'phosphate', 'salinity'
+  const [activeParam, setActiveParam] = useState('phosphate'); // 'dkh', 'calcium', 'nitrate', 'magnesium', 'phosphate', 'salinity'
+  const reefAnalysisRef = useRef(null);
 
   const triggerHaptic = (ms = 15) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(ms);
+    }
+  };
+
+  const handleAnalizarConIA = () => {
+    triggerHaptic(25);
+    if (reefAnalysisRef.current?.fetchAiAnalysis) {
+      reefAnalysisRef.current.fetchAiAnalysis();
+    }
+    const section = document.getElementById('reef-analysis-section');
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   };
 
@@ -570,39 +582,39 @@ export default function DashboardTrends({
 
       {/* ---------------- 3. GRÁFICA INTERACTIVA CON ZONA SEGURA & PROYECCIÓN ---------------- */}
       <div className="glass-panel rounded-3xl p-5 sm:p-7 border border-marine-700/80 space-y-4 shadow-2xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-marine-800">
+        {/* Cabecera Superior (Título y Botones) */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 pb-4 border-b border-marine-800">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                {currentParam.name}
-              </h2>
-              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                Zona Segura: {currentParam.safeMin} - {currentParam.safeMax} {currentParam.unit}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1 font-medium">
-              Serie histórica con <strong className="text-emerald-400">franja verde de rango seguro</strong> y <strong className="text-amber-400">proyección punteada a 3 días</strong>.
-            </p>
+            <h2 className="text-2xl font-bold text-white flex items-center flex-wrap gap-y-2">
+              {currentParam.name} <span className="ml-3 text-xs bg-emerald-900/50 text-emerald-400 px-2 py-1 rounded border border-emerald-800">Zona Segura: {currentParam.safeMin} - {currentParam.safeMax} {currentParam.unit}</span>
+            </h2>
+            <p className="text-sm text-gray-400 mt-1">Serie histórica con franja verde de rango seguro y proyección punteada a 3 días.</p>
           </div>
+          
+          {/* Grupo de Acciones */}
+          <div className="flex items-center flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(25);
+                if (onOpenQuickLog) onOpenQuickLog();
+              }}
+              className="bg-emerald-400 hover:bg-emerald-300 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center transition-colors active:scale-95"
+            >
+              <span>📷 Escanear / Registrar</span>
+            </button>
+            
+            {/* NUEVO: Botón de IA integrado en la cabecera */}
+            <button 
+              type="button"
+              onClick={handleAnalizarConIA} /* Usa la función que ya tenías */
+              className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all active:scale-95"
+            >
+              <img src="/robot-fish.jpg" alt="IA" className="w-5 h-5 mr-2 rounded border border-slate-900/20 object-cover" />
+              Analizar con IA
+            </button>
 
-          {/* Quick Metrics & Actions */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {onOpenQuickLog && (
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic(25);
-                  onOpenQuickLog();
-                }}
-                className="btn-touch py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-marine-950 font-black text-xs shadow-neon-cyan flex items-center gap-1.5 active:scale-95"
-              >
-                <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Escanear / Registrar</span>
-              </button>
-            )}
-
-            <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right">
+            <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right hidden lg:block">
               <span className="block text-[10px] font-black uppercase text-slate-400">Pendiente Diaria</span>
               <span className={`text-sm font-black flex items-center justify-end gap-1 ${
                 localSlope < 0 ? 'text-amber-400' : 'text-cyan-400'
@@ -612,11 +624,11 @@ export default function DashboardTrends({
               </span>
             </div>
 
-            <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right">
+            <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right hidden lg:block">
               <span className="block text-[10px] font-black uppercase text-slate-400">Proyección +3 Días</span>
               <span className="text-sm font-black text-white">
                 {validReadings.length > 0
-                  ? `${(Number(validReadings[validReadings.length - 1][currentParam.key]) + localSlope * 3).toFixed(2)} ${currentParam.unit}`
+                  ? `${Math.max(0, Number(validReadings[validReadings.length - 1][currentParam.key]) + localSlope * 3).toFixed(2)} ${currentParam.unit}`
                   : '--'}
               </span>
             </div>
@@ -670,8 +682,9 @@ export default function DashboardTrends({
       </div>
 
       {/* Tarjeta de Diagnóstico Predictivo AquaPulse con IA */}
-      <div className="pt-2">
+      <div id="reef-analysis-section" className="pt-2">
         <ReefAnalysisCard
+          ref={reefAnalysisRef}
           aquariumData={{
             nombre_acuario: 'Mi Acuario Principal',
             volumen_litros: 280,
