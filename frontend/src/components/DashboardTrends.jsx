@@ -216,6 +216,13 @@ export default function DashboardTrends({
     if (validReadings.length < 2) return 0;
     const recent = validReadings.slice(-5);
     const t0 = new Date(recent[0].timestamp).getTime() / 86400000;
+    const tLast = new Date(recent[recent.length - 1].timestamp).getTime() / 86400000;
+    const spanDays = tLast - t0;
+
+    // Si las lecturas están tomadas a menos de 2 horas de diferencia, asumir estabilidad (tasa 0)
+    // para evitar divisiones infinitesimales que disparen pendientes erráticas (ej: -73.11)
+    if (spanDays < 0.08) return 0;
+
     const points = recent.map(r => [
       (new Date(r.timestamp).getTime() / 86400000) - t0,
       Number(r[currentParam.key])
@@ -227,7 +234,18 @@ export default function DashboardTrends({
     const sumX2 = points.reduce((acc, p) => acc + p[0] ** 2, 0);
     const den = (n * sumX2 - sumX ** 2);
     if (Math.abs(den) < 1e-9) return 0;
-    return (n * sumXY - sumX * sumY) / den;
+    const rawSlope = (n * sumXY - sumX * sumY) / den;
+
+    // Límites biológicos de variación máxima por día para amortiguar ruido
+    const maxDailyChange = {
+      phosphate_ppm: 0.15,
+      alkalinity_dkh: 2.0,
+      calcium_ppm: 50.0,
+      magnesium_ppm: 100.0,
+      nitrate_ppm: 15.0
+    };
+    const maxLimit = maxDailyChange[currentParam.key] || 5.0;
+    return Math.max(-maxLimit, Math.min(maxLimit, rawSlope));
   }, [validReadings, currentParam.key]);
 
   // Configurar datasets de Chart.js con la zona segura sombreada y línea punteada de 3 días
@@ -245,28 +263,23 @@ export default function DashboardTrends({
     const lastDate = new Date(validReadings[validReadings.length - 1].timestamp);
     const projLabels = [];
     const projValues = new Array(realValues.length - 1).fill(null);
-    const lastValue = realValues[realValues.length - 1];
+    const ultimoValorReal = realValues[realValues.length - 1];
+    const pendienteDiaria = localSlope;
 
-    // Conectar el último punto real con el inicio de la línea de proyección
-    projValues.push(lastValue);
+    // El primer valor conecta la línea real con la punteada
+    projValues.push(ultimoValorReal);
 
+    // Proyecciones limitadas estrictamente a cero:
     for (let day = 1; day <= 3; day++) {
       const futureDate = new Date(lastDate);
       futureDate.setDate(futureDate.getDate() + day);
       projLabels.push(`+${day}d (${futureDate.getDate()}/${futureDate.getMonth() + 1})`);
       
-      // Al calcular los puntos de la línea punteada:
-      const valorProyectado = lastValue + (localSlope * day);
-      // Forzar a que nunca baje de cero
-      const valorPintado = Math.max(0, valorProyectado);
-      projValues.push(Number(valorPintado.toFixed(3)));
+      const proyeccionDia = Math.max(0, ultimoValorReal + (pendienteDiaria * day));
+      projValues.push(Number(proyeccionDia.toFixed(3)));
     }
 
     const allLabels = [...realLabels, ...projLabels];
-
-    // 3. Zona Segura (Banda sombreada horizontal en verde traslúcido)
-    const safeZoneMaxArray = new Array(allLabels.length).fill(currentParam.safeMax);
-    const safeZoneMinArray = new Array(allLabels.length).fill(currentParam.safeMin);
 
     return {
       labels: allLabels,
@@ -276,24 +289,24 @@ export default function DashboardTrends({
           label: `Medición Real (${currentParam.unit})`,
           data: [...realValues, null, null, null],
           borderColor: currentParam.color,
-          backgroundColor: `${currentParam.color}22`,
+          backgroundColor: currentParam.color,
           borderWidth: 3,
           pointBackgroundColor: currentParam.color,
           pointBorderColor: '#ffffff',
           pointBorderWidth: 2,
           pointRadius: 6,
           pointHoverRadius: 8,
-          tension: 0.3,
+          tension: 0.1,
           fill: false,
         },
         // Línea Punteada de Proyección a 3 Días
         {
-          label: `Proyección 3 Días (${localSlope >= 0 ? '+' : ''}${localSlope.toFixed(2)} ${currentParam.unit}/día)`,
+          label: `Proyección 3 Días (${pendienteDiaria >= 0 ? '+' : ''}${pendienteDiaria.toFixed(2)} ${currentParam.unit}/día)`,
           data: projValues,
-          borderColor: localSlope < 0 ? '#f59e0b' : '#38bdf8',
+          borderColor: '#38bdf8', // Cyan
+          borderDash: [6, 6], // Define el estilo punteado
           borderWidth: 2.5,
-          borderDash: [6, 6],
-          pointBackgroundColor: localSlope < 0 ? '#f59e0b' : '#38bdf8',
+          pointBackgroundColor: '#38bdf8',
           pointBorderColor: '#ffffff',
           pointBorderWidth: 1.5,
           pointRadius: 4.5,

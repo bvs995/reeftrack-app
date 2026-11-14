@@ -95,9 +95,14 @@ def analyze_parameter_consumption(
             alert_message=f"Se requieren al menos 2 mediciones de {name} para estimar la tasa de consumo."
         ), None
 
-    slope = compute_linear_regression(points)
-    if slope is None:
+    total_span_days = points[-1][0] - points[0][0]
+    if total_span_days < 0.08:
+        # Menos de 2 horas entre mediciones: asumir estabilidad en lugar de extrapolar tasas diarias extremas
         slope = 0.0
+    else:
+        slope = compute_linear_regression(points)
+        if slope is None:
+            slope = 0.0
 
     # Tasa de consumo: positiva cuando el buffer desciende
     daily_consumption = round(-slope, 3) if slope < 0 else 0.0
