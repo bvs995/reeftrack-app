@@ -5,16 +5,16 @@ import logging
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
-from backend.models import AnalisisAcuarioSchema, DosisRecomendada
+from backend.models import AnalisisAcuarioSchema, AnalisisAcuarioResponse, DosisRecomendada
 
 # Cargar variables de entorno
 load_dotenv()
 
 logger = logging.getLogger("aquapulse.ai_service")
 
-# Modelos recomendados con fallback resiliente
-PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
-FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
+# Modelos recomendados: usuario solicita gemini-2.5-flash, con fallback a gemini-3.1-flash-lite y 3.8-flash
+PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
 
 
 def _generar_analisis_fallback(
@@ -27,7 +27,7 @@ def _generar_analisis_fallback(
     nitrato: Optional[float],
     fosfato: Optional[float],
     tendencia: str
-) -> AnalisisAcuarioSchema:
+) -> AnalisisAcuarioResponse:
     """Genera un análisis clínico estructurado inteligente de respaldo cuando la API externa no está disponible."""
     risk = "Bajo"
     alert = "Parámetros dentro de umbrales operativos estables. Mantener rutina regular de dosificación y filtración."
@@ -113,7 +113,7 @@ def _generar_analisis_fallback(
         f"Tendencia reportada: '{tendencia}'."
     )
 
-    return AnalisisAcuarioSchema(
+    return AnalisisAcuarioResponse(
         diagnostico_general=diagnostico,
         nivel_riesgo=risk,
         alerta_predictiva=alert,
@@ -121,11 +121,11 @@ def _generar_analisis_fallback(
     )
 
 
-def analizar_parametros_acuario(datos_acuario: Dict[str, Any], allow_fallback: bool = True) -> AnalisisAcuarioSchema:
+def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool = True) -> AnalisisAcuarioResponse:
     """
     Analiza los parámetros químicos actuales de un acuario y genera un diagnóstico predictivo
-    y clínico estructurado utilizando Google GenAI (Gemini SDK oficial) con Structured Outputs.
-    Devuelve una instancia validada de AnalisisAcuarioSchema.
+    y clínico puramente técnico y estructurado utilizando Google GenAI (Gemini SDK oficial) con Structured Outputs.
+    Devuelve un modelo Pydantic AnalisisAcuarioResponse (alias de AnalisisAcuarioSchema) directamente parseado.
     """
     api_key = (
         os.environ.get("GEMINI_API_KEY") or
@@ -147,7 +147,7 @@ def analizar_parametros_acuario(datos_acuario: Dict[str, Any], allow_fallback: b
     magnesio = datos_acuario.get("magnesio")
     nitrato = datos_acuario.get("nitrato")
     fosfato = datos_acuario.get("fosfato")
-    tendencia = datos_acuario.get("tendencia_reciente", "Estable en las últimas 24h")
+    tendencia = datos_acuario.get("tendencia_reciente", "Estable")
 
     # Si no hay API key disponible en entorno local, devolver diagnóstico clínico inteligente estructurado de respaldo
     if is_dummy_key:
@@ -158,36 +158,24 @@ def analizar_parametros_acuario(datos_acuario: Dict[str, Any], allow_fallback: b
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        # Inicializa cliente con api_key explícita si existe
+        client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
-        # System Prompt: Define el rol clínico y preventivo
         system_instruction = (
-            "Eres AquaPulse AI, un biólogo marino experto en química del agua y sistemas de arrecife cerrado. "
-            "Tu objetivo es analizar los parámetros actuales de un acuario, detectar desviaciones y prever colapsos químicos "
-            "(como caídas de KH o picos de fosfatos) antes de que ocurran. "
-            "Sé directo, clínico y técnico. Estructura tu respuesta en formato JSON estrictamente acorde al esquema requerido:\n"
-            "- diagnostico_general: Resumen clínico del estado químico actual del tanque.\n"
-            "- nivel_riesgo: 'Bajo', 'Moderado', 'Crítico' o 'Colapso Inminente'.\n"
-            "- alerta_predictiva: Predicción de lo que ocurrirá en las próximas 48 horas si no se actúa.\n"
-            "- acciones_correctoras: Lista de objetos { parametro, producto, cantidad_sugerida } con dosificaciones exactas."
+            "Eres AquaPulse AI, un biólogo marino experto en química del agua de arrecife. "
+            "Analiza los parámetros de entrada y genera una respuesta puramente técnica, predictiva y estructurada."
         )
 
-        # User Prompt Dinámico inyectando los datos del acuario
         user_prompt = f"""
-Analiza los siguientes datos actuales del acuario '{nombre}':
-- Volumen: {volumen} litros
-- pH: {ph if ph is not None else 'No registrado'} (Ideal: 8.1 - 8.4)
-- Alcalinidad (KH): {kh if kh is not None else 'No registrado'} dKH (Ideal: 7.5 - 8.5 dKH)
-- Calcio: {calcio if calcio is not None else 'No registrado'} ppm (Ideal: 420 - 450 ppm)
-- Magnesio: {magnesio if magnesio is not None else 'No registrado'} ppm (Ideal: 1300 - 1450 ppm)
-- Nitrato: {nitrato if nitrato is not None else 'No registrado'} ppm (Ideal: 5 - 10 ppm)
-- Fosfato: {fosfato if fosfato is not None else 'No registrado'} ppm (Ideal: 0.03 - 0.08 ppm)
-
-Historial reciente de cambios:
-{tendencia}
-
-Genera el análisis predictivo estructurado y las recomendaciones precisas de dosificación.
-"""
+    Analiza los datos del acuario '{nombre}':
+    - pH: {ph if ph is not None else 'No registrado'}
+    - KH: {kh if kh is not None else 'No registrado'} dKH
+    - Calcio: {calcio if calcio is not None else 'No registrado'} ppm
+    - Magnesio: {magnesio if magnesio is not None else 'No registrado'} ppm
+    - Nitrato: {nitrato if nitrato is not None else 'No registrado'} ppm
+    - Fosfato: {fosfato if fosfato is not None else 'No registrado'} ppm
+    - Historial: {tendencia}
+    """
 
         candidate_models = list(dict.fromkeys(FALLBACK_MODELS))
         last_error = None
@@ -199,18 +187,23 @@ Genera el análisis predictivo estructurado y las recomendaciones precisas de do
                     contents=user_prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
-                        temperature=0.2,  # Evita alucinaciones y mantiene determinismo técnico
-                        max_output_tokens=1000,
+                        temperature=0.1,  # Temperatura ultra baja para precisión en esquemas
                         response_mime_type="application/json",
-                        response_schema=AnalisisAcuarioSchema,
-                    )
+                        response_schema=AnalisisAcuarioResponse,  # ¡Aquí ocurre la magia!
+                    ),
                 )
-                if response and response.text:
-                    clean_text = response.text.strip()
-                    if clean_text.startswith("```"):
-                        clean_text = re.sub(r"^```(?:json)?\s*", "", clean_text)
-                        clean_text = re.sub(r"\s*```$", "", clean_text)
-                    return AnalisisAcuarioSchema.model_validate_json(clean_text)
+                if response:
+                    # Si el SDK soporta response.parsed directamente, devolverlo
+                    if hasattr(response, "parsed") and response.parsed is not None:
+                        return response.parsed
+
+                    # Si devuelve texto JSON estructurado, validarlo contra el esquema
+                    if response.text:
+                        clean_text = response.text.strip()
+                        if clean_text.startswith("```"):
+                            clean_text = re.sub(r"^```(?:json)?\s*", "", clean_text)
+                            clean_text = re.sub(r"\s*```$", "", clean_text)
+                        return AnalisisAcuarioResponse.model_validate_json(clean_text)
             except Exception as model_err:
                 last_error = model_err
                 logger.warning(f"Aviso con modelo {model_cand}: {model_err}. Intentando modelo alternativo...")
@@ -227,3 +220,7 @@ Genera el análisis predictivo estructurado y las recomendaciones precisas de do
             logger.info("Activando fallback estructurado de emergencia para garantizar disponibilidad.")
             return _generar_analisis_fallback(nombre, volumen, ph, kh, calcio, magnesio, nitrato, fosfato, tendencia)
         raise e
+
+
+# Alias de compatibilidad
+analizar_parametros_acuario = analizar_parametros_estructurado

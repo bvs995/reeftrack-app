@@ -35,10 +35,14 @@ from backend.models import (
     PASSWORD_REQUIREMENTS_ERROR,
     DosisRecomendada,
     AnalisisAcuarioSchema,
+    AnalisisAcuarioResponse,
     AquariumDataRequest,
     AquariumAnalysisResponse
 )
-from backend.services.ai_service import analizar_parametros_acuario
+from backend.services.ai_service import (
+    analizar_parametros_acuario,
+    analizar_parametros_estructurado
+)
 from backend.auth import (
     hash_password,
     verify_password,

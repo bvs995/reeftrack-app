@@ -302,6 +302,9 @@ class AnalisisAcuarioSchema(BaseModel):
     alerta_predictiva: str = Field(description="Predicción de lo que ocurrirá en las próximas 48 horas si no se actúa.")
     acciones_correctoras: List[DosisRecomendada] = Field(description="Lista de acciones y dosificaciones requeridas.")
 
+# Alias de compatibilidad directa para AnalisisAcuarioResponse
+AnalisisAcuarioResponse = AnalisisAcuarioSchema
+
 class AquariumDataRequest(BaseModel):
     nombre_acuario: str = Field("Principal", example="Arrecife Mixto SPS/LPS", description="Nombre del acuario")
     volumen_litros: float = Field(280.0, example=280.0, description="Volumen del acuario en litros")
