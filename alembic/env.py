@@ -6,16 +6,26 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# Asegurar que la raíz del proyecto esté en sys.path para importar backend
+# Asegurar que la raíz del proyecto y backend/ estén en sys.path para soportar cualquier estilo de import
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
+for path in [PROJECT_ROOT, BACKEND_DIR]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 # Cargar variables de entorno desde backend/.env si existe
-load_dotenv(os.path.join(PROJECT_ROOT, "backend", ".env"))
+load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 
-from backend.database import Base
-import backend.models  # Registra todos los modelos ORM en Base.metadata
+# Importar backend e interconectar módulos para que 'from database import Base' y 'from models import ...'
+# compartan el mismo espacio de metadatos de SQLAlchemy sin duplicar instancias de Base.
+import backend.database
+import backend.models
+sys.modules["database"] = backend.database
+sys.modules["models"] = backend.models
+
+# Importa la Base de donde heredan tus modelos (ej. from database import Base)
+from database import Base
+from models import Acuario, Medicion
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

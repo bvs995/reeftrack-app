@@ -141,6 +141,9 @@ class MedicionAcuario(Base):
     acuario = relationship("Acuario", back_populates="mediciones")
     tank = synonym("acuario")
 
+# Alias canónicos para modelos de base de datos
+Medicion = MedicionAcuario
+
 
 # ==============================================================================
 # ESQUEMAS PYDANTIC v2 - AUTENTICACIÓN Y USUARIOS
