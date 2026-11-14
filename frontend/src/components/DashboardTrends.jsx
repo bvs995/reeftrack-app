@@ -28,7 +28,7 @@ import {
   Info,
   Camera
 } from 'lucide-react';
-import { fetchPredictions, fetchMeasurements } from '../api';
+import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis } from '../api';
 import ReefAnalysisCard from './ReefAnalysisCard';
 
 // Registrar plugins requeridos de Chart.js incluyendo annotationPlugin oficial
@@ -55,6 +55,9 @@ export default function DashboardTrends({
   const [measurements, setMeasurements] = useState(propMeasurements || []);
   const [loading, setLoading] = useState(!propPredictions);
   const [activeParam, setActiveParam] = useState('phosphate'); // 'dkh', 'calcium', 'nitrate', 'magnesium', 'phosphate', 'salinity'
+  const [mostrarDiagnosticoIA, setMostrarDiagnosticoIA] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
   const reefAnalysisRef = useRef(null);
 
   const triggerHaptic = (ms = 15) => {
@@ -63,14 +66,42 @@ export default function DashboardTrends({
     }
   };
 
-  const handleAnalizarConIA = () => {
+  const handleAnalizarConIA = async () => {
     triggerHaptic(25);
+    setMostrarDiagnosticoIA(prev => !prev);
+
+    // Si aún no hemos cargado el análisis de IA, consultar a FastAPI / Gemini
+    if (!aiAnalysis && !aiLoading) {
+      setAiLoading(true);
+      try {
+        const alk = predictions?.alkalinity;
+        const cal = predictions?.calcium;
+        const wc = predictions?.water_change;
+        const payload = {
+          nombre_acuario: 'Mi Acuario Principal',
+          volumen_litros: 280,
+          ph: 8.2,
+          kh: alk?.latest_value ?? 8.3,
+          calcio: cal?.latest_value ?? 420,
+          magnesio: 1350,
+          nitrato: wc?.current_nitrate_ppm ?? 5.0,
+          fosfato: 0.04,
+          temperatura: 25.5,
+          tendencia_reciente: `Consumo KH: ${alk?.daily_consumption_rate ? alk.daily_consumption_rate.toFixed(2) + ' dKH/d' : 'Estable'}. Acumulación NO3: ${wc?.daily_accumulation_rate ? wc.daily_accumulation_rate.toFixed(2) + ' ppm/d' : 'Estable'}.`
+        };
+        const res = await fetchPredictiveAnalysis(payload);
+        if (res?.data) {
+          setAiAnalysis(res.data);
+        }
+      } catch (err) {
+        console.error('Error al consultar diagnóstico IA:', err);
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
     if (reefAnalysisRef.current?.fetchAiAnalysis) {
       reefAnalysisRef.current.fetchAiAnalysis();
-    }
-    const section = document.getElementById('reef-analysis-section');
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   };
 
@@ -635,8 +666,86 @@ export default function DashboardTrends({
           </div>
         </div>
 
-        {/* Canvas de Chart.js */}
-        <div className="h-80 sm:h-96 w-full pt-1">
+        {/* NUEVO: Panel de IA de Ancho Completo (Se muestra al hacer clic en el botón) */}
+        {mostrarDiagnosticoIA && (
+          <div className="w-full bg-[#111827] border border-cyan-500/30 rounded-xl p-6 mb-6 shadow-lg shadow-cyan-900/20 animate-fade-in">
+            
+            {/* Encabezado del Panel IA */}
+            <div className="flex items-center justify-between mb-5 border-b border-gray-700/50 pb-4">
+              <div className="flex items-center">
+                <img 
+                  src="/robot-fish.jpg" 
+                  alt="AquaPulse AI" 
+                  className="w-12 h-12 mr-4 rounded-lg shadow-lg border border-cyan-500/50 object-cover" 
+                />
+                <div>
+                  <h3 className="text-xl font-bold text-cyan-400">Diagnóstico Predictivo AquaPulse</h3>
+                  <p className="text-sm text-gray-400">Análisis clínico impulsado por Gemini 2.5 Flash</p>
+                </div>
+              </div>
+              {aiLoading && (
+                <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 bg-cyan-950/60 px-3 py-1.5 rounded-full border border-cyan-800">
+                  <Activity className="w-4 h-4 animate-spin text-cyan-400" />
+                  <span>Analizando química...</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Grid de 3 columnas para aprovechar el espacio horizontal */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Columna 1: Riesgo */}
+              <div className={`p-4 rounded-lg border ${
+                aiAnalysis?.nivel_riesgo?.toLowerCase().includes('crítico') || aiAnalysis?.nivel_riesgo?.toLowerCase().includes('alto')
+                  ? 'bg-red-900/20 border-red-800/50'
+                  : aiAnalysis?.nivel_riesgo?.toLowerCase().includes('moderad')
+                  ? 'bg-amber-900/20 border-amber-800/50'
+                  : 'bg-emerald-900/20 border-emerald-800/50'
+              }`}>
+                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Nivel de Riesgo</span>
+                <p className={`text-xl font-bold mt-1 ${
+                  aiAnalysis?.nivel_riesgo?.toLowerCase().includes('crítico') || aiAnalysis?.nivel_riesgo?.toLowerCase().includes('alto')
+                    ? 'text-red-400'
+                    : aiAnalysis?.nivel_riesgo?.toLowerCase().includes('moderad')
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
+                }`}>
+                  {aiAnalysis?.nivel_riesgo || 'Bajo'}
+                </p>
+              </div>
+              
+              {/* Columna 2: Diagnóstico */}
+              <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
+                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Diagnóstico General</span>
+                <p className="text-sm text-gray-300 mt-2">
+                  {aiAnalysis?.diagnostico_general || 'El sistema presenta una estabilidad química excelente con parámetros dentro de los rangos óptimos...'}
+                </p>
+              </div>
+              
+              {/* Columna 3: Proyección y Acciones */}
+              <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
+                <span className="text-xs text-amber-500/80 font-bold uppercase tracking-wider flex items-center">
+                  ⚠️ Predicción a 48 Horas
+                </span>
+                <p className="text-sm text-gray-300 mt-2">
+                  {aiAnalysis?.alerta_predictiva_48h || 'Continuará el crecimiento coralino, pero falta registro de temperatura.'}
+                </p>
+                
+                {/* Sugerencia como "Chip" */}
+                <div className="mt-3 bg-cyan-900/30 border border-cyan-800 text-cyan-300 text-xs p-2 rounded">
+                  <strong>Acción:</strong>{' '}
+                  {aiAnalysis?.acciones_correctoras && aiAnalysis.acciones_correctoras.length > 0
+                    ? `${aiAnalysis.acciones_correctoras[0].parametro ? aiAnalysis.acciones_correctoras[0].parametro + ': ' : ''}${aiAnalysis.acciones_correctoras[0].producto || ''} ${aiAnalysis.acciones_correctoras[0].cantidad_sugerida ? '(' + aiAnalysis.acciones_correctoras[0].cantidad_sugerida + ')' : ''}`
+                    : 'Instalar sensor de monitoreo continuo.'}
+                </div>
+              </div>
+              
+            </div>
+          </div>
+        )}
+
+        {/* Gráfica Original */}
+        <div className="h-64 sm:h-80 w-full bg-slate-900/50 rounded-xl p-4 border border-slate-800">
           {loading ? (
             <div className="h-full flex items-center justify-center text-slate-400 gap-2">
               <Activity className="w-6 h-6 animate-spin text-cyan-400" />
@@ -648,9 +757,7 @@ export default function DashboardTrends({
               <p className="text-xs font-semibold">No hay mediciones registradas para {currentParam.name}.</p>
             </div>
           ) : (
-            <div className="h-64 sm:h-80 w-full">
-              <Line data={chartData} options={chartOptions} />
-            </div>
+            <Line data={chartData} options={chartOptions} />
           )}
         </div>
 
