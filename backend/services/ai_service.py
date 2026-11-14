@@ -62,8 +62,10 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     resumen_historial = []
     for reg in registros:
         fecha_str = reg.fecha_registro.strftime("%Y-%m-%d %H:%M")
+        temp_val = getattr(reg, "temperatura", None)
+        temp_str = f", Temp: {temp_val} °C" if temp_val is not None else ""
         resumen_historial.append(
-            f"[{fecha_str}] pH: {reg.ph}, KH: {reg.kh} dKH, Calcio: {reg.calcio} ppm, Fosfato: {reg.fosfato} ppm"
+            f"[{fecha_str}] pH: {reg.ph}, KH: {reg.kh} dKH, Calcio: {reg.calcio} ppm, Fosfato: {reg.fosfato} ppm{temp_str}"
         )
 
     return "\n".join(resumen_historial)
@@ -78,12 +80,40 @@ def _generar_analisis_fallback(
     magnesio: Optional[float],
     nitrato: Optional[float],
     fosfato: Optional[float],
-    tendencia: str
+    tendencia: str,
+    temperatura: Optional[float] = None
 ) -> AnalisisAcuarioResponse:
     """Genera un análisis clínico estructurado inteligente de respaldo cuando la API externa no está disponible."""
     risk = "Bajo"
     alert = "Parámetros dentro de umbrales operativos estables. Mantener rutina regular de dosificación y filtración."
     acciones: List[DosisRecomendada] = []
+
+    if temperatura is not None and temperatura > 27.5:
+        risk = "Crítico" if temperatura >= 28.5 else "Moderado"
+        alert = (
+            f"Temperatura a {temperatura} °C por encima del rango óptimo (24.5 - 26.5 °C). "
+            f"Riesgo de blanqueamiento de corales e hipoxia en el tanque si no se disipa calor."
+        )
+        acciones.append(
+            DosisRecomendada(
+                parametro="Temperatura",
+                producto="Ventiladores de evaporación o Enfriador (Chiller)",
+                cantidad_sugerida="Activar enfriamiento forzado y aumentar oxigenación superficial"
+            )
+        )
+    elif temperatura is not None and temperatura < 23.5:
+        risk = "Moderado"
+        alert = (
+            f"Temperatura a {temperatura} °C por debajo del rango seguro. "
+            f"Ralentización metabólica y estrés en fauna marina."
+        )
+        acciones.append(
+            DosisRecomendada(
+                parametro="Temperatura",
+                producto="Calentador con termostato calibrado",
+                cantidad_sugerida="Verificar calentador y elevar gradualmente a 25.0 °C"
+            )
+        )
 
     if kh is not None and kh < 7.5:
         risk = "Crítico" if kh < 6.8 else "Moderado"
@@ -161,7 +191,8 @@ def _generar_analisis_fallback(
         f"Ca={calcio if calcio is not None else '420'} ppm, "
         f"Mg={magnesio if magnesio is not None else '1350'} ppm, "
         f"NO3={nitrato if nitrato is not None else '5.0'} ppm, "
-        f"PO4={fosfato if fosfato is not None else '0.04'} ppm. "
+        f"PO4={fosfato if fosfato is not None else '0.04'} ppm"
+        f"{f', Temp={temperatura} °C' if temperatura is not None else ''}. "
         f"Tendencia reportada: '{tendencia}'."
     )
 
@@ -199,12 +230,13 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
     magnesio = datos_acuario.get("magnesio")
     nitrato = datos_acuario.get("nitrato")
     fosfato = datos_acuario.get("fosfato")
+    temperatura = datos_acuario.get("temperatura")
     tendencia = datos_acuario.get("tendencia_reciente", "Estable")
 
     # Si no hay API key disponible en entorno local, devolver diagnóstico clínico inteligente estructurado de respaldo
     if is_dummy_key:
         logger.warning("⚠️ GEMINI_API_KEY no detectada. Generando diagnóstico clínico estructurado de respaldo (demo fallback).")
-        return _generar_analisis_fallback(nombre, volumen, ph, kh, calcio, magnesio, nitrato, fosfato, tendencia)
+        return _generar_analisis_fallback(nombre, volumen, ph, kh, calcio, magnesio, nitrato, fosfato, tendencia, temperatura)
 
     try:
         from google import genai
@@ -226,6 +258,7 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
     - Magnesio: {magnesio if magnesio is not None else 'No registrado'} ppm
     - Nitrato: {nitrato if nitrato is not None else 'No registrado'} ppm
     - Fosfato: {fosfato if fosfato is not None else 'No registrado'} ppm
+    - Temperatura: {temperatura if temperatura is not None else 'No registrado'} °C
     - Historial: {tendencia}
     """
 

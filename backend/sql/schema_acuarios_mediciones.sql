@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS mediciones (
     magnesio NUMERIC(7, 2),
     nitrato NUMERIC(7, 2),
     fosfato NUMERIC(6, 4),
+    temperatura NUMERIC(4, 2), -- Temperatura del agua en °C (ej: 25.5)
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Definición estricta de la Llave Foránea
@@ -59,3 +60,9 @@ WHERE
     tc.constraint_type = 'FOREIGN KEY' 
     AND tc.table_name='mediciones';
 */
+
+-- ==============================================================================
+-- 5. Migración Incremental: Agregar Columna Temperatura
+-- ==============================================================================
+-- Si la tabla mediciones ya existe en tu base de datos:
+ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperatura NUMERIC(4, 2);

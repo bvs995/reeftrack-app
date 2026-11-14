@@ -835,6 +835,7 @@ def endpoint_analisis_con_historial(
             "magnesio": ultima_medicion.magnesio,
             "nitrato": ultima_medicion.nitrato,
             "fosfato": ultima_medicion.fosfato,
+            "temperatura": getattr(ultima_medicion, "temperatura", None),
             "tendencia_reciente": tendencia  # <--- Aquí inyectamos el historial formateado
         }
 

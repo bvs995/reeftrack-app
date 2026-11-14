@@ -78,6 +78,7 @@ class Measurement(Base):
     nitrate_ppm = Column(Float, nullable=True)
     phosphate_ppm = Column(Float, nullable=True)
     salinity_ppt = Column(Float, nullable=True)
+    temperatura = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
 
     # Sinónimos para consultas nativas en español (MedicionAcuario)
@@ -88,6 +89,8 @@ class Measurement(Base):
     magnesio = synonym("magnesium_ppm")
     nitrato = synonym("nitrate_ppm")
     fosfato = synonym("phosphate_ppm")
+    temperature = synonym("temperatura")
+    temperature_c = synonym("temperatura")
 
     user = relationship("User", back_populates="measurements")
     tank = relationship("Tank", back_populates="measurements")
@@ -127,6 +130,7 @@ class MedicionAcuario(Base):
     magnesio = Column(Float, nullable=True)
     nitrato = Column(Float, nullable=True)
     fosfato = Column(Float, nullable=True)
+    temperatura = Column(Float, nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
 
     # Sinónimos para interoperabilidad total
@@ -136,6 +140,8 @@ class MedicionAcuario(Base):
     magnesium_ppm = synonym("magnesio")
     nitrate_ppm = synonym("nitrato")
     phosphate_ppm = synonym("fosfato")
+    temperature = synonym("temperatura")
+    temperature_c = synonym("temperatura")
     timestamp = synonym("fecha_registro")
 
     acuario = relationship("Acuario", back_populates="mediciones")
@@ -269,10 +275,11 @@ class MeasurementBase(BaseModel):
     nitrate_ppm: Optional[float] = Field(None, example=5.0, description="Nitrato (NO3) en ppm")
     phosphate_ppm: Optional[float] = Field(None, example=0.04, description="Fosfato (PO4) en ppm")
     salinity_ppt: Optional[float] = Field(None, example=35.0, description="Salinidad en ppt o Gravedad Específica")
+    temperatura: Optional[float] = Field(None, example=25.5, description="Temperatura en °C (Ideal: 24.5 - 26.5)")
     notes: Optional[str] = Field(None, example="Test Hanna Checker HI772", description="Notas o kit de test")
 
     # Campos de compatibilidad con entrada rápida Numpad
-    parameter_code: Optional[str] = Field(None, description="Código de parámetro rápido (ej: dkh, ca, mg, no3, po4, salinity)")
+    parameter_code: Optional[str] = Field(None, description="Código de parámetro rápido (ej: dkh, ca, mg, no3, po4, salinity, temp)")
     value: Optional[float] = Field(None, description="Valor numérico de la medición individual")
     measured_at: Optional[datetime] = Field(None, description="Timestamp alternativo de medición")
 
@@ -298,6 +305,9 @@ class MeasurementBase(BaseModel):
             "phosphate_ppm": "phosphate_ppm",
             "salinity": "salinity_ppt",
             "salinity_ppt": "salinity_ppt",
+            "temp": "temperatura",
+            "temperatura": "temperatura",
+            "temperature": "temperatura",
         }
         if self.parameter_code and self.value is not None:
             field_name = code_map.get(str(self.parameter_code).lower().strip())
@@ -384,6 +394,7 @@ class AquariumDataRequest(BaseModel):
     magnesio: Optional[float] = Field(None, example=1350.0, description="Magnesio en ppm (Ideal: 1300 - 1450)")
     nitrato: Optional[float] = Field(None, example=5.0, description="Nitrato en ppm (Ideal: 5 - 10)")
     fosfato: Optional[float] = Field(None, example=0.04, description="Fosfato en ppm (Ideal: 0.03 - 0.08)")
+    temperatura: Optional[float] = Field(None, example=25.5, description="Temperatura del agua en °C (Ideal: 24.5 - 26.5)")
     tendencia_reciente: str = Field("Estable en las últimas 24h", description="Historial o tendencia reciente de cambios")
 
 class AquariumAnalysisResponse(BaseModel):

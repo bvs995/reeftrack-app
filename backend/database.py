@@ -89,6 +89,17 @@ def init_db():
                 if "ph" not in columns:
                     conn.execute(text("ALTER TABLE measurements ADD COLUMN ph FLOAT;"))
                     logger.info("Auto-migración: Columna ph añadida a measurements.")
+                if "temperatura" not in columns:
+                    conn.execute(text("ALTER TABLE measurements ADD COLUMN temperatura FLOAT;"))
+                    logger.info("Auto-migración: Columna temperatura añadida a measurements.")
+
+        # Auto-migración para mediciones
+        if "mediciones" in table_names:
+            med_columns = [c["name"] for c in inspector.get_columns("mediciones")]
+            with engine.begin() as conn:
+                if "temperatura" not in med_columns:
+                    conn.execute(text("ALTER TABLE mediciones ADD COLUMN temperatura FLOAT;"))
+                    logger.info("Auto-migración: Columna temperatura añadida a mediciones.")
 
         # Auto-migración para users (campos requeridos con defaults seguros)
         if "users" in table_names:
@@ -126,8 +137,8 @@ def init_db():
                             SELECT id, name, volume_liters, CAST(user_id AS TEXT), created_at FROM tanks;
                         """))
                         conn.execute(text("""
-                            INSERT OR IGNORE INTO mediciones (id, acuario_id, ph, kh, calcio, magnesio, nitrato, fosfato, fecha_registro)
-                            SELECT id, tank_id, ph, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, timestamp 
+                            INSERT OR IGNORE INTO mediciones (id, acuario_id, ph, kh, calcio, magnesio, nitrato, fosfato, temperatura, fecha_registro)
+                            SELECT id, tank_id, ph, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, temperatura, timestamp 
                             FROM measurements WHERE tank_id IN (SELECT id FROM acuarios);
                         """))
                     else:
@@ -137,8 +148,8 @@ def init_db():
                             ON CONFLICT (id) DO NOTHING;
                         """))
                         conn.execute(text("""
-                            INSERT INTO mediciones (id, acuario_id, ph, kh, calcio, magnesio, nitrato, fosfato, fecha_registro)
-                            SELECT id, tank_id, ph, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, timestamp 
+                            INSERT INTO mediciones (id, acuario_id, ph, kh, calcio, magnesio, nitrato, fosfato, temperatura, fecha_registro)
+                            SELECT id, tank_id, ph, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, temperatura, timestamp 
                             FROM measurements WHERE tank_id IN (SELECT id FROM acuarios)
                             ON CONFLICT (id) DO NOTHING;
                         """))
