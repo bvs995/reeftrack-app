@@ -30,6 +30,49 @@ import {
 import { fetchPredictions, fetchMeasurements } from '../api';
 import ReefAnalysisCard from './ReefAnalysisCard';
 
+// Plugin de anotaciones (Chart.js box annotations) para dibujar franjas de zona segura
+const annotationPlugin = {
+  id: 'annotation',
+  beforeDatasetsDraw(chart, _args, options) {
+    const { ctx, chartArea, scales } = chart;
+    if (!options?.annotations || !chartArea || !scales?.y) return;
+
+    const { top, bottom, left, right } = chartArea;
+    const yScale = scales.y;
+
+    Object.values(options.annotations).forEach((annotation) => {
+      if (!annotation || annotation.type !== 'box') return;
+
+      const yMinVal = annotation.yMin !== undefined ? annotation.yMin : 0;
+      const yMaxVal = annotation.yMax !== undefined ? annotation.yMax : 0;
+
+      const rawY1 = yScale.getPixelForValue(yMaxVal);
+      const rawY2 = yScale.getPixelForValue(yMinVal);
+
+      const yTop = Math.max(top, Math.min(rawY1, rawY2));
+      const yBottom = Math.min(bottom, Math.max(rawY1, rawY2));
+      const height = Math.max(0, yBottom - yTop);
+      const width = right - left;
+
+      if (height <= 0 || width <= 0) return;
+
+      ctx.save();
+      ctx.fillStyle = annotation.backgroundColor || 'rgba(16, 185, 129, 0.15)';
+      ctx.fillRect(left, yTop, width, height);
+
+      if (annotation.borderWidth && annotation.borderWidth > 0 && annotation.borderColor) {
+        ctx.strokeStyle = annotation.borderColor;
+        ctx.lineWidth = annotation.borderWidth;
+        if (annotation.borderDash) {
+          ctx.setLineDash(annotation.borderDash);
+        }
+        ctx.strokeRect(left, yTop, width, height);
+      }
+      ctx.restore();
+    });
+  }
+};
+
 // Registrar plugins requeridos de Chart.js
 ChartJS.register(
   CategoryScale,
@@ -39,7 +82,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  annotationPlugin
 );
 
 export default function DashboardTrends({
@@ -309,6 +353,18 @@ export default function DashboardTrends({
           label: (context) => {
             if (context.parsed.y === null) return null;
             return `${context.dataset.label}: ${context.parsed.y} ${currentParam.unit}`;
+          }
+        }
+      },
+      annotation: {
+        annotations: {
+          zonaSegura: {
+            type: 'box',
+            yMin: currentParam.safeMin !== undefined ? currentParam.safeMin : 0.02, // Límite inferior del fosfato
+            yMax: currentParam.safeMax !== undefined ? currentParam.safeMax : 0.08, // Límite superior del fosfato
+            backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde esmeralda traslúcido
+            borderWidth: 0, // Sin bordes duros
+            drawTime: 'beforeDatasetsDraw' // Dibuja la franja POR DEBAJO de las líneas
           }
         }
       }

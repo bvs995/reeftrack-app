@@ -24,6 +24,48 @@ import {
 } from 'lucide-react';
 import { fetchChartData, deleteMeasurement } from '../api';
 
+const annotationPlugin = {
+  id: 'annotation',
+  beforeDatasetsDraw(chart, _args, options) {
+    const { ctx, chartArea, scales } = chart;
+    if (!options?.annotations || !chartArea || !scales?.y) return;
+
+    const { top, bottom, left, right } = chartArea;
+    const yScale = scales.y;
+
+    Object.values(options.annotations).forEach((annotation) => {
+      if (!annotation || annotation.type !== 'box') return;
+
+      const yMinVal = annotation.yMin !== undefined ? annotation.yMin : 0;
+      const yMaxVal = annotation.yMax !== undefined ? annotation.yMax : 0;
+
+      const rawY1 = yScale.getPixelForValue(yMaxVal);
+      const rawY2 = yScale.getPixelForValue(yMinVal);
+
+      const yTop = Math.max(top, Math.min(rawY1, rawY2));
+      const yBottom = Math.min(bottom, Math.max(rawY1, rawY2));
+      const height = Math.max(0, yBottom - yTop);
+      const width = right - left;
+
+      if (height <= 0 || width <= 0) return;
+
+      ctx.save();
+      ctx.fillStyle = annotation.backgroundColor || 'rgba(16, 185, 129, 0.15)';
+      ctx.fillRect(left, yTop, width, height);
+
+      if (annotation.borderWidth && annotation.borderWidth > 0 && annotation.borderColor) {
+        ctx.strokeStyle = annotation.borderColor;
+        ctx.lineWidth = annotation.borderWidth;
+        if (annotation.borderDash) {
+          ctx.setLineDash(annotation.borderDash);
+        }
+        ctx.strokeRect(left, yTop, width, height);
+      }
+      ctx.restore();
+    });
+  }
+};
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -32,7 +74,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  annotationPlugin
 );
 
 export default function TrendsView({
@@ -175,6 +218,18 @@ export default function TrendsView({
         padding: 12,
         callbacks: {
           label: (context) => `${context.dataset.label}: ${context.parsed.y} ${meta.unit || ''}`
+        }
+      },
+      annotation: {
+        annotations: {
+          zonaSegura: {
+            type: 'box',
+            yMin: (activeCode === 'po4' || activeCode === 'phosphate') ? 0.02 : (meta.min_safe !== undefined ? meta.min_safe : 0.02), // Límite inferior del fosfato
+            yMax: (activeCode === 'po4' || activeCode === 'phosphate') ? 0.08 : (meta.max_safe !== undefined ? meta.max_safe : 0.08), // Límite superior del fosfato
+            backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde esmeralda traslúcido
+            borderWidth: 0, // Sin bordes duros
+            drawTime: 'beforeDatasetsDraw' // Dibuja la franja POR DEBAJO de las líneas
+          }
         }
       }
     },
