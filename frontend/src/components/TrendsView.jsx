@@ -201,17 +201,31 @@ export default function TrendsView({
   };
 
   const chartConfig = prepareChartConfig();
+  const isPo4 = activeCode === 'po4' || activeCode === 'phosphate';
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    scales: {
+      y: {
+        min: 0, // CRÍTICO: Bloquea el eje Y para que nunca sea negativo
+        suggestedMax: isPo4 ? 0.25 : (meta.max_safe ? meta.max_safe * 1.1 : undefined), // Da aire por encima de tu lectura de 0.20
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)',
+        },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
+        ...(isPo4 ? {} : { suggestedMin: meta.min_safe ? meta.min_safe * 0.9 : 0 })
+      },
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)',
+        },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
+      }
+    },
     plugins: {
       legend: {
-        position: 'top',
-        labels: {
-          color: '#cbd5e1',
-          font: { size: 12, weight: '700' }
-        }
+        display: false, // Oculta la leyenda por defecto si usas la tuya personalizada
       },
       tooltip: {
         backgroundColor: '#0f172a',
@@ -228,28 +242,13 @@ export default function TrendsView({
         annotations: {
           zonaSegura: {
             type: 'box',
-            yMin: (activeCode === 'po4' || activeCode === 'phosphate') ? 0.02 : (meta.min_safe !== undefined ? meta.min_safe : 0.02), // Límite inferior del fosfato
-            yMax: (activeCode === 'po4' || activeCode === 'phosphate') ? 0.08 : (meta.max_safe !== undefined ? meta.max_safe : 0.08), // Límite superior del fosfato
-            backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde esmeralda traslúcido
-            borderWidth: 0, // Sin bordes duros
-            drawTime: 'beforeDatasetsDraw' // Dibuja la franja POR DEBAJO de las líneas
+            yMin: isPo4 ? 0.02 : (meta.min_safe !== undefined ? meta.min_safe : 0.02), // Límite inferior de fosfatos
+            yMax: isPo4 ? 0.08 : (meta.max_safe !== undefined ? meta.max_safe : 0.08), // Límite superior de fosfatos
+            backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde translúcido (#10b981 al 15%)
+            borderWidth: 0,
+            drawTime: 'beforeDatasetsDraw', // Pinta la caja de fondo, detrás de las líneas
           }
         }
-      }
-    },
-    scales: {
-      x: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
-      },
-      y: {
-        min: (activeCode === 'po4' || activeCode === 'phosphate') ? 0 : undefined, // Bloqueo estricto inferior
-        suggestedMax: (activeCode === 'po4' || activeCode === 'phosphate') ? 0.25 : (meta.max_safe ? meta.max_safe * 1.1 : undefined), // Da un poco de aire por encima del 0.20 actual
-        grid: {
-          color: 'rgba(255, 255, 255, 0.05)' // Líneas sutiles para el tema oscuro
-        },
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        suggestedMin: meta.min_safe ? meta.min_safe * 0.9 : undefined
       }
     }
   };

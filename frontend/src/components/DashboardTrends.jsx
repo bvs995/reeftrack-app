@@ -271,29 +271,6 @@ export default function DashboardTrends({
     return {
       labels: allLabels,
       datasets: [
-        // Banda Superior de Zona Segura (invisible, sirve de techo para el fill)
-        {
-          label: 'Límite Superior Seguro',
-          data: safeZoneMaxArray,
-          borderColor: 'rgba(16, 185, 129, 0.35)',
-          borderWidth: 1,
-          borderDash: [3, 3],
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          fill: false,
-        },
-        // Banda Inferior de Zona Segura con sombreado verde claro traslúcido hasta la banda superior (-1)
-        {
-          label: 'Rango Seguro',
-          data: safeZoneMinArray,
-          borderColor: 'rgba(16, 185, 129, 0.35)',
-          borderWidth: 1,
-          borderDash: [3, 3],
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          backgroundColor: 'rgba(16, 185, 129, 0.12)',
-          fill: '-1', // Rellena hacia el dataset anterior (Límite Superior)
-        },
         // Medición Real del Acuarista
         {
           label: `Medición Real (${currentParam.unit})`,
@@ -328,22 +305,31 @@ export default function DashboardTrends({
     };
   }, [validReadings, currentParam, localSlope]);
 
+  const isPhosphate = currentParam.key === 'phosphate_ppm' || activeParam === 'phosphate';
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
+    scales: {
+      y: {
+        min: 0, // CRÍTICO: Bloquea el eje Y para que nunca sea negativo
+        suggestedMax: isPhosphate ? 0.25 : (currentParam.suggestedMax || currentParam.safeMax * 1.1), // Da aire por encima de tu lectura de 0.20
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)',
+        },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
+        ...(isPhosphate ? {} : { suggestedMin: currentParam.safeMin ? currentParam.safeMin * 0.9 : 0 })
+      },
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)',
+        },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
+      }
     },
     plugins: {
       legend: {
-        position: 'top',
-        labels: {
-          color: '#cbd5e1',
-          font: { size: 11, weight: '700' },
-          usePointStyle: true,
-          filter: (legendItem) => legendItem.text !== 'Límite Superior Seguro'
-        }
+        display: false, // Oculta la leyenda por defecto si usas la tuya personalizada
       },
       tooltip: {
         backgroundColor: '#0f172a',
@@ -363,28 +349,13 @@ export default function DashboardTrends({
         annotations: {
           zonaSegura: {
             type: 'box',
-            yMin: currentParam.safeMin !== undefined ? currentParam.safeMin : 0.02, // Límite inferior del fosfato
-            yMax: currentParam.safeMax !== undefined ? currentParam.safeMax : 0.08, // Límite superior del fosfato
-            backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde esmeralda traslúcido
-            borderWidth: 0, // Sin bordes duros
-            drawTime: 'beforeDatasetsDraw' // Dibuja la franja POR DEBAJO de las líneas
+            yMin: isPhosphate ? 0.02 : (currentParam.safeMin !== undefined ? currentParam.safeMin : 0.02), // Límite inferior de fosfatos
+            yMax: isPhosphate ? 0.08 : (currentParam.safeMax !== undefined ? currentParam.safeMax : 0.08), // Límite superior de fosfatos
+            backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde translúcido (#10b981 al 15%)
+            borderWidth: 0,
+            drawTime: 'beforeDatasetsDraw', // Pinta la caja de fondo, detrás de las líneas
           }
         }
-      }
-    },
-    scales: {
-      x: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
-      },
-      y: {
-        min: currentParam.min !== undefined ? currentParam.min : (currentParam.key === 'phosphate_ppm' ? 0 : undefined), // Bloqueo estricto inferior
-        suggestedMax: currentParam.suggestedMax !== undefined ? currentParam.suggestedMax : (currentParam.key === 'phosphate_ppm' ? 0.25 : currentParam.safeMax * 1.1), // Da un poco de aire por encima del 0.20 actual
-        grid: {
-          color: 'rgba(255, 255, 255, 0.05)' // Líneas sutiles para el tema oscuro
-        },
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        suggestedMin: currentParam.min !== undefined ? currentParam.min : currentParam.safeMin * 0.9
       }
     }
   };
