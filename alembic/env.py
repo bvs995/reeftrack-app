@@ -31,6 +31,16 @@ from models import Acuario, Medicion
 # access to the values within the .ini file in use.
 config = context.config
 
+# Sobrescribir sqlalchemy.url con la variable de entorno de Render (DATABASE_URL)
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    # Render a veces usa 'postgres://' pero SQLAlchemy requiere 'postgresql://'
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    if database_url.startswith("postgresql://") and "+psycopg2" not in database_url:
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    config.set_main_option("sqlalchemy.url", database_url)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -41,14 +51,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 def get_url() -> str:
-    """Obtiene la URL de la base de datos desde el entorno o alembic.ini, normalizando el driver."""
-    url = os.environ.get("DATABASE_URL")
-    if url:
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+psycopg2://", 1)
-        elif url.startswith("postgresql://") and "+psycopg2" not in url:
-            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
-        return url
+    """Obtiene la URL de la base de datos desde alembic config (sobrescrita por DATABASE_URL si existe)."""
     return config.get_main_option("sqlalchemy.url")
 
 
