@@ -20,7 +20,7 @@ import {
   fetchTankAnalytics,
   fetchPredictions
 } from './api';
-import { evaluateScheduledReminder } from './utils/notifications';
+import { evaluateScheduledReminder, checkAndTriggerScheduledNotification } from './utils/notifications';
 import {
   LayoutDashboard,
   LineChart,
@@ -118,7 +118,7 @@ function AppContent() {
       try {
         const preds = await fetchPredictions();
         if (preds) {
-          await evaluateScheduledReminder(preds);
+          await checkAndTriggerScheduledNotification(preds);
         }
       } catch (e) {
         // Silencioso en segundo plano

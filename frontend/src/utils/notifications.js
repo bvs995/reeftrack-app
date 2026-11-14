@@ -87,13 +87,125 @@ export async function sendLocalNotification(title, options = {}) {
 }
 
 /**
- * Evalúa las predicciones del sistema y dispara la notificación si:
+ * Rangos seguros de referencia estándar para parámetros de arrecife (Reef).
+ */
+export const RANGOS_SEGUROS_DEFAULT = {
+  'Fosfato': { min: 0.02, max: 0.08 },
+  'Alcalinidad': { min: 7.5, max: 8.5 },
+  'Calcio': { min: 400, max: 450 },
+  'Magnesio': { min: 1250, max: 1450 },
+  'Nitrato': { min: 2.0, max: 15.0 },
+  'pH': { min: 8.1, max: 8.4 },
+  'Temperatura': { min: 24.5, max: 26.5 },
+  'Salinidad': { min: 34.0, max: 36.0 },
+  // Claves normalizadas en minúsculas y códigos técnicos
+  'fosfato': { min: 0.02, max: 0.08 },
+  'po4': { min: 0.02, max: 0.08 },
+  'alcalinidad': { min: 7.5, max: 8.5 },
+  'dkh': { min: 7.5, max: 8.5 },
+  'kh': { min: 7.5, max: 8.5 },
+  'alkalinity': { min: 7.5, max: 8.5 },
+  'calcio': { min: 400, max: 450 },
+  'ca': { min: 400, max: 450 },
+  'calcium': { min: 400, max: 450 },
+  'magnesio': { min: 1250, max: 1450 },
+  'mg': { min: 1250, max: 1450 },
+  'magnesium': { min: 1250, max: 1450 },
+  'nitrato': { min: 2.0, max: 15.0 },
+  'no3': { min: 2.0, max: 15.0 },
+  'nitrate': { min: 2.0, max: 15.0 },
+  'ph': { min: 8.1, max: 8.4 },
+  'temperatura': { min: 24.5, max: 26.5 },
+  'temp': { min: 24.5, max: 26.5 },
+  'temperature': { min: 24.5, max: 26.5 },
+  'salinidad': { min: 34.0, max: 36.0 },
+  'salinity': { min: 34.0, max: 36.0 }
+};
+
+/**
+ * Evalúa las predicciones contra los rangos seguros para generar alertas urgentes.
+ * 1. NUEVA VALIDACIÓN: Verifica si el valor actual YA está fuera de rango ('Peligro').
+ * 2. VALIDACIÓN EXISTENTE: Verifica si la proyección a 3 días saldrá del rango ('Advertencia').
+ * 
+ * @param {Array|Object} predictions Lista de parámetros [{ nombre, medicionReal, proyeccion3Dias }] o respuesta predictiva
+ * @param {Object} [rangosSeguros=RANGOS_SEGUROS_DEFAULT] Mapeo de rangos seguros { min, max }
+ * @returns {Array<{tipo: string, parametro: string, mensaje: string, accion: string}>} Alertas urgentes
+ */
+export function evaluateScheduledReminder(predictions, rangosSeguros = RANGOS_SEGUROS_DEFAULT) {
+  let alertasUrgentes = [];
+  if (!predictions) return alertasUrgentes;
+
+  const rangos = rangosSeguros || RANGOS_SEGUROS_DEFAULT;
+
+  // Normalizar datos si predictions es un objeto (PredictionResponse de API) o un Array de parámetros
+  const items = Array.isArray(predictions)
+    ? predictions
+    : Object.entries(predictions)
+        .filter(([key, val]) => val && typeof val === 'object' && ('current_value' in val || 'medicionReal' in val))
+        .map(([key, val]) => ({
+          nombre: val.nombre || val.parameter || key,
+          medicionReal: val.medicionReal !== undefined ? val.medicionReal : val.current_value,
+          proyeccion3Dias: val.proyeccion3Dias !== undefined ? val.proyeccion3Dias : val.projected_value_3d
+        }));
+
+  items.forEach(parametro => {
+    if (!parametro || !parametro.nombre) return;
+    const valorActual = parametro.medicionReal;
+    const rango = rangos[parametro.nombre] || rangos[parametro.nombre.toLowerCase()];
+
+    // Si no hay rango configurado para este parámetro, continuar
+    if (!rango || typeof rango.min !== 'number' || typeof rango.max !== 'number') {
+      return;
+    }
+
+    // 1. NUEVA VALIDACIÓN: Verifica si el valor actual YA está fuera de rango
+    if (valorActual !== null && valorActual !== undefined && !isNaN(valorActual)) {
+      if (valorActual > rango.max) {
+        alertasUrgentes.push({
+          tipo: 'Peligro',
+          parametro: parametro.nombre,
+          mensaje: `El nivel actual de ${parametro.nombre} (${valorActual}) supera el máximo seguro de ${rango.max}. Riesgo alto.`,
+          accion: 'Tomar medida correctiva de inmediato.'
+        });
+        return;
+      } else if (valorActual < rango.min) {
+        alertasUrgentes.push({
+          tipo: 'Peligro',
+          parametro: parametro.nombre,
+          mensaje: `El nivel actual de ${parametro.nombre} (${valorActual}) está por debajo del mínimo seguro de ${rango.min}.`,
+          accion: 'Aditar suplemento de inmediato.'
+        });
+        return;
+      }
+    }
+
+    // 2. VALIDACIÓN EXISTENTE: La que ya tenías para la proyección a futuro (cruces de línea)
+    if (
+      parametro.proyeccion3Dias !== null &&
+      parametro.proyeccion3Dias !== undefined &&
+      !isNaN(parametro.proyeccion3Dias) &&
+      (parametro.proyeccion3Dias < rango.min || parametro.proyeccion3Dias > rango.max)
+    ) {
+      alertasUrgentes.push({
+        tipo: 'Advertencia',
+        parametro: parametro.nombre,
+        mensaje: `A este ritmo, tu ${parametro.nombre} saldrá de la zona segura en los próximos días.`,
+        accion: 'Medir mañana para confirmar tendencia.'
+      });
+    }
+  });
+
+  return alertasUrgentes;
+}
+
+/**
+ * Evalúa las predicciones del sistema y dispara la notificación local si:
  * 1. Están habilitadas y autorizadas.
  * 2. La hora actual coincide o superó la hora elegida.
  * 3. No se ha notificado hoy todavía.
- * 4. La alcalinidad está cayendo o requiere medición hoy.
+ * 4. Existen alertas urgentes (Peligro o Advertencia) o cambio de agua requerido.
  */
-export async function evaluateScheduledReminder(predictions) {
+export async function checkAndTriggerScheduledNotification(predictions, rangosSeguros = RANGOS_SEGUROS_DEFAULT) {
   const settings = getNotificationSettings();
   if (!settings.enabled || getPermissionState() !== 'granted') {
     return false;
@@ -122,27 +234,27 @@ export async function evaluateScheduledReminder(predictions) {
     return false;
   }
 
-  // Comprobar si las predicciones indican que debe medir hoy
-  const alk = predictions.alkalinity;
-  const wc = predictions.water_change_prediction;
+  // Evaluar alertas urgentes usando evaluateScheduledReminder
+  const alertas = evaluateScheduledReminder(predictions, rangosSeguros);
+  const peligroAlert = alertas.find(a => a.tipo === 'Peligro');
+  const advertenciaAlert = alertas.find(a => a.tipo === 'Advertencia');
 
   let shouldAlert = false;
   let alertTitle = '🌊 AquaPulse: Recordatorio de Medición';
   let alertBody = '';
 
-  // Condición A: Alcalinidad cayendo hacia el límite (<= 3 días o estado de advertencia)
-  if (alk && (alk.days_remaining_safe !== null && alk.days_remaining_safe <= 3.0)) {
+  if (peligroAlert) {
     shouldAlert = true;
-    alertTitle = '⚠️ Alerta de Alcalinidad: ¡Medir Hoy!';
-    alertBody = `Tu dKH desciende a -${alk.daily_consumption_rate || '0.2'} dKH/día. Alcanzará el límite seguro (7.5 dKH) en ~${alk.days_remaining_safe} días. Realiza un test hoy para calibrar tu dosificación.`;
-  } else if (alk && (alk.status === 'critical_below_safe' || alk.status === 'warning_approaching')) {
+    alertTitle = `🚨 Peligro: ${peligroAlert.parametro} fuera de rango`;
+    alertBody = `${peligroAlert.mensaje} ${peligroAlert.accion}`;
+  } else if (advertenciaAlert) {
     shouldAlert = true;
-    alertTitle = '⚠️ Desestabilización de KH Detectada';
-    alertBody = alk.alert_message || 'Tu alcalinidad requiere atención inmediata hoy.';
-  } else if (wc && wc.urgency === 'immediate') {
+    alertTitle = `⚠️ Advertencia: ${advertenciaAlert.parametro} en riesgo`;
+    alertBody = `${advertenciaAlert.mensaje} ${advertenciaAlert.accion}`;
+  } else if (predictions?.water_change_prediction?.urgency === 'immediate') {
     shouldAlert = true;
     alertTitle = '🚨 Cambio de Agua Requerido';
-    alertBody = `Nitratos acumulados (${wc.current_nitrate_ppm} ppm). Se recomienda realizar el cambio de agua del ${wc.suggested_percentage}% hoy.`;
+    alertBody = `Nitratos acumulados (${predictions.water_change_prediction.current_nitrate_ppm} ppm). Se recomienda cambio del ${predictions.water_change_prediction.suggested_percentage}%.`;
   }
 
   if (shouldAlert) {
