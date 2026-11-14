@@ -288,8 +288,19 @@ class PredictionResponse(BaseModel):
 
 
 # ==============================================================================
-# ESQUEMAS PYDANTIC v2 - ANÁLISIS CLÍNICO CON IA (GEMINI)
+# ESQUEMAS PYDANTIC v2 - ANÁLISIS CLÍNICO CON IA ESTRUCTURADO (GEMINI)
 # ==============================================================================
+
+class DosisRecomendada(BaseModel):
+    parametro: str = Field(description="Nombre del parámetro a ajustar (ej. Alcalinidad, Calcio)")
+    producto: str = Field(description="Nombre comercial o genérico del aditivo (ej. Bicarbonato de sodio, Cloruro de calcio)")
+    cantidad_sugerida: str = Field(description="Dosis exacta con unidades (ej. 15 ml o 5 gramos)")
+
+class AnalisisAcuarioSchema(BaseModel):
+    diagnostico_general: str = Field(description="Resumen clínico del estado químico actual del tanque.")
+    nivel_riesgo: str = Field(description="Clasificación del riesgo: 'Bajo', 'Moderado', 'Crítico' o 'Colapso Inminente'")
+    alerta_predictiva: str = Field(description="Predicción de lo que ocurrirá en las próximas 48 horas si no se actúa.")
+    acciones_correctoras: List[DosisRecomendada] = Field(description="Lista de acciones y dosificaciones requeridas.")
 
 class AquariumDataRequest(BaseModel):
     nombre_acuario: str = Field("Principal", example="Arrecife Mixto SPS/LPS", description="Nombre del acuario")
@@ -304,4 +315,4 @@ class AquariumDataRequest(BaseModel):
 
 class AquariumAnalysisResponse(BaseModel):
     status: str = "success"
-    analisis: str
+    analisis: AnalisisAcuarioSchema

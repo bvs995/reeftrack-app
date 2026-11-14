@@ -33,6 +33,8 @@ from backend.models import (
     AdminUserListItem,
     check_password_complexity,
     PASSWORD_REQUIREMENTS_ERROR,
+    DosisRecomendada,
+    AnalisisAcuarioSchema,
     AquariumDataRequest,
     AquariumAnalysisResponse
 )
@@ -730,12 +732,13 @@ def scan_measurement_photo(
 )
 def endpoint_analizar_acuario(data: AquariumDataRequest):
     """
-    Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini).
-    Devuelve diagnóstico de estado, riesgo potencial predictivo y acciones correctoras exactas.
+    Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini)
+    con Structured Outputs (AnalisisAcuarioSchema).
+    Devuelve diagnóstico estructurado de estado, riesgo potencial predictivo y lista de dosis recomendadas.
     """
     try:
         resultado_ia = analizar_parametros_acuario(data.model_dump())
-        return {"status": "success", "analisis": resultado_ia}
+        return AquariumAnalysisResponse(status="success", analisis=resultado_ia)
     except Exception as e:
         logger.error(f"Error en endpoint_analizar_acuario: {e}")
         raise HTTPException(
