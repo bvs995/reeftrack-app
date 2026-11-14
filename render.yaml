@@ -4,22 +4,21 @@ services:
   # ============================================================================
   - type: web
     name: aquapulse-backend
-    runtime: python
-    region: oregon
+    env: python
+    region: oregon # O la región que utilices
     plan: free
     branch: main
     rootDir: .
-    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 1
+    buildCommand: "pip install -r requirements.txt"
+    # Aquí unimos la migración de Alembic con el comando de inicio de Uvicorn usando '&&'
+    startCommand: "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
       - key: DATABASE_URL
-        fromDatabase:
-          name: aquapulse-postgres
-          property: connectionString
+        sync: false # O enlazado a tu base de datos PostgreSQL en Render
       - key: ALLOWED_ORIGINS
         value: "*" # Configura aquí la URL de tu frontend en Vercel (ej: https://aquapulse.vercel.app)
       - key: GEMINI_API_KEY
@@ -35,7 +34,7 @@ services:
 
 databases:
   # ============================================================================
-  # 🐘 PostgreSQL Database en Render
+  # 🐘 PostgreSQL Database en Render (Opcional si sync: false conecta base externa)
   # ============================================================================
   - name: aquapulse-postgres
     databaseName: aquatracker
