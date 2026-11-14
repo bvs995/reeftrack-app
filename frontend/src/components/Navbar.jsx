@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Waves, Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Globe, ShieldCheck } from 'lucide-react';
+import { Plus, ChevronDown, RefreshCw, Bell, User, LogIn, Globe, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({
@@ -48,23 +48,20 @@ export default function Navbar({
   return (
     <header className="sticky top-0 z-40 bg-marine-950/90 backdrop-blur-xl border-b border-marine-800/90 px-3 sm:px-6 py-3 shadow-lg">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-        {/* Brand Náutico Neón */}
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-400 to-emerald-400 flex items-center justify-center shadow-neon-cyan border border-white/20 shrink-0">
-            <Waves className="w-6 h-6 text-marine-950 stroke-[2.5]" />
-          </div>
+        {/* Barra de navegación - Cabecera izquierda */}
+        <div className="flex items-center space-x-3">
+          <img 
+            src="/logo-reef.png" 
+            alt="AquaPulse Logo" 
+            onError={(e) => { e.currentTarget.src = '/logo-reef.jpg'; }}
+            className="w-12 h-12 rounded-2xl shadow-lg shadow-cyan-500/10 border border-cyan-500/20 object-cover shrink-0" 
+          />
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-black text-xl tracking-tight bg-gradient-to-r from-cyan-300 via-sky-200 to-emerald-300 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(6,182,212,0.5)]">
-                {t('nav.brand')}
-              </span>
-              <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">
-                {t('nav.pwa')}
-              </span>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xl font-bold text-white tracking-tight">AquaPulse</h1>
+              <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/50 border border-cyan-800/80 px-1.5 py-0.5 rounded-full uppercase">PWA</span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              {t('nav.subtitle')}
-            </p>
+            <p className="text-xs text-gray-400 hidden sm:block">Gestión Predictiva Multi-Usuario para Acuarios de Arrecife</p>
           </div>
         </div>
 
