@@ -29,7 +29,6 @@ import {
   Camera
 } from 'lucide-react';
 import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis } from '../api';
-import ReefAnalysisCard from './ReefAnalysisCard';
 
 // Registrar plugins requeridos de Chart.js incluyendo annotationPlugin oficial
 ChartJS.register(
@@ -58,7 +57,6 @@ export default function DashboardTrends({
   const [mostrarDiagnosticoIA, setMostrarDiagnosticoIA] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
-  const reefAnalysisRef = useRef(null);
 
   const triggerHaptic = (ms = 15) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -98,10 +96,6 @@ export default function DashboardTrends({
       } finally {
         setAiLoading(false);
       }
-    }
-
-    if (reefAnalysisRef.current?.fetchAiAnalysis) {
-      reefAnalysisRef.current.fetchAiAnalysis();
     }
   };
 
@@ -786,24 +780,6 @@ export default function DashboardTrends({
             <span>Actualizar Gráfica</span>
           </button>
         </div>
-      </div>
-
-      {/* Tarjeta de Diagnóstico Predictivo AquaPulse con IA */}
-      <div id="reef-analysis-section" className="pt-2">
-        <ReefAnalysisCard
-          ref={reefAnalysisRef}
-          aquariumData={{
-            nombre_acuario: 'Mi Acuario Principal',
-            volumen_litros: 280,
-            ph: 8.2,
-            kh: alk?.latest_value ?? 8.3,
-            calcio: propPredictions?.calcium?.latest_value ?? 420,
-            magnesio: 1350,
-            nitrato: wc?.current_nitrate_ppm ?? 5.0,
-            fosfato: 0.04,
-            tendencia_reciente: `Consumo KH: ${alk?.daily_consumption_rate ? alk.daily_consumption_rate.toFixed(2) + ' dKH/d' : 'Estable'}. Acumulación NO3: ${wc?.daily_accumulation_rate ? wc.daily_accumulation_rate.toFixed(2) + ' ppm/d' : 'Estable'}.`
-          }}
-        />
       </div>
     </div>
   );
