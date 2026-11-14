@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
 from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from backend.database import Base
 
 PASSWORD_REGEX = r"^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]).{8,}$"
@@ -67,6 +67,7 @@ class Measurement(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="SET NULL"), nullable=True, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ph = Column(Float, nullable=True)
     alkalinity_dkh = Column(Float, nullable=True)
     calcium_ppm = Column(Float, nullable=True)
     magnesium_ppm = Column(Float, nullable=True)
@@ -75,8 +76,21 @@ class Measurement(Base):
     salinity_ppt = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
 
+    # Sinónimos para consultas nativas en español (MedicionAcuario)
+    acuario_id = synonym("tank_id")
+    fecha_registro = synonym("timestamp")
+    kh = synonym("alkalinity_dkh")
+    calcio = synonym("calcium_ppm")
+    magnesio = synonym("magnesium_ppm")
+    nitrato = synonym("nitrate_ppm")
+    fosfato = synonym("phosphate_ppm")
+
     user = relationship("User", back_populates="measurements")
     tank = relationship("Tank", back_populates="measurements")
+
+# Alias de clases ORM para compatibilidad directa
+MedicionAcuario = Measurement
+Acuario = Tank
 
 
 # ==============================================================================
@@ -196,6 +210,7 @@ class TankResponse(BaseModel):
 class MeasurementBase(BaseModel):
     tank_id: Optional[int] = None
     timestamp: Optional[datetime] = None
+    ph: Optional[float] = Field(None, example=8.2, description="Nivel de pH (ej: 8.1 - 8.4)")
     alkalinity_dkh: Optional[float] = Field(None, example=8.2, description="Alcalinidad en dKH")
     calcium_ppm: Optional[float] = Field(None, example=420.0, description="Calcio en ppm")
     magnesium_ppm: Optional[float] = Field(None, example=1350.0, description="Magnesio en ppm")
@@ -213,6 +228,7 @@ class MeasurementBase(BaseModel):
     def map_parameter_code_if_present(self):
         """Mapea automáticamente campos individuales tipo {parameter_code: 'dkh', value: 8.3} a la columna correcta."""
         code_map = {
+            "ph": "ph",
             "dkh": "alkalinity_dkh",
             "alkalinity": "alkalinity_dkh",
             "alkalinity_dkh": "alkalinity_dkh",
@@ -308,6 +324,8 @@ AnalisisAcuarioResponse = AnalisisAcuarioSchema
 class AquariumDataRequest(BaseModel):
     nombre_acuario: str = Field("Principal", example="Arrecife Mixto SPS/LPS", description="Nombre del acuario")
     volumen_litros: float = Field(280.0, example=280.0, description="Volumen del acuario en litros")
+    acuario_id: Optional[int] = Field(None, example=1, description="ID del acuario para cargar historial automático")
+    tank_id: Optional[int] = Field(None, example=1, description="ID del acuario (alias de acuario_id)")
     ph: Optional[float] = Field(None, example=8.2, description="Nivel de pH (Ideal: 8.1 - 8.4)")
     kh: Optional[float] = Field(None, example=8.3, description="Alcalinidad dKH (Ideal: 7.5 - 8.5)")
     calcio: Optional[float] = Field(None, example=420.0, description="Calcio en ppm (Ideal: 420 - 450)")

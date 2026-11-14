@@ -77,6 +77,9 @@ def init_db():
                 if "tank_id" not in columns:
                     conn.execute(text("ALTER TABLE measurements ADD COLUMN tank_id INTEGER;"))
                     logger.info("Auto-migración: Columna tank_id añadida a measurements.")
+                if "ph" not in columns:
+                    conn.execute(text("ALTER TABLE measurements ADD COLUMN ph FLOAT;"))
+                    logger.info("Auto-migración: Columna ph añadida a measurements.")
 
         # Auto-migración para users (campos requeridos con defaults seguros)
         if "users" in table_names:

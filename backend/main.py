@@ -38,11 +38,14 @@ from backend.models import (
     AnalisisAcuarioResponse,
     AquariumDataRequest,
     AquariumAnalysisResponse,
-    PredictiveAnalysisJsonResponse
+    PredictiveAnalysisJsonResponse,
+    MedicionAcuario,
+    Acuario
 )
 from backend.services.ai_service import (
     analizar_parametros_acuario,
-    analizar_parametros_estructurado
+    analizar_parametros_estructurado,
+    obtener_tendencia_ultimas_48h
 )
 from backend.auth import (
     hash_password,
@@ -737,18 +740,47 @@ router = APIRouter()
     response_model=PredictiveAnalysisJsonResponse,
     summary="Obtener análisis predictivo estructurado en JSON (AquaPulse AI)"
 )
-def obtener_analisis_json(data: AquariumDataRequest):
+def obtener_analisis_json(
+    data: AquariumDataRequest,
+    db: Session = Depends(get_db)
+):
     """
     Endpoint estructurado para obtener diagnóstico predictivo en formato JSON puro.
     Ejecuta inferencia técnica con Gemini mediante esquemas tipados.
+    Si se especifica acuario_id o tank_id, consulta automáticamente el historial real de las últimas 48h.
     """
     try:
         data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+        target_id = data.acuario_id or data.tank_id
+        if target_id and (not data.tendencia_reciente or data.tendencia_reciente in ["Estable en las últimas 24h", "Estable"]):
+            historial_48h = obtener_tendencia_ultimas_48h(db, target_id)
+            data_dict["tendencia_reciente"] = historial_48h
+
         resultado_estructurado = analizar_parametros_estructurado(data_dict)
         return {"status": "success", "data": resultado_estructurado}
     except Exception as e:
         logger.error(f"Error en obtener_analisis_json: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get(
+    "/api/tanks/{tank_id}/tendencia-48h",
+    summary="Obtener resumen textual del historial de mediciones de las últimas 48h"
+)
+@router.get(
+    "/api/acuarios/{acuario_id}/tendencia-48h",
+    summary="Obtener resumen textual del historial de mediciones de las últimas 48h (alias español)"
+)
+def endpoint_tendencia_48h(
+    tank_id: Optional[int] = None,
+    acuario_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Consulta las mediciones registradas en las últimas 48h y devuelve la cadena formateada."""
+    target_id = tank_id or acuario_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Debe proporcionarse el ID del acuario.")
+    resumen = obtener_tendencia_ultimas_48h(db, target_id)
+    return {"status": "success", "acuario_id": target_id, "tendencia": resumen}
 
 app.include_router(router)
 

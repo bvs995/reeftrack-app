@@ -2,10 +2,17 @@ import os
 import re
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
-from backend.models import AnalisisAcuarioSchema, AnalisisAcuarioResponse, DosisRecomendada
+from backend.models import (
+    AnalisisAcuarioSchema,
+    AnalisisAcuarioResponse,
+    DosisRecomendada,
+    MedicionAcuario
+)
 
 # Cargar variables de entorno
 load_dotenv()
@@ -15,6 +22,37 @@ logger = logging.getLogger("aquapulse.ai_service")
 # Modelos recomendados: usuario solicita gemini-2.5-flash, con fallback a gemini-3.1-flash-lite y 3.8-flash
 PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
+
+
+def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
+    """
+    Obtiene el historial cronológico de mediciones de un acuario en las últimas 48 horas
+    y lo resume en texto estructurado comprensible para la IA de AquaPulse.
+    """
+    # Definir el umbral de tiempo (hace exactamente 48 horas)
+    hace_48_horas = datetime.utcnow() - timedelta(hours=48)
+
+    # Consulta en SQLAlchemy ordenada de la más antigua a la más reciente
+    registros = (
+        db.query(MedicionAcuario)
+        .filter(MedicionAcuario.acuario_id == acuario_id)
+        .filter(MedicionAcuario.fecha_registro >= hace_48_horas)
+        .order_by(MedicionAcuario.fecha_registro.asc())
+        .all()
+    )
+
+    if not registros:
+        return "No hay registros en las últimas 48 horas. Estado inicial o estable."
+
+    # Convertir los registros en un texto estructurado para que la IA entienda la tendencia
+    resumen_historial = []
+    for reg in registros:
+        fecha_str = reg.fecha_registro.strftime("%Y-%m-%d %H:%M")
+        resumen_historial.append(
+            f"[{fecha_str}] pH: {reg.ph}, KH: {reg.kh} dKH, Calcio: {reg.calcio} ppm, Fosfato: {reg.fosfato} ppm"
+        )
+
+    return "\n".join(resumen_historial)
 
 
 def _generar_analisis_fallback(
