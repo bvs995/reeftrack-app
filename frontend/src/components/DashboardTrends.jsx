@@ -255,8 +255,11 @@ export default function DashboardTrends({
       futureDate.setDate(futureDate.getDate() + day);
       projLabels.push(`+${day}d (${futureDate.getDate()}/${futureDate.getMonth() + 1})`);
       
-      const projectedVal = lastValue + localSlope * day;
-      projValues.push(Number(projectedVal.toFixed(3)));
+      // Al calcular los puntos de la línea punteada:
+      const valorProyectado = lastValue + (localSlope * day);
+      // Forzar a que nunca baje de cero
+      const valorPintado = Math.max(0, valorProyectado);
+      projValues.push(Number(valorPintado.toFixed(3)));
     }
 
     const allLabels = [...realLabels, ...projLabels];

@@ -175,7 +175,11 @@ export default function TrendsView({
         const nextD = new Date(lastDate);
         nextD.setDate(nextD.getDate() + i * 2);
         projLabels.push(`${nextD.getDate()}/${nextD.getMonth() + 1} (Proj)`);
-        projValues.push(Number((lastVal + rate * (i * 2)).toFixed(2)));
+        // Al calcular los puntos de la línea punteada:
+        const valorProyectado = lastVal + (rate * (i * 2));
+        // Forzar a que nunca baje de cero
+        const valorPintado = Math.max(0, valorProyectado);
+        projValues.push(Number(valorPintado.toFixed(2)));
       }
 
       datasets.push({
