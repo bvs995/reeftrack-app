@@ -191,6 +191,19 @@ export async function analyzeAquariumAI(aquariumData) {
   return res.json();
 }
 
+export async function fetchPredictiveAnalysis(aquariumData) {
+  const res = await authFetch('/analisis-predictivo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(aquariumData),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al solicitar análisis predictivo JSON');
+  }
+  return res.json();
+}
+
 // ----------------- MÉTODOS DE ACUARIOS Y COMPATIBILIDAD -----------------
 
 export async function fetchTanks() {

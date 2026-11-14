@@ -10,7 +10,8 @@ from backend.models import (
     AnalisisAcuarioSchema,
     AnalisisAcuarioResponse,
     AquariumAnalysisResponse,
-    AquariumDataRequest
+    AquariumDataRequest,
+    PredictiveAnalysisJsonResponse
 )
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "AnalisisAcuarioResponse",
     "AquariumAnalysisResponse",
     "AquariumDataRequest",
+    "PredictiveAnalysisJsonResponse",
     "PRIMARY_MODEL",
     "FALLBACK_MODELS"
 ]

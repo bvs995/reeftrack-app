@@ -319,3 +319,7 @@ class AquariumDataRequest(BaseModel):
 class AquariumAnalysisResponse(BaseModel):
     status: str = "success"
     analisis: AnalisisAcuarioSchema
+
+class PredictiveAnalysisJsonResponse(BaseModel):
+    status: str = "success"
+    data: AnalisisAcuarioResponse

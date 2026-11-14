@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -37,7 +37,8 @@ from backend.models import (
     AnalisisAcuarioSchema,
     AnalisisAcuarioResponse,
     AquariumDataRequest,
-    AquariumAnalysisResponse
+    AquariumAnalysisResponse,
+    PredictiveAnalysisJsonResponse
 )
 from backend.services.ai_service import (
     analizar_parametros_acuario,
@@ -726,8 +727,30 @@ def scan_measurement_photo(
 
 
 # ==============================================================================
-# 🧠 ENDPOINT DE ANÁLISIS PREDICTIVO CLÍNICO CON IA (GEMINI)
+# 🧠 ENDPOINTS DE ANÁLISIS PREDICTIVO CLÍNICO CON IA (GEMINI)
 # ==============================================================================
+
+router = APIRouter()
+
+@router.post(
+    "/api/analisis-predictivo",
+    response_model=PredictiveAnalysisJsonResponse,
+    summary="Obtener análisis predictivo estructurado en JSON (AquaPulse AI)"
+)
+def obtener_analisis_json(data: AquariumDataRequest):
+    """
+    Endpoint estructurado para obtener diagnóstico predictivo en formato JSON puro.
+    Ejecuta inferencia técnica con Gemini mediante esquemas tipados.
+    """
+    try:
+        data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+        resultado_estructurado = analizar_parametros_estructurado(data_dict)
+        return {"status": "success", "data": resultado_estructurado}
+    except Exception as e:
+        logger.error(f"Error en obtener_analisis_json: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+app.include_router(router)
 
 @app.post(
     "/api/analizar-ia",
@@ -741,7 +764,7 @@ def endpoint_analizar_acuario(data: AquariumDataRequest):
     Devuelve diagnóstico estructurado de estado, riesgo potencial predictivo y lista de dosis recomendadas.
     """
     try:
-        resultado_ia = analizar_parametros_acuario(data.model_dump())
+        resultado_ia = analizar_parametros_estructurado(data.model_dump())
         return AquariumAnalysisResponse(status="success", analisis=resultado_ia)
     except Exception as e:
         logger.error(f"Error en endpoint_analizar_acuario: {e}")
