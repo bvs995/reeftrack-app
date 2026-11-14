@@ -28,6 +28,7 @@ import {
   Camera
 } from 'lucide-react';
 import { fetchPredictions, fetchMeasurements } from '../api';
+import ReefAnalysisCard from './ReefAnalysisCard';
 
 // Registrar plugins requeridos de Chart.js
 ChartJS.register(
@@ -658,6 +659,23 @@ export default function DashboardTrends({
             <span>Actualizar Gráfica</span>
           </button>
         </div>
+      </div>
+
+      {/* Tarjeta de Diagnóstico Predictivo AquaPulse con IA */}
+      <div className="pt-2">
+        <ReefAnalysisCard
+          aquariumData={{
+            nombre_acuario: 'Mi Acuario Principal',
+            volumen_litros: 280,
+            ph: 8.2,
+            kh: alk?.latest_value ?? 8.3,
+            calcio: propPredictions?.calcium?.latest_value ?? 420,
+            magnesio: 1350,
+            nitrato: wc?.current_nitrate_ppm ?? 5.0,
+            fosfato: 0.04,
+            tendencia_reciente: `Consumo KH: ${alk?.daily_consumption_rate ? alk.daily_consumption_rate.toFixed(2) + ' dKH/d' : 'Estable'}. Acumulación NO3: ${wc?.daily_accumulation_rate ? wc.daily_accumulation_rate.toFixed(2) + ' ppm/d' : 'Estable'}.`
+          }}
+        />
       </div>
     </div>
   );
