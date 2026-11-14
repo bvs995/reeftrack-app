@@ -262,3 +262,4 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
 
 # Alias de compatibilidad
 analizar_parametros_acuario = analizar_parametros_estructurado
+analizar_acuario_estructurado = analizar_parametros_estructurado

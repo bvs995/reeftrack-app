@@ -2,6 +2,7 @@
 from backend.services.ai_service import (
     analizar_parametros_estructurado,
     analizar_parametros_acuario,
+    analizar_acuario_estructurado,
     obtener_tendencia_ultimas_48h,
     PRIMARY_MODEL,
     FALLBACK_MODELS
@@ -20,6 +21,7 @@ from backend.models import (
 __all__ = [
     "analizar_parametros_estructurado",
     "analizar_parametros_acuario",
+    "analizar_acuario_estructurado",
     "obtener_tendencia_ultimas_48h",
     "DosisRecomendada",
     "AnalisisAcuarioSchema",

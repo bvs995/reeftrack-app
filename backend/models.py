@@ -56,6 +56,10 @@ class Tank(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Sinónimos para compatibilidad bilingüe
+    nombre = synonym("name")
+    volumen = synonym("volume_liters")
+
     owner = relationship("User", back_populates="tanks")
     measurements = relationship("Measurement", back_populates="tank", cascade="all, delete-orphan")
 
@@ -87,6 +91,7 @@ class Measurement(Base):
 
     user = relationship("User", back_populates="measurements")
     tank = relationship("Tank", back_populates="measurements")
+    acuario = synonym("tank")
 
 # Alias de clases ORM para compatibilidad directa
 MedicionAcuario = Measurement

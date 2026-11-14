@@ -45,6 +45,7 @@ from backend.models import (
 from backend.services.ai_service import (
     analizar_parametros_acuario,
     analizar_parametros_estructurado,
+    analizar_acuario_estructurado,
     obtener_tendencia_ultimas_48h
 )
 from backend.auth import (
@@ -781,6 +782,71 @@ def endpoint_tendencia_48h(
         raise HTTPException(status_code=400, detail="Debe proporcionarse el ID del acuario.")
     resumen = obtener_tendencia_ultimas_48h(db, target_id)
     return {"status": "success", "acuario_id": target_id, "tendencia": resumen}
+
+@router.post(
+    "/api/acuarios/{acuario_id}/analisis-predictivo",
+    response_model=PredictiveAnalysisJsonResponse,
+    summary="Análisis predictivo con IA inyectando historial de 48h desde base de datos"
+)
+@router.post(
+    "/api/tanks/{tank_id}/analisis-predictivo",
+    response_model=PredictiveAnalysisJsonResponse,
+    summary="Análisis predictivo con IA inyectando historial de 48h desde base de datos (alias tanks)"
+)
+def endpoint_analisis_con_historial(
+    acuario_id: Optional[int] = None,
+    tank_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    target_id = acuario_id or tank_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Debe especificarse el ID del acuario.")
+
+    try:
+        # 1. Obtener la última medición actual del acuario
+        ultima_medicion = (
+            db.query(MedicionAcuario)
+            .filter(MedicionAcuario.acuario_id == target_id)
+            .order_by(MedicionAcuario.fecha_registro.desc())
+            .first()
+        )
+
+        if not ultima_medicion:
+            raise HTTPException(status_code=404, detail="No se encontraron mediciones para este acuario.")
+
+        # 2. Extraer el historial de las últimas 48 horas usando la función anterior
+        tendencia = obtener_tendencia_ultimas_48h(db, target_id)
+
+        # 3. Preparar el paquete de datos para la IA
+        tank_obj = (
+            ultima_medicion.acuario
+            if hasattr(ultima_medicion, "acuario") and ultima_medicion.acuario
+            else db.query(Acuario).filter(Acuario.id == target_id).first()
+        )
+        nombre_acuario = getattr(tank_obj, "nombre", None) or getattr(tank_obj, "name", "Principal") if tank_obj else "Principal"
+        volumen_litros = float(getattr(tank_obj, "volumen", None) or getattr(tank_obj, "volume_liters", 280.0) if tank_obj else 280.0)
+
+        datos_para_ia = {
+            "nombre_acuario": nombre_acuario,
+            "volumen_litros": volumen_litros,
+            "ph": ultima_medicion.ph,
+            "kh": ultima_medicion.kh,
+            "calcio": ultima_medicion.calcio,
+            "magnesio": ultima_medicion.magnesio,
+            "nitrato": ultima_medicion.nitrato,
+            "fosfato": ultima_medicion.fosfato,
+            "tendencia_reciente": tendencia  # <--- Aquí inyectamos el historial formateado
+        }
+
+        # 4. Llamar a tu función de Gemini estructurada
+        resultado_ia = analizar_acuario_estructurado(datos_para_ia)
+
+        return {"status": "success", "data": resultado_ia}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en endpoint_analisis_con_historial: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 app.include_router(router)
 
