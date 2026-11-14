@@ -50,10 +50,11 @@ export default function Navbar({
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         {/* Barra de navegación - Cabecera izquierda */}
         <div className="flex items-center space-x-3">
+          {/* AQUÍ ESTÁ EL NUEVO LOGO DEL ARRECIFE */}
           <img 
-            src="/logo-reef.png" 
+            src="/logo-reef-icon.png" 
             alt="AquaPulse Logo" 
-            onError={(e) => { e.currentTarget.src = '/logo-reef.jpg'; }}
+            onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
             className="w-12 h-12 rounded-2xl shadow-lg shadow-cyan-500/10 border border-cyan-500/20 object-cover shrink-0" 
           />
           <div>
