@@ -139,6 +139,8 @@ export default function DashboardTrends({
       unit: 'ppm',
       safeMin: 0.02,
       safeMax: 0.08,
+      min: 0, // Bloqueo estricto inferior
+      suggestedMax: 0.25, // Da un poco de aire por encima del 0.20 actual
       step: 0.01,
       color: '#c084fc',
       predictionData: null
@@ -317,10 +319,13 @@ export default function DashboardTrends({
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
       },
       y: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        min: currentParam.min !== undefined ? currentParam.min : (currentParam.key === 'phosphate_ppm' ? 0 : undefined), // Bloqueo estricto inferior
+        suggestedMax: currentParam.suggestedMax !== undefined ? currentParam.suggestedMax : (currentParam.key === 'phosphate_ppm' ? 0.25 : currentParam.safeMax * 1.1), // Da un poco de aire por encima del 0.20 actual
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)' // Líneas sutiles para el tema oscuro
+        },
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        suggestedMin: currentParam.safeMin * 0.9,
-        suggestedMax: currentParam.safeMax * 1.1
+        suggestedMin: currentParam.min !== undefined ? currentParam.min : currentParam.safeMin * 0.9
       }
     }
   };

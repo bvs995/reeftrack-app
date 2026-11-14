@@ -180,14 +180,17 @@ export default function TrendsView({
     },
     scales: {
       x: {
-        grid: { color: 'rgba(255, 255, 255, 0.06)' },
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } }
       },
       y: {
-        grid: { color: 'rgba(255, 255, 255, 0.06)' },
+        min: (activeCode === 'po4' || activeCode === 'phosphate') ? 0 : undefined, // Bloqueo estricto inferior
+        suggestedMax: (activeCode === 'po4' || activeCode === 'phosphate') ? 0.25 : (meta.max_safe ? meta.max_safe * 1.1 : undefined), // Da un poco de aire por encima del 0.20 actual
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)' // Líneas sutiles para el tema oscuro
+        },
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        suggestedMin: meta.min_safe ? meta.min_safe * 0.9 : undefined,
-        suggestedMax: meta.max_safe ? meta.max_safe * 1.1 : undefined
+        suggestedMin: meta.min_safe ? meta.min_safe * 0.9 : undefined
       }
     }
   };
