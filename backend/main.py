@@ -32,8 +32,11 @@ from backend.models import (
     AdminUserUpdate,
     AdminUserListItem,
     check_password_complexity,
-    PASSWORD_REQUIREMENTS_ERROR
+    PASSWORD_REQUIREMENTS_ERROR,
+    AquariumDataRequest,
+    AquariumAnalysisResponse
 )
+from backend.services.ai_service import analizar_parametros_acuario
 from backend.auth import (
     hash_password,
     verify_password,
@@ -713,6 +716,31 @@ def scan_measurement_photo(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al analizar la imagen: {str(e)}"
+        )
+
+
+# ==============================================================================
+# 🧠 ENDPOINT DE ANÁLISIS PREDICTIVO CLÍNICO CON IA (GEMINI)
+# ==============================================================================
+
+@app.post(
+    "/api/analizar-ia",
+    response_model=AquariumAnalysisResponse,
+    summary="Analizar parámetros químicos y prever colapsos con IA (AquaPulse AI)"
+)
+def endpoint_analizar_acuario(data: AquariumDataRequest):
+    """
+    Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini).
+    Devuelve diagnóstico de estado, riesgo potencial predictivo y acciones correctoras exactas.
+    """
+    try:
+        resultado_ia = analizar_parametros_acuario(data.model_dump())
+        return {"status": "success", "analisis": resultado_ia}
+    except Exception as e:
+        logger.error(f"Error en endpoint_analizar_acuario: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al generar análisis con IA: {str(e)}"
         )
 
 

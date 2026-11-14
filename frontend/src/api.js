@@ -178,6 +178,19 @@ export async function scanMeasurement(imageBase64, preferredParameter = null) {
   return res.json();
 }
 
+export async function analyzeAquariumAI(aquariumData) {
+  const res = await authFetch('/analizar-ia', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(aquariumData),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al solicitar análisis clínico con IA');
+  }
+  return res.json();
+}
+
 // ----------------- MÉTODOS DE ACUARIOS Y COMPATIBILIDAD -----------------
 
 export async function fetchTanks() {

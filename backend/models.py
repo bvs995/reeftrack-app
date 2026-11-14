@@ -285,3 +285,23 @@ class PredictionResponse(BaseModel):
     calcium: ParameterConsumption
     water_change_prediction: WaterChangePrediction
     active_alerts: List[str]
+
+
+# ==============================================================================
+# ESQUEMAS PYDANTIC v2 - ANÁLISIS CLÍNICO CON IA (GEMINI)
+# ==============================================================================
+
+class AquariumDataRequest(BaseModel):
+    nombre_acuario: str = Field("Principal", example="Arrecife Mixto SPS/LPS", description="Nombre del acuario")
+    volumen_litros: float = Field(280.0, example=280.0, description="Volumen del acuario en litros")
+    ph: Optional[float] = Field(None, example=8.2, description="Nivel de pH (Ideal: 8.1 - 8.4)")
+    kh: Optional[float] = Field(None, example=8.3, description="Alcalinidad dKH (Ideal: 7.5 - 8.5)")
+    calcio: Optional[float] = Field(None, example=420.0, description="Calcio en ppm (Ideal: 420 - 450)")
+    magnesio: Optional[float] = Field(None, example=1350.0, description="Magnesio en ppm (Ideal: 1300 - 1450)")
+    nitrato: Optional[float] = Field(None, example=5.0, description="Nitrato en ppm (Ideal: 5 - 10)")
+    fosfato: Optional[float] = Field(None, example=0.04, description="Fosfato en ppm (Ideal: 0.03 - 0.08)")
+    tendencia_reciente: str = Field("Estable en las últimas 24h", description="Historial o tendencia reciente de cambios")
+
+class AquariumAnalysisResponse(BaseModel):
+    status: str = "success"
+    analisis: str
