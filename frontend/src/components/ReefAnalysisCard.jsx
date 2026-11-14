@@ -62,8 +62,15 @@ export default function ReefAnalysisCard({ aquariumData = {}, backendUrl = null 
 
   return (
     <div className="p-6 bg-slate-900 rounded-xl text-slate-100 max-w-xl mx-auto shadow-xl border border-slate-800">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold text-cyan-400">🤖 Diagnóstico Predictivo AquaPulse</h3>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h3 className="text-xl font-bold text-white mb-4 sm:mb-0 flex items-center">
+          <img 
+            src="/robot-fish.jpg" 
+            alt="AquaPulse AI" 
+            className="w-8 h-8 mr-3 rounded-lg shadow-lg border border-cyan-500/30 object-cover" 
+          />
+          Diagnóstico Predictivo AquaPulse
+        </h3>
         <button
           onClick={fetchAiAnalysis}
           disabled={loading}
