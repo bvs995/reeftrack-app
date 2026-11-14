@@ -44,6 +44,15 @@ else:
         connect_args={"check_same_thread": False}
     )
 
+# Enforzar llaves foráneas en conexiones SQLite
+from sqlalchemy import event
+if "sqlite" in DATABASE_URL:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON;")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

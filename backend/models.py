@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func
 from sqlalchemy.orm import relationship, synonym
 from backend.database import Base
 
@@ -104,7 +104,7 @@ class Acuario(Base):
     nombre = Column(String(100), nullable=False)
     volumen_litros = Column(Float, nullable=False)
     usuario_id = Column(String(100), nullable=False, default="1", index=True)
-    creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
+    creado_en = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
 
     # Sinónimos para interoperabilidad total
     volumen = synonym("volumen_litros")
@@ -127,7 +127,7 @@ class MedicionAcuario(Base):
     magnesio = Column(Float, nullable=True)
     nitrato = Column(Float, nullable=True)
     fosfato = Column(Float, nullable=True)
-    fecha_registro = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    fecha_registro = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
 
     # Sinónimos para interoperabilidad total
     tank_id = synonym("acuario_id")
