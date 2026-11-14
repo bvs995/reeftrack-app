@@ -93,9 +93,53 @@ class Measurement(Base):
     tank = relationship("Tank", back_populates="measurements")
     acuario = synonym("tank")
 
-# Alias de clases ORM para compatibilidad directa
-MedicionAcuario = Measurement
-Acuario = Tank
+# ==============================================================================
+# MODELOS SQLALCHEMY ORM OFICIALES EN ESPAÑOL (acuarios y mediciones)
+# ==============================================================================
+
+class Acuario(Base):
+    __tablename__ = "acuarios"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    nombre = Column(String(100), nullable=False)
+    volumen_litros = Column(Float, nullable=False)
+    usuario_id = Column(String(100), nullable=False, default="1", index=True)
+    creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Sinónimos para interoperabilidad total
+    volumen = synonym("volumen_litros")
+    name = synonym("nombre")
+    volume_liters = synonym("volumen_litros")
+    user_id = synonym("usuario_id")
+    created_at = synonym("creado_en")
+
+    mediciones = relationship("MedicionAcuario", back_populates="acuario", cascade="all, delete-orphan")
+
+
+class MedicionAcuario(Base):
+    __tablename__ = "mediciones"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    acuario_id = Column(Integer, ForeignKey("acuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    ph = Column(Float, nullable=True)
+    kh = Column(Float, nullable=True)
+    calcio = Column(Float, nullable=True)
+    magnesio = Column(Float, nullable=True)
+    nitrato = Column(Float, nullable=True)
+    fosfato = Column(Float, nullable=True)
+    fecha_registro = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Sinónimos para interoperabilidad total
+    tank_id = synonym("acuario_id")
+    alkalinity_dkh = synonym("kh")
+    calcium_ppm = synonym("calcio")
+    magnesium_ppm = synonym("magnesio")
+    nitrate_ppm = synonym("nitrato")
+    phosphate_ppm = synonym("fosfato")
+    timestamp = synonym("fecha_registro")
+
+    acuario = relationship("Acuario", back_populates="mediciones")
+    tank = synonym("acuario")
 
 
 # ==============================================================================

@@ -106,6 +106,35 @@ def init_db():
                     conn.execute(text("UPDATE users SET subscription_tier = 'free' WHERE subscription_tier IS NULL;"))
                 except Exception as sanitize_err:
                     logger.debug(f"Aviso en saneamiento users: {sanitize_err}")
+
+        # Sincronización y consistencia bidireccional entre tanks/measurements y acuarios/mediciones
+        if "acuarios" in table_names and "tanks" in table_names:
+            with engine.begin() as conn:
+                try:
+                    if engine.dialect.name == "sqlite":
+                        conn.execute(text("""
+                            INSERT OR IGNORE INTO acuarios (id, nombre, volumen_litros, usuario_id, creado_en)
+                            SELECT id, name, volume_liters, CAST(user_id AS TEXT), created_at FROM tanks;
+                        """))
+                        conn.execute(text("""
+                            INSERT OR IGNORE INTO mediciones (id, acuario_id, ph, kh, calcio, magnesio, nitrato, fosfato, fecha_registro)
+                            SELECT id, tank_id, ph, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, timestamp 
+                            FROM measurements WHERE tank_id IN (SELECT id FROM acuarios);
+                        """))
+                    else:
+                        conn.execute(text("""
+                            INSERT INTO acuarios (id, nombre, volumen_litros, usuario_id, creado_en)
+                            SELECT id, name, volume_liters, CAST(user_id AS TEXT), created_at FROM tanks
+                            ON CONFLICT (id) DO NOTHING;
+                        """))
+                        conn.execute(text("""
+                            INSERT INTO mediciones (id, acuario_id, ph, kh, calcio, magnesio, nitrato, fosfato, fecha_registro)
+                            SELECT id, tank_id, ph, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, timestamp 
+                            FROM measurements WHERE tank_id IN (SELECT id FROM acuarios)
+                            ON CONFLICT (id) DO NOTHING;
+                        """))
+                except Exception as sync_err:
+                    logger.debug(f"Aviso en sincronización inicial acuarios/mediciones: {sync_err}")
     except Exception as e:
         logger.warning(f"Aviso durante auto-migración de tablas: {e}")
 

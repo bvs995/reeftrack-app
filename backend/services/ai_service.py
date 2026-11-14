@@ -42,6 +42,20 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     )
 
     if not registros:
+        # Fallback a tabla legacy measurements si aplica
+        try:
+            from backend.models import Measurement
+            registros = (
+                db.query(Measurement)
+                .filter(Measurement.tank_id == acuario_id)
+                .filter(Measurement.timestamp >= hace_48_horas)
+                .order_by(Measurement.timestamp.asc())
+                .all()
+            )
+        except Exception:
+            pass
+
+    if not registros:
         return "No hay registros en las últimas 48 horas. Estado inicial o estable."
 
     # Convertir los registros en un texto estructurado para que la IA entienda la tendencia
