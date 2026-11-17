@@ -323,12 +323,19 @@ function AppContent() {
           {!isAuthenticated && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="max-w-4xl mx-auto px-4 py-12 text-center">
               <div className="bg-marine-900/90 border border-marine-800 rounded-3xl p-8 sm:p-12 shadow-2xl relative overflow-hidden">
-                <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto mb-4 border border-cyan-400/40">
-                  <Lock className="w-8 h-8" />
+                {/* LOGO ACTUALIZADO CON EL NOMBRE EXACTO */}
+                <div className="flex justify-center mb-6 relative">
+                  <img 
+                    src="/logo-reef-icon.png" 
+                    alt="AquaPulse Logo" 
+                    onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
+                    className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
+                  />
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white mb-2">
-                  {t('app.welcomeTitle')}
-                </h2>
+
+                <h1 className="text-2xl font-bold text-white text-center mb-1">
+                  AquaPulse Commercial Cloud
+                </h1>
                 <p className="text-sm text-slate-400 max-w-lg mx-auto mb-6">
                   {t('app.welcomeDesc')}
                 </p>

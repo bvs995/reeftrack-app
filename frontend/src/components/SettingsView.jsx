@@ -113,10 +113,19 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 pb-28 sm:pb-12 space-y-6 animate-fadeIn">
         <div className="bg-marine-900/90 border border-marine-800 rounded-3xl p-6 sm:p-10 text-center shadow-2xl relative overflow-hidden">
-          <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto mb-4 border border-cyan-400/40">
-            <Lock className="w-8 h-8" />
+          {/* LOGO ACTUALIZADO CON EL NOMBRE EXACTO */}
+          <div className="flex justify-center mb-6 relative">
+            <img 
+              src="/logo-reef-icon.png" 
+              alt="AquaPulse Logo" 
+              onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
+              className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
+            />
           </div>
-          <h2 className="text-2xl font-black text-white mb-2">{t('settings.sessionRequiredTitle')}</h2>
+
+          <h1 className="text-2xl font-bold text-white text-center mb-1">
+            AquaPulse Commercial Cloud
+          </h1>
           <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
             {t('settings.sessionRequiredDesc')}
           </p>

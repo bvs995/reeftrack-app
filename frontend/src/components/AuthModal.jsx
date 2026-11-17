@@ -305,26 +305,30 @@ export default function AuthModal({ isOpen, onClose }) {
           <X className="w-5 h-5" />
         </button>
 
-        {/* Logo & Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-400 to-emerald-400 flex items-center justify-center shadow-neon-cyan border border-white/20 mb-3">
-            <Waves className="w-8 h-8 text-marine-950 stroke-[2.5]" />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            {authModalTab === 'forgot'
-              ? t('auth.forgotTitle')
-              : authModalTab === 'reset'
-              ? t('auth.resetTitle')
-              : t('auth.headerTitle')}
-          </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-xs">
-            {authModalTab === 'forgot'
-              ? t('auth.forgotSubtitle')
-              : authModalTab === 'reset'
-              ? t('auth.resetSubtitle')
-              : t('auth.headerSubtitle')}
-          </p>
+        {/* LOGO ACTUALIZADO CON EL NOMBRE EXACTO */}
+        <div className="flex justify-center mb-6 relative">
+          <img 
+            src="/logo-reef-icon.png" 
+            alt="AquaPulse Logo" 
+            onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
+            className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
+          />
         </div>
+
+        <h1 className="text-2xl font-bold text-white text-center mb-1">
+          {authModalTab === 'forgot'
+            ? t('auth.forgotTitle')
+            : authModalTab === 'reset'
+            ? t('auth.resetTitle')
+            : 'AquaPulse Commercial Cloud'}
+        </h1>
+        <p className="text-xs text-slate-400 text-center mb-6 max-w-xs mx-auto">
+          {authModalTab === 'forgot'
+            ? t('auth.forgotSubtitle')
+            : authModalTab === 'reset'
+            ? t('auth.resetSubtitle')
+            : t('auth.headerSubtitle')}
+        </p>
 
         {/* Pestañas Iniciar Sesión / Crear Cuenta (Ocultas en forgot o reset) */}
         {(authModalTab === 'login' || authModalTab === 'register') && (
