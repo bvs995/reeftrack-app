@@ -102,6 +102,12 @@ export default function DashboardTrends({
     return acuarioActual.tipoAgua === 'dulce' ? 'ph' : 'fosfatos';
   });
 
+  const parametroActivo = activeParam;
+  const setParametroActivo = (id) => {
+    triggerHaptic(15);
+    setActiveParam(id);
+  };
+
   // Asegurar que el parámetro seleccionado sea coherente con el ecosistema
   useEffect(() => {
     const aliasMap = {
@@ -727,74 +733,57 @@ export default function DashboardTrends({
         </div>
       </div>
 
-      {/* ---------------- 2. SELECTOR DE PARÁMETRO INTERACTIVO SEGÚN ECOSISTEMA ---------------- */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none flex-1">
-            {parametrosAMostrar.map((param) => {
-              const isSelected = activeParam === param.id ||
-                (param.id === 'fosfatos' && (activeParam === 'phosphate' || activeParam === 'fosfatos')) ||
-                (param.id === 'alcalinidad' && (activeParam === 'dkh' || activeParam === 'alcalinidad')) ||
-                (param.id === 'calcio' && (activeParam === 'calcium' || activeParam === 'calcio')) ||
-                (param.id === 'magnesio' && (activeParam === 'magnesium' || activeParam === 'magnesio')) ||
-                (param.id === 'salinidad' && (activeParam === 'salinity' || activeParam === 'salinidad')) ||
-                (param.id === 'nitratos' && (activeParam === 'nitrate' || activeParam === 'nitratos'));
-
-              return (
-                <button
-                  key={param.id}
-                  onClick={() => {
-                    triggerHaptic();
-                    setActiveParam(param.id);
-                  }}
-                  className={`min-h-[46px] flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all border select-none active:scale-95 ${
-                    isSelected
-                      ? 'bg-cyan-500/25 border-cyan-400 text-white shadow-neon-cyan ring-2 ring-cyan-400/40'
-                      : 'bg-marine-900 border-marine-700/80 text-slate-400 hover:text-slate-200 hover:bg-marine-850'
-                  }`}
-                >
-                  <span>{param.nombre}</span>
-                  {param.unidad && (
-                    <span className="text-[11px] font-bold text-cyan-400">{param.unidad}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selector interactivo de Ecosistema Táctil (Agua Salada vs Agua Dulce) */}
-          <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 shrink-0">
+      {/* ---------------- 2. SELECTOR DE PARÁMETROS DINÁMICO ---------------- */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        {/* Selector de Parámetros Dinámico */}
+        <div className="flex flex-wrap gap-3">
+          {parametrosAMostrar.map((parametro) => (
             <button
-              type="button"
-              onClick={() => {
-                triggerHaptic();
-                setUserSelectedEcosystem('salada');
-                setActiveParam('fosfatos');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                acuarioActual.tipoAgua !== 'dulce'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
-                  : 'text-slate-400 hover:text-slate-200'
+              key={parametro.id}
+              onClick={() => setParametroActivo(parametro.id)}
+              className={`px-4 py-2 rounded-full border text-sm font-bold transition-colors ${
+                parametroActivo === parametro.id 
+                  ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' 
+                  : 'bg-slate-800 border-slate-700 text-gray-400 hover:bg-slate-700'
               }`}
             >
-              🪸 Agua Salada
+              {parametro.nombre} <span className="text-xs font-normal opacity-70">{parametro.unidad}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic();
-                setUserSelectedEcosystem('dulce');
-                setActiveParam('ph');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                acuarioActual.tipoAgua === 'dulce'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-neon-emerald'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🌿 Agua Dulce
-            </button>
-          </div>
+          ))}
+        </div>
+
+        {/* Conmutador de Ecosistema */}
+        <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setUserSelectedEcosystem('salada');
+              setParametroActivo('fosfatos');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              acuarioActual.tipoAgua !== 'dulce'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🪸 Salada
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setUserSelectedEcosystem('dulce');
+              setParametroActivo('ph');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              acuarioActual.tipoAgua === 'dulce'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-neon-emerald'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🌿 Dulce
+          </button>
         </div>
       </div>
 
