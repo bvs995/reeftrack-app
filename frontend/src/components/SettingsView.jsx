@@ -36,9 +36,25 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
+  const currentLang = (i18n.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
+    }
+  };
+
+  const handleToggleLanguage = () => {
+    triggerHaptic();
+    const nextLang = currentLang === 'es' ? 'en' : 'es';
+    i18n.changeLanguage(nextLang);
+  };
+
+  const handlePremiumClick = () => {
+    triggerHaptic();
+    const el = document.getElementById('premium-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -95,7 +111,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
   // Si no está autenticado, mostrar tarjeta de bienvenida para registrarse o ingresar
   if (!isAuthenticated) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 pb-28 sm:pb-12 animate-fadeIn">
+      <div className="max-w-4xl mx-auto px-4 py-8 pb-28 sm:pb-12 space-y-6 animate-fadeIn">
         <div className="bg-marine-900/90 border border-marine-800 rounded-3xl p-6 sm:p-10 text-center shadow-2xl relative overflow-hidden">
           <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto mb-4 border border-cyan-400/40">
             <Lock className="w-8 h-8" />
@@ -116,6 +132,40 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
               className="px-6 py-3 rounded-2xl bg-marine-950 border border-marine-700 text-slate-200 font-bold text-sm hover:border-cyan-400 active:scale-95 transition"
             >
               {t('app.registerBtn')}
+            </button>
+          </div>
+        </div>
+
+        {/* Dentro de tu componente de Ajustes (Settings) */}
+        <div className="p-4 space-y-4 bg-marine-900/90 border border-marine-800 rounded-3xl shadow-xl">
+          <h2 className="text-xl font-bold text-white mb-4">Ajustes de la App</h2>
+
+          {/* Bloque de Opciones */}
+          <div className="bg-slate-800 rounded-xl divide-y divide-slate-700 overflow-hidden border border-slate-700">
+            {/* Opción Premium */}
+            <button
+              type="button"
+              onClick={() => openAuthModal('register')}
+              className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+            >
+              <span className="flex items-center">
+                <span className="bg-cyan-500 text-black px-2 py-1 rounded text-xs font-bold mr-3">P</span>
+                AquaPulse Premium
+              </span>
+              <span className="text-gray-400">{'>'}</span>
+            </button>
+
+            {/* Opción Idioma */}
+            <button
+              type="button"
+              onClick={handleToggleLanguage}
+              className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+            >
+              <span className="flex items-center">🌐 Idioma</span>
+              <span className="text-gray-400">
+                <span className="text-cyan-400 font-bold mr-1">{currentLang.toUpperCase()}</span>
+                · ES / EN {'>'}
+              </span>
             </button>
           </div>
         </div>
@@ -170,6 +220,57 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
           <span>{statusMessage.text}</span>
         </div>
       )}
+
+      {/* Dentro de tu componente de Ajustes (Settings) */}
+      <div className="p-4 space-y-4 bg-marine-900/90 border border-marine-800/90 rounded-3xl shadow-xl">
+        <h2 className="text-xl font-bold text-white mb-4">Ajustes de la App</h2>
+
+        {/* Bloque de Opciones */}
+        <div className="bg-slate-800 rounded-xl divide-y divide-slate-700 overflow-hidden border border-slate-700">
+          
+          {/* Opción Premium */}
+          <button 
+            type="button"
+            onClick={handlePremiumClick}
+            className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+          >
+            <span className="flex items-center">
+              <span className="bg-cyan-500 text-black px-2 py-1 rounded text-xs font-bold mr-3">P</span>
+              AquaPulse Premium
+            </span>
+            <span className="text-gray-400">{'>'}</span>
+          </button>
+
+          {/* Opción Idioma */}
+          <button 
+            type="button"
+            onClick={handleToggleLanguage}
+            className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+          >
+            <span className="flex items-center">🌐 Idioma</span>
+            <span className="text-gray-400">
+              <span className="text-cyan-400 font-bold mr-1">{currentLang.toUpperCase()}</span>
+              · ES / EN {'>'}
+            </span>
+          </button>
+
+          {/* Opción Panel Admin (Solo visible si es admin) */}
+          {user?.is_admin && (
+            <button 
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                if (onOpenAdmin) onOpenAdmin();
+              }}
+              className="w-full flex justify-between items-center p-4 text-left text-amber-400 hover:bg-slate-700/50 transition cursor-pointer"
+            >
+              <span className="flex items-center">🛡️ Panel de Administrador</span>
+              <span className="text-gray-400">{'>'}</span>
+            </button>
+          )}
+
+        </div>
+      </div>
 
       {/* 1. SECCIÓN DE PERFIL */}
       <section className="bg-marine-900/90 border border-marine-800/90 rounded-3xl p-5 sm:p-7 shadow-xl">
@@ -305,7 +406,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
       </section>
 
       {/* 3. SECCIÓN DE SUSCRIPCIÓN FREEMIUM */}
-      <section className="bg-gradient-to-b from-marine-900 to-marine-950 border border-marine-800 rounded-3xl p-5 sm:p-7 shadow-2xl relative overflow-hidden">
+      <section id="premium-section" className="bg-gradient-to-b from-marine-900 to-marine-950 border border-marine-800 rounded-3xl p-5 sm:p-7 shadow-2xl relative overflow-hidden">
         {/* Glow de fondo */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
