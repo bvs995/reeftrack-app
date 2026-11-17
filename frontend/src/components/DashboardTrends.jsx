@@ -61,22 +61,28 @@ export default function DashboardTrends({
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [userSelectedEcosystem, setUserSelectedEcosystem] = useState(null);
 
-  // Normalización del ecosistema del acuario
+  // Normalización del ecosistema del acuario (arrecife, plantado, dulce_peces)
   const rawTank = propAcuarioActual || activeTank || {};
-  const isFreshwater = rawTank.tipoAgua === 'dulce' ||
-    (typeof rawTank.tank_type === 'string' && rawTank.tank_type.toLowerCase().includes('freshwater')) ||
-    (typeof rawTank.type === 'string' && rawTank.type.toLowerCase().includes('freshwater')) ||
-    rawTank.biotipo === 'dulce';
+  const rawTipo = (rawTank.tipo || rawTank.tank_type || rawTank.tipoAgua || '').toLowerCase();
 
-  const defaultTipoAgua = isFreshwater ? 'dulce' : 'salada';
-  const tipoAgua = userSelectedEcosystem || defaultTipoAgua;
+  let defaultTipo = 'arrecife';
+  if (rawTipo.includes('plant')) {
+    defaultTipo = 'plantado';
+  } else if (rawTipo.includes('pece') || rawTipo.includes('community') || rawTipo.includes('comunitario') || rawTipo === 'dulce') {
+    defaultTipo = 'dulce_peces';
+  } else if (rawTipo.includes('reef') || rawTipo.includes('arrecife') || rawTipo.includes('salada')) {
+    defaultTipo = 'arrecife';
+  }
+
+  const currentTipo = userSelectedEcosystem || defaultTipo;
 
   const acuarioActual = {
     ...rawTank,
-    tipoAgua
+    tipo: currentTipo,
+    tipoAgua: currentTipo === 'arrecife' ? 'salada' : 'dulce'
   };
 
-  // Listas maestras de parámetros según el ecosistema
+  // Listas maestras de parámetros según el ecosistema seleccionado
   const parametrosSalada = [
     { id: 'alcalinidad', nombre: 'Alcalinidad', unidad: '(dKH)' },
     { id: 'calcio', nombre: 'Calcio', unidad: '(ppm)' },
@@ -86,7 +92,7 @@ export default function DashboardTrends({
     { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' }
   ];
 
-  const parametrosDulce = [
+  const parametrosDulcePeces = [
     { id: 'ph', nombre: 'pH', unidad: '' },
     { id: 'amoniaco', nombre: 'Amoníaco', unidad: '(NH3)' },
     { id: 'nitritos', nombre: 'Nitritos', unidad: '(NO2)' },
@@ -95,11 +101,31 @@ export default function DashboardTrends({
     { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' }
   ];
 
-  // Lógica condicional: Si el acuario es de agua dulce, usa la lista dulce; si no, la salada.
-  const parametrosAMostrar = acuarioActual.tipoAgua === 'dulce' ? parametrosDulce : parametrosSalada;
+  const parametrosPlantado = [
+    { id: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'kh', nombre: 'Dureza (KH)', unidad: '(dKH)' },
+    { id: 'gh', nombre: 'Dureza (GH)', unidad: '(dGH)' },
+    { id: 'nitratos', nombre: 'Nitrógeno', unidad: '(NO3 ppm)' },
+    { id: 'fosfatos', nombre: 'Fósforo', unidad: '(PO4 ppm)' },
+    { id: 'potasio', nombre: 'Potasio', unidad: '(K ppm)' },
+    { id: 'hierro', nombre: 'Hierro', unidad: '(Fe ppm)' },
+    { id: 'co2', nombre: 'CO2 disuelto', unidad: '(ppm)' }
+  ];
+
+  // Lógica de ruteo según el perfil del acuario guardado en la base de datos o estado
+  let parametrosAMostrar = [];
+  if (acuarioActual.tipo === 'arrecife') {
+    parametrosAMostrar = parametrosSalada;
+  } else if (acuarioActual.tipo === 'plantado') {
+    parametrosAMostrar = parametrosPlantado;
+  } else {
+    parametrosAMostrar = parametrosDulcePeces;
+  }
 
   const [activeParam, setActiveParam] = useState(() => {
-    return acuarioActual.tipoAgua === 'dulce' ? 'ph' : 'fosfatos';
+    if (acuarioActual.tipo === 'plantado') return 'potasio';
+    if (acuarioActual.tipo === 'arrecife') return 'fosfatos';
+    return 'ph';
   });
 
   const parametroActivo = activeParam;
@@ -123,7 +149,7 @@ export default function DashboardTrends({
     if (!exists && parametrosAMostrar.length > 0) {
       setActiveParam(parametrosAMostrar[0].id);
     }
-  }, [acuarioActual.tipoAgua, parametrosAMostrar]);
+  }, [acuarioActual.tipo, parametrosAMostrar]);
 
   const triggerHaptic = (ms = 15) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -329,6 +355,60 @@ export default function DashboardTrends({
       step: 0.1,
       color: '#ec4899',
       predictionData: null
+    },
+
+    // ---- Parámetros Específicos Acuario Plantado ----
+    kh: {
+      key: 'kh',
+      name: 'Dureza (KH)',
+      shortName: 'KH',
+      unit: 'dKH',
+      safeMin: 1.0,
+      safeMax: 5.0,
+      min: 0,
+      suggestedMax: 8.0,
+      step: 0.5,
+      color: '#00f2fe',
+      predictionData: null
+    },
+    potasio: {
+      key: 'potassium_ppm',
+      name: 'Potasio (K ppm)',
+      shortName: 'Potasio',
+      unit: 'ppm',
+      safeMin: 10.0,
+      safeMax: 25.0,
+      min: 0,
+      suggestedMax: 35.0,
+      step: 1.0,
+      color: '#10b981',
+      predictionData: null
+    },
+    hierro: {
+      key: 'iron_ppm',
+      name: 'Hierro (Fe ppm)',
+      shortName: 'Hierro',
+      unit: 'ppm',
+      safeMin: 0.05,
+      safeMax: 0.20,
+      min: 0,
+      suggestedMax: 0.50,
+      step: 0.01,
+      color: '#f43f5e',
+      predictionData: null
+    },
+    co2: {
+      key: 'co2_ppm',
+      name: 'CO2 disuelto (ppm)',
+      shortName: 'CO2',
+      unit: 'ppm',
+      safeMin: 20.0,
+      safeMax: 35.0,
+      min: 0,
+      suggestedMax: 50.0,
+      step: 1.0,
+      color: '#38bdf8',
+      predictionData: null
     }
   };
 
@@ -339,6 +419,8 @@ export default function DashboardTrends({
   PARAM_CONFIG.salinity = PARAM_CONFIG.salinidad;
   PARAM_CONFIG.phosphate = PARAM_CONFIG.fosfatos;
   PARAM_CONFIG.nitrate = PARAM_CONFIG.nitratos;
+  PARAM_CONFIG.k = PARAM_CONFIG.potasio;
+  PARAM_CONFIG.fe = PARAM_CONFIG.hierro;
 
   const currentParam = PARAM_CONFIG[activeParam] || PARAM_CONFIG[parametrosAMostrar[0]?.id] || PARAM_CONFIG.fosfatos;
 
@@ -753,36 +835,51 @@ export default function DashboardTrends({
         </div>
 
         {/* Conmutador de Ecosistema */}
-        <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 self-start sm:self-auto shrink-0">
+        <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 self-start sm:self-auto shrink-0 flex-wrap">
           <button
             type="button"
             onClick={() => {
               triggerHaptic();
-              setUserSelectedEcosystem('salada');
+              setUserSelectedEcosystem('arrecife');
               setParametroActivo('fosfatos');
             }}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipoAgua !== 'dulce'
+              acuarioActual.tipo === 'arrecife'
                 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🪸 Salada
+            🪸 Arrecife
           </button>
           <button
             type="button"
             onClick={() => {
               triggerHaptic();
-              setUserSelectedEcosystem('dulce');
-              setParametroActivo('ph');
+              setUserSelectedEcosystem('plantado');
+              setParametroActivo('potasio');
             }}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipoAgua === 'dulce'
+              acuarioActual.tipo === 'plantado'
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-neon-emerald'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🌿 Dulce
+            🌿 Plantado
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setUserSelectedEcosystem('dulce_peces');
+              setParametroActivo('ph');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              acuarioActual.tipo === 'dulce_peces'
+                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-neon-cyan'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🐟 Dulce Peces
           </button>
         </div>
       </div>
