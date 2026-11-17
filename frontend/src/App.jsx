@@ -371,6 +371,8 @@ function AppContent() {
 
               {activeTab === 'trends' && (
                 <DashboardTrends
+                  activeTank={activeTank}
+                  acuarioActual={activeTank}
                   onOpenQuickLog={handleOpenQuickLog}
                   onOpenWaterChange={() => handleSelectTab('water')}
                 />

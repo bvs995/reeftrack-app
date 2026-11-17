@@ -32,6 +32,11 @@ export default function QuickEntryForm({
     nitrate_ppm: '',
     phosphate_ppm: '',
     salinity_ppt: '',
+    ph: '',
+    ammonia_ppm: '',
+    nitrite_ppm: '',
+    gh_dgh: '',
+    temperatura: '',
     notes: '',
     timestamp: new Date().toISOString().slice(0, 16)
   });
@@ -179,8 +184,80 @@ export default function QuickEntryForm({
     }
   };
 
-  // Definición de las 6 tarjetas compactas de parámetros
-  const PARAM_CARDS = [
+  // Detección del tipo de agua para adaptar el catálogo de registro
+  const isDulce = tank?.tipoAgua === 'dulce' ||
+    (typeof tank?.tank_type === 'string' && tank.tank_type.toLowerCase().includes('freshwater')) ||
+    (typeof tank?.type === 'string' && tank.type.toLowerCase().includes('freshwater'));
+
+  // Definición de las tarjetas compactas de parámetros según el ecosistema
+  const PARAM_CARDS = isDulce ? [
+    {
+      key: 'ph',
+      label: 'pH',
+      unit: '',
+      step: '0.1',
+      placeholder: '6.8',
+      safeRange: '6.5 - 7.5',
+      accentColor: 'border-cyan-500/40 focus-within:border-cyan-400 focus-within:ring-cyan-400/20',
+      badgeColor: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
+      lastValue: lastMeasurement?.ph
+    },
+    {
+      key: 'ammonia_ppm',
+      label: 'Amoníaco (NH3)',
+      unit: 'ppm',
+      step: '0.01',
+      placeholder: '0.0',
+      safeRange: '< 0.02 ppm',
+      accentColor: 'border-rose-500/40 focus-within:border-rose-400 focus-within:ring-rose-400/20',
+      badgeColor: 'bg-rose-500/10 text-rose-300 border-rose-500/30',
+      lastValue: lastMeasurement?.ammonia_ppm
+    },
+    {
+      key: 'nitrite_ppm',
+      label: 'Nitritos (NO2)',
+      unit: 'ppm',
+      step: '0.01',
+      placeholder: '0.0',
+      safeRange: '< 0.05 ppm',
+      accentColor: 'border-orange-500/40 focus-within:border-orange-400 focus-within:ring-orange-400/20',
+      badgeColor: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
+      lastValue: lastMeasurement?.nitrite_ppm
+    },
+    {
+      key: 'nitrate_ppm',
+      label: 'Nitratos (NO3)',
+      unit: 'ppm',
+      step: '0.5',
+      placeholder: '10.0',
+      safeRange: '5.0 - 25.0 ppm',
+      accentColor: 'border-amber-500/40 focus-within:border-amber-400 focus-within:ring-amber-400/20',
+      badgeColor: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+      lastValue: lastMeasurement?.nitrate_ppm
+    },
+    {
+      key: 'gh_dgh',
+      label: 'Dureza General (GH)',
+      unit: 'dGH',
+      step: '0.5',
+      placeholder: '6.0',
+      safeRange: '4.0 - 10.0 dGH',
+      accentColor: 'border-purple-500/40 focus-within:border-purple-400 focus-within:ring-purple-400/20',
+      badgeColor: 'bg-purple-500/10 text-purple-300 border-purple-500/30',
+      lastValue: lastMeasurement?.gh_dgh
+    },
+    {
+      key: 'temperatura',
+      label: 'Temperatura',
+      unit: '°C',
+      step: '0.1',
+      placeholder: '24.5',
+      safeRange: '22.0 - 26.0 °C',
+      accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
+      badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+      lastValue: lastMeasurement?.temperatura
+    }
+  ] : [
     {
       key: 'alkalinity_dkh',
       label: t('quickEntry.alkLabel'),

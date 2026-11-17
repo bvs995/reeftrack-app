@@ -47,16 +47,77 @@ export default function DashboardTrends({
   predictions: propPredictions = null,
   measurements: propMeasurements = null,
   onOpenQuickLog = null,
-  onOpenWaterChange = null
+  onOpenWaterChange = null,
+  initialParam = 'fosfatos',
+  activeTank = null,
+  acuarioActual: propAcuarioActual = null
 }) {
   const { t, i18n } = useTranslation();
   const [predictions, setPredictions] = useState(propPredictions);
   const [measurements, setMeasurements] = useState(propMeasurements || []);
   const [loading, setLoading] = useState(!propPredictions);
-  const [activeParam, setActiveParam] = useState('phosphate'); // 'dkh', 'calcium', 'nitrate', 'magnesium', 'phosphate', 'salinity'
   const [mostrarDiagnosticoIA, setMostrarDiagnosticoIA] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [userSelectedEcosystem, setUserSelectedEcosystem] = useState(null);
+
+  // Normalización del ecosistema del acuario
+  const rawTank = propAcuarioActual || activeTank || {};
+  const isFreshwater = rawTank.tipoAgua === 'dulce' ||
+    (typeof rawTank.tank_type === 'string' && rawTank.tank_type.toLowerCase().includes('freshwater')) ||
+    (typeof rawTank.type === 'string' && rawTank.type.toLowerCase().includes('freshwater')) ||
+    rawTank.biotipo === 'dulce';
+
+  const defaultTipoAgua = isFreshwater ? 'dulce' : 'salada';
+  const tipoAgua = userSelectedEcosystem || defaultTipoAgua;
+
+  const acuarioActual = {
+    ...rawTank,
+    tipoAgua
+  };
+
+  // Listas maestras de parámetros según el ecosistema
+  const parametrosSalada = [
+    { id: 'alcalinidad', nombre: 'Alcalinidad', unidad: '(dKH)' },
+    { id: 'calcio', nombre: 'Calcio', unidad: '(ppm)' },
+    { id: 'magnesio', nombre: 'Magnesio', unidad: '(ppm)' },
+    { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' },
+    { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
+    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' }
+  ];
+
+  const parametrosDulce = [
+    { id: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'amoniaco', nombre: 'Amoníaco', unidad: '(NH3)' },
+    { id: 'nitritos', nombre: 'Nitritos', unidad: '(NO2)' },
+    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
+    { id: 'gh', nombre: 'Dureza General', unidad: '(GH)' },
+    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' }
+  ];
+
+  // Lógica condicional: Si el acuario es de agua dulce, usa la lista dulce; si no, la salada.
+  const parametrosAMostrar = acuarioActual.tipoAgua === 'dulce' ? parametrosDulce : parametrosSalada;
+
+  const [activeParam, setActiveParam] = useState(() => {
+    return acuarioActual.tipoAgua === 'dulce' ? 'ph' : 'fosfatos';
+  });
+
+  // Asegurar que el parámetro seleccionado sea coherente con el ecosistema
+  useEffect(() => {
+    const aliasMap = {
+      dkh: 'alcalinidad',
+      calcium: 'calcio',
+      magnesium: 'magnesio',
+      salinity: 'salinidad',
+      phosphate: 'fosfatos',
+      nitrate: 'nitratos'
+    };
+    const currentId = aliasMap[activeParam] || activeParam;
+    const exists = parametrosAMostrar.some(p => p.id === currentId);
+    if (!exists && parametrosAMostrar.length > 0) {
+      setActiveParam(parametrosAMostrar[0].id);
+    }
+  }, [acuarioActual.tipoAgua, parametrosAMostrar]);
 
   const triggerHaptic = (ms = 15) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -125,9 +186,10 @@ export default function DashboardTrends({
     }
   };
 
-  // Parámetros disponibles y sus configuraciones
+  // Parámetros disponibles y sus configuraciones maestras para ambos ecosistemas
   const PARAM_CONFIG = {
-    dkh: {
+    // ---- Parámetros Agua Salada ----
+    alcalinidad: {
       key: 'alkalinity_dkh',
       name: 'Alcalinidad (dKH)',
       shortName: 'Alcalinidad',
@@ -138,7 +200,7 @@ export default function DashboardTrends({
       color: '#00f2fe',
       predictionData: predictions?.alkalinity
     },
-    calcium: {
+    calcio: {
       key: 'calcium_ppm',
       name: 'Calcio (Ca)',
       shortName: 'Calcio',
@@ -149,18 +211,7 @@ export default function DashboardTrends({
       color: '#10b981',
       predictionData: predictions?.calcium
     },
-    nitrate: {
-      key: 'nitrate_ppm',
-      name: 'Nitratos (NO3)',
-      shortName: 'Nitratos',
-      unit: 'ppm',
-      safeMin: 2.0,
-      safeMax: 20.0,
-      step: 0.1,
-      color: '#f59e0b',
-      predictionData: null
-    },
-    magnesium: {
+    magnesio: {
       key: 'magnesium_ppm',
       name: 'Magnesio (Mg)',
       shortName: 'Magnesio',
@@ -171,7 +222,18 @@ export default function DashboardTrends({
       color: '#38bdf8',
       predictionData: null
     },
-    phosphate: {
+    salinidad: {
+      key: 'salinity_ppt',
+      name: 'Salinidad (SG / ppt)',
+      shortName: 'Salinidad',
+      unit: 'SG / ppt',
+      safeMin: 1.024,
+      safeMax: 1.026,
+      step: 0.001,
+      color: '#0ea5e9',
+      predictionData: null
+    },
+    fosfatos: {
       key: 'phosphate_ppm',
       name: 'Fosfatos (PO4)',
       shortName: 'Fosfatos',
@@ -184,27 +246,106 @@ export default function DashboardTrends({
       color: '#c084fc',
       predictionData: null
     },
-    salinity: {
-      key: 'salinity_ppt',
-      name: 'Salinidad (SG / ppt)',
-      shortName: 'Salinidad',
-      unit: 'SG / ppt',
-      safeMin: 1.024,
-      safeMax: 1.026,
-      step: 0.001,
-      color: '#0ea5e9',
+    nitratos: {
+      key: 'nitrate_ppm',
+      name: 'Nitratos (NO3)',
+      shortName: 'Nitratos',
+      unit: 'ppm',
+      safeMin: 2.0,
+      safeMax: 20.0,
+      step: 0.1,
+      color: '#f59e0b',
+      predictionData: predictions?.water_change
+    },
+
+    // ---- Parámetros Agua Dulce ----
+    ph: {
+      key: 'ph',
+      name: 'pH',
+      shortName: 'pH',
+      unit: 'pH',
+      safeMin: 6.5,
+      safeMax: 7.5,
+      min: 5.5,
+      suggestedMax: 8.5,
+      step: 0.1,
+      color: '#06b6d4',
+      predictionData: null
+    },
+    amoniaco: {
+      key: 'ammonia_ppm',
+      name: 'Amoníaco (NH3)',
+      shortName: 'Amoníaco',
+      unit: 'ppm',
+      safeMin: 0.0,
+      safeMax: 0.02,
+      min: 0,
+      suggestedMax: 0.25,
+      step: 0.01,
+      color: '#ef4444',
+      predictionData: null
+    },
+    nitritos: {
+      key: 'nitrite_ppm',
+      name: 'Nitritos (NO2)',
+      shortName: 'Nitritos',
+      unit: 'ppm',
+      safeMin: 0.0,
+      safeMax: 0.05,
+      min: 0,
+      suggestedMax: 0.20,
+      step: 0.01,
+      color: '#f97316',
+      predictionData: null
+    },
+    gh: {
+      key: 'gh_dgh',
+      name: 'Dureza General (GH)',
+      shortName: 'Dureza General',
+      unit: 'dGH',
+      safeMin: 4.0,
+      safeMax: 10.0,
+      min: 0,
+      suggestedMax: 15.0,
+      step: 0.5,
+      color: '#8b5cf6',
+      predictionData: null
+    },
+    temperatura: {
+      key: 'temperatura',
+      name: 'Temperatura (°C)',
+      shortName: 'Temperatura',
+      unit: '°C',
+      safeMin: 22.0,
+      safeMax: 26.0,
+      min: 18.0,
+      suggestedMax: 32.0,
+      step: 0.1,
+      color: '#ec4899',
       predictionData: null
     }
   };
 
-  const currentParam = PARAM_CONFIG[activeParam] || PARAM_CONFIG.dkh;
+  // Sinónimos para mantener compatibilidad con claves en inglés
+  PARAM_CONFIG.dkh = PARAM_CONFIG.alcalinidad;
+  PARAM_CONFIG.calcium = PARAM_CONFIG.calcio;
+  PARAM_CONFIG.magnesium = PARAM_CONFIG.magnesio;
+  PARAM_CONFIG.salinity = PARAM_CONFIG.salinidad;
+  PARAM_CONFIG.phosphate = PARAM_CONFIG.fosfatos;
+  PARAM_CONFIG.nitrate = PARAM_CONFIG.nitratos;
+
+  const currentParam = PARAM_CONFIG[activeParam] || PARAM_CONFIG[parametrosAMostrar[0]?.id] || PARAM_CONFIG.fosfatos;
 
   // Filtrar lecturas válidas para el parámetro activo
   const validReadings = useMemo(() => {
     return measurements
-      .filter(m => m[currentParam.key] !== null && m[currentParam.key] !== undefined)
+      .filter(m => {
+        if (!currentParam?.key) return false;
+        const val = m[currentParam.key];
+        return val !== null && val !== undefined && val !== '' && !isNaN(Number(val));
+      })
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  }, [measurements, currentParam.key]);
+  }, [measurements, currentParam]);
 
   // Calcular la pendiente local para proyección de 3 días si no viene precalculada
   const localSlope = useMemo(() => {
@@ -237,7 +378,12 @@ export default function DashboardTrends({
       alkalinity_dkh: 2.0,
       calcium_ppm: 50.0,
       magnesium_ppm: 100.0,
-      nitrate_ppm: 15.0
+      nitrate_ppm: 15.0,
+      ph: 0.5,
+      ammonia_ppm: 0.2,
+      nitrite_ppm: 0.2,
+      gh_dgh: 2.0,
+      temperatura: 3.0
     };
     const maxLimit = maxDailyChange[currentParam.key] || 5.0;
     return Math.max(-maxLimit, Math.min(maxLimit, rawSlope));
@@ -581,28 +727,75 @@ export default function DashboardTrends({
         </div>
       </div>
 
-      {/* ---------------- 2. SELECTOR DE PARÁMETRO INTERACTIVO ---------------- */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {Object.entries(PARAM_CONFIG).map(([key, config]) => {
-          const isSelected = activeParam === key;
-          return (
+      {/* ---------------- 2. SELECTOR DE PARÁMETRO INTERACTIVO SEGÚN ECOSISTEMA ---------------- */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none flex-1">
+            {parametrosAMostrar.map((param) => {
+              const isSelected = activeParam === param.id ||
+                (param.id === 'fosfatos' && (activeParam === 'phosphate' || activeParam === 'fosfatos')) ||
+                (param.id === 'alcalinidad' && (activeParam === 'dkh' || activeParam === 'alcalinidad')) ||
+                (param.id === 'calcio' && (activeParam === 'calcium' || activeParam === 'calcio')) ||
+                (param.id === 'magnesio' && (activeParam === 'magnesium' || activeParam === 'magnesio')) ||
+                (param.id === 'salinidad' && (activeParam === 'salinity' || activeParam === 'salinidad')) ||
+                (param.id === 'nitratos' && (activeParam === 'nitrate' || activeParam === 'nitratos'));
+
+              return (
+                <button
+                  key={param.id}
+                  onClick={() => {
+                    triggerHaptic();
+                    setActiveParam(param.id);
+                  }}
+                  className={`min-h-[46px] flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all border select-none active:scale-95 ${
+                    isSelected
+                      ? 'bg-cyan-500/25 border-cyan-400 text-white shadow-neon-cyan ring-2 ring-cyan-400/40'
+                      : 'bg-marine-900 border-marine-700/80 text-slate-400 hover:text-slate-200 hover:bg-marine-850'
+                  }`}
+                >
+                  <span>{param.nombre}</span>
+                  {param.unidad && (
+                    <span className="text-[11px] font-bold text-cyan-400">{param.unidad}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selector interactivo de Ecosistema Táctil (Agua Salada vs Agua Dulce) */}
+          <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 shrink-0">
             <button
-              key={key}
+              type="button"
               onClick={() => {
                 triggerHaptic();
-                setActiveParam(key);
+                setUserSelectedEcosystem('salada');
+                setActiveParam('fosfatos');
               }}
-              className={`min-h-[46px] flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all border select-none active:scale-95 ${
-                isSelected
-                  ? 'bg-cyan-500/25 border-cyan-400 text-white shadow-neon-cyan ring-2 ring-cyan-400/40'
-                  : 'bg-marine-900 border-marine-700/80 text-slate-400 hover:text-slate-200 hover:bg-marine-850'
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                acuarioActual.tipoAgua !== 'dulce'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span>{config.shortName}</span>
-              <span className="text-[11px] font-bold text-cyan-400">({config.unit})</span>
+              🪸 Agua Salada
             </button>
-          );
-        })}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                setUserSelectedEcosystem('dulce');
+                setActiveParam('ph');
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                acuarioActual.tipoAgua === 'dulce'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-neon-emerald'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              🌿 Agua Dulce
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ---------------- 3. GRÁFICA INTERACTIVA CON ZONA SEGURA & PROYECCIÓN ---------------- */}

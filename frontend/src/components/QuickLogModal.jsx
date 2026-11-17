@@ -100,22 +100,37 @@ export default function QuickLogModal({
     try {
       const codeMap = {
         dkh: 'alkalinity_dkh',
+        alcalinidad: 'alkalinity_dkh',
         alkalinity: 'alkalinity_dkh',
         alkalinity_dkh: 'alkalinity_dkh',
         ca: 'calcium_ppm',
+        calcio: 'calcium_ppm',
         calcium: 'calcium_ppm',
         calcium_ppm: 'calcium_ppm',
         mg: 'magnesium_ppm',
+        magnesio: 'magnesium_ppm',
         magnesium: 'magnesium_ppm',
         magnesium_ppm: 'magnesium_ppm',
         no3: 'nitrate_ppm',
+        nitratos: 'nitrate_ppm',
         nitrate: 'nitrate_ppm',
         nitrate_ppm: 'nitrate_ppm',
         po4: 'phosphate_ppm',
+        fosfatos: 'phosphate_ppm',
         phosphate: 'phosphate_ppm',
         phosphate_ppm: 'phosphate_ppm',
         salinity: 'salinity_ppt',
-        salinity_ppt: 'salinity_ppt'
+        salinidad: 'salinity_ppt',
+        salinity_ppt: 'salinity_ppt',
+        ph: 'ph',
+        amoniaco: 'ammonia_ppm',
+        ammonia: 'ammonia_ppm',
+        nitritos: 'nitrite_ppm',
+        nitrite: 'nitrite_ppm',
+        gh: 'gh_dgh',
+        temp: 'temperatura',
+        temperatura: 'temperatura',
+        temperature: 'temperatura'
       };
 
       const fieldKey = codeMap[selectedParam?.code] || selectedParam?.code || 'alkalinity_dkh';
