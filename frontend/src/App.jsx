@@ -318,7 +318,7 @@ function AppContent() {
       </div>
 
       {/* Main Content Area con ErrorBoundary */}
-      <main className="flex-1 overflow-y-auto p-4 pb-32">
+      <main className="flex-1 overflow-y-auto p-4 relative">
         <ErrorBoundary>
           {!isAuthenticated && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="max-w-4xl mx-auto px-4 py-12 text-center">
@@ -402,8 +402,8 @@ function AppContent() {
           )}
         </ErrorBoundary>
 
-        {/* 2. NUEVO: Espaciador invisible para forzar el scroll hasta arriba */}
-        <div className="h-40 w-full flex-shrink-0 pointer-events-none" aria-hidden="true" />
+        {/* EL ESPACIADOR DEFINITIVO: Esto obligará al scroll a bajar muchísimo más */}
+        <div className="h-64 w-full flex-shrink-0 text-transparent opacity-0">.</div>
       </main>
 
       {/* Mobile Bottom Navigation Bar */}
