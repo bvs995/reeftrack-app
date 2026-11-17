@@ -117,46 +117,45 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Quick Actions Row con Botones Táctiles Grandes */}
-        <div className="mt-6 pt-5 border-t border-marine-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-            <Clock className="w-4 h-4 text-cyan-400" />
-            <span>{t('dashboard.biologicalStability')}</span>
-          </div>
-
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+        {/* CONTENEDOR DE BOTONES DE ACCIÓN (Agrupados) */}
+        <div className="mt-6 flex flex-col gap-3">
+          
+          {/* Fila superior: Mediciones y Test */}
+          <div className="flex gap-3">
             <button
+              type="button"
               onClick={() => {
                 triggerHaptic();
                 setShowInlineForm(prev => !prev);
               }}
-              className="btn-touch-secondary flex-1 sm:flex-none text-xs"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-2xl p-4 flex items-center justify-center text-sm font-semibold text-white hover:bg-slate-700 transition-colors active:scale-95 cursor-pointer"
             >
-              <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
-              <span>{showInlineForm ? t('common.close') : t('dashboard.logMeasurement')}</span>
-              {showInlineForm ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <span className="mr-2">⎚</span> {showInlineForm ? t('common.close') : 'Registrar Medición'}
             </button>
             <button
+              type="button"
               onClick={() => {
                 triggerHaptic();
                 onOpenQuickLog();
               }}
-              className="btn-touch-primary flex-1 sm:flex-none text-xs"
+              className="flex-1 bg-cyan-400 text-slate-900 rounded-2xl p-4 flex items-center justify-center font-bold shadow-lg shadow-cyan-500/30 hover:bg-cyan-300 transition-colors active:scale-95 cursor-pointer"
             >
-              <Plus className="w-5 h-5 stroke-[3]" />
-              <span>{t('nav.quickLog')}</span>
-            </button>
-            <button
-              onClick={() => {
-                triggerHaptic();
-                onOpenWaterChange();
-              }}
-              className="btn-touch-secondary flex-1 sm:flex-none text-xs"
-            >
-              <Droplets className="w-5 h-5 text-cyan-400" />
-              <span>{t('nav.water')}</span>
+              + Registrar Test Rápido
             </button>
           </div>
+          
+          {/* Fila inferior: Nuevo botón de Cambio de Agua centralizado */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              onOpenWaterChange();
+            }}
+            className="w-full bg-blue-900/30 border border-blue-500/50 text-blue-400 rounded-2xl p-4 flex items-center justify-center font-semibold hover:bg-blue-900/50 transition-colors active:scale-95 cursor-pointer"
+          >
+            <span className="mr-2">💧</span> Registrar Cambio de Agua
+          </button>
+
         </div>
       </div>
 
