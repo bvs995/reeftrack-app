@@ -318,7 +318,7 @@ function AppContent() {
       </div>
 
       {/* Main Content Area con ErrorBoundary */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-y-auto p-4 pb-32">
         <ErrorBoundary>
           {!isAuthenticated && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="max-w-4xl mx-auto px-4 py-12 text-center">
