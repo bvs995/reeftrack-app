@@ -1,60 +1,60 @@
 import os
 import logging
 from typing import Generator
-from sqlalchemy import create_engine, text, inspect
-from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text, inspect, event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
 logger = logging.getLogger("aquapulse.database")
 
-# Obtener URL de conexión desde variables de entorno
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# Cargar variables de entorno locales si existen
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+load_dotenv()
 
-# Manejo de compatibilidad con proveedores cloud (Render, Supabase, Heroku, Neon)
-# que asignan 'postgres://' o 'postgresql://' sin especificar el driver psycopg2
-if DATABASE_URL:
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
-    elif DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-    
-    # Configuración de producción para PostgreSQL
-    if "postgresql" in DATABASE_URL:
-        logger.info("🐘 Conectando a base de datos PostgreSQL en modo producción.")
-        engine = create_engine(
-            DATABASE_URL,
-            pool_size=int(os.environ.get("DB_POOL_SIZE", "10")),
-            max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "20")),
-            pool_pre_ping=True,      # Verifica conexión antes de consulta, previene socket timeouts
-            pool_recycle=300         # Recicla conexiones cada 5 minutos
-        )
-    else:
-        # URL explícita de otro tipo (ej: sqlite:///...)
-        engine = create_engine(
-            DATABASE_URL,
-            connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-        )
-else:
-    # Modo desarrollo local: persistencia en SQLite
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DB_PATH = os.environ.get("AQUATRACKER_DB", os.path.join(BASE_DIR, "aquatracker.db"))
-    DATABASE_URL = f"sqlite:///{DB_PATH}"
-    logger.info(f"💾 Modo desarrollo: Usando SQLite local en {DB_PATH}")
+# 1. Fuerza la lectura de la variable de Render
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Si el código no encuentra la variable, detiene la app en lugar de crear un SQLite falso
+if not SQLALCHEMY_DATABASE_URL:
+    raise ValueError("Falta configurar la variable DATABASE_URL en el entorno.")
+
+# 2. Corrección crítica: SQLAlchemy exige 'postgresql://' pero algunos proveedores entregan 'postgres://'
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Asegurar driver psycopg2 si no está disponible psycopg v3
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
+    try:
+        import psycopg
+    except ImportError:
+        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+DATABASE_URL = SQLALCHEMY_DATABASE_URL
+
+# 3. Conexión estricta a PostgreSQL (o SQLite si se configura en entorno local)
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
-        DATABASE_URL,
+        SQLALCHEMY_DATABASE_URL,
         connect_args={"check_same_thread": False}
     )
-
-# Enforzar llaves foráneas en conexiones SQLite
-from sqlalchemy import event
-if "sqlite" in DATABASE_URL:
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
+else:
+    logger.info("🐘 Conectando a base de datos PostgreSQL en modo producción.")
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_size=int(os.environ.get("DB_POOL_SIZE", "10")),
+        max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+        pool_pre_ping=True,
+        pool_recycle=300
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
 def get_db() -> Generator:
