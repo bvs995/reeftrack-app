@@ -219,7 +219,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-marine-950 flex flex-col font-sans selection:bg-cyan-500 selection:text-marine-950">
+    <div className="h-[100dvh] w-full flex flex-col bg-slate-900 overflow-hidden font-sans selection:bg-cyan-500 selection:text-marine-950">
       {/* Offline Alert Banner */}
       {!isOnline && (
         <div className="bg-amber-500/20 text-amber-300 border-b border-amber-500/40 px-4 py-2 text-xs font-bold flex items-center justify-center gap-2">
@@ -318,7 +318,7 @@ function AppContent() {
       </div>
 
       {/* Main Content Area con ErrorBoundary */}
-      <main className="flex-1 overflow-y-auto p-4">
+      <main className="flex-1 overflow-y-auto p-4 pb-32">
         <ErrorBoundary>
           {!isAuthenticated && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="max-w-4xl mx-auto px-4 py-12 text-center">
