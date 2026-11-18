@@ -109,6 +109,16 @@ def init_db():
     except Exception as ddl_err:
         logger.info(f"Aviso durante create_all (posible creación concurrente por otro worker): {ddl_err}")
 
+    # Ejecuta esto después de Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        try:
+            # Cambia 'parameter_logs' por el nombre real de tu tabla en __tablename__ (measurements y mediciones)
+            conn.execute(text("ALTER TABLE measurements ADD COLUMN IF NOT EXISTS temperature FLOAT;"))
+            conn.execute(text("ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperature FLOAT;"))
+            conn.commit()
+        except Exception as e:
+            print(f"Verificación de columna temperature: {e}")
+
     try:
         inspector = inspect(engine)
         table_names = inspector.get_table_names()
