@@ -25,6 +25,7 @@ from backend.models import (
     UserResponse,
     TokenResponse,
     TankCreate,
+    AquariumCreate,
     TankResponse,
     MeasurementCreate,
     MeasurementResponse,
@@ -530,6 +531,49 @@ def create_user_tank(
     db.add(new_tank)
     db.commit()
     db.refresh(new_tank)
+    return TankResponse.model_validate(new_tank)
+
+@app.post(
+    "/api/aquariums",
+    response_model=TankResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear un nuevo acuario",
+    tags=["Acuarios"]
+)
+@app.post("/api/acuarios", include_in_schema=False)
+def create_aquarium_via_schema(
+    payload: AquariumCreate,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Crea un nuevo acuario utilizando el esquema AquariumCreate.
+    Valida el biotipo dentro de: arrecife, plantado, dulce, peces_marinos, mixto.
+    """
+    user_id = current_user.id if current_user else 1
+    new_tank = Tank(
+        user_id=user_id,
+        name=payload.name.strip(),
+        tank_type=payload.type,
+        volume_liters=float(payload.volume_liters)
+    )
+    db.add(new_tank)
+    db.commit()
+    db.refresh(new_tank)
+
+    # Sincronización en tabla acuarios
+    try:
+        nuevo_acuario = Acuario(
+            id=new_tank.id,
+            nombre=new_tank.name,
+            volumen_litros=new_tank.volume_liters,
+            usuario_id=str(user_id)
+        )
+        db.add(nuevo_acuario)
+        db.commit()
+    except Exception:
+        db.rollback()
+
     return TankResponse.model_validate(new_tank)
 
 @app.put(

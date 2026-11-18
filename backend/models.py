@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
 from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func
 from sqlalchemy.orm import relationship, synonym
@@ -245,6 +245,11 @@ class TokenResponse(BaseModel):
 # ==============================================================================
 # ESQUEMAS PYDANTIC v2 - ACUARIOS (TANKS)
 # ==============================================================================
+
+class AquariumCreate(BaseModel):
+    name: str
+    volume_liters: int
+    type: Literal["arrecife", "plantado", "dulce", "peces_marinos", "mixto"]
 
 class TankCreate(BaseModel):
     name: str = Field(..., example="Arrecife Mixto SPS/LPS")
