@@ -274,8 +274,11 @@ export default function QuickEntryForm({
       label: 'Temperatura',
       unit: '°C',
       step: '0.1',
+      min: '15',
+      max: '35',
       placeholder: '25.5',
-      safeRange: '20.0 - 32.0 °C',
+      ideal: '24.5 - 26.0 °C',
+      safeRange: '24.5 - 26.0 °C',
       accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
       badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
       lastValue: lastMeasurement?.temperature || lastMeasurement?.temperatura
@@ -352,8 +355,11 @@ export default function QuickEntryForm({
       label: 'Temperatura',
       unit: '°C',
       step: '0.1',
+      min: '15',
+      max: '35',
       placeholder: '25.5',
-      safeRange: '20.0 - 32.0 °C',
+      ideal: '24.5 - 26.0 °C',
+      safeRange: '24.5 - 26.0 °C',
       accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
       badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
       lastValue: lastMeasurement?.temperature || lastMeasurement?.temperatura
@@ -462,7 +468,7 @@ export default function QuickEntryForm({
                     </span>
                   )}
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${card.badgeColor}`}>
-                    {card.safeRange}
+                    {card.ideal || card.safeRange}
                   </span>
                 </div>
               </div>
@@ -472,6 +478,8 @@ export default function QuickEntryForm({
                 <input
                   type="number"
                   step={card.step}
+                  min={card.min}
+                  max={card.max}
                   inputMode="decimal"
                   value={formData[card.key]}
                   onChange={(e) => handleChange(card.key, e.target.value)}
