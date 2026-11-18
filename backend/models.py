@@ -389,7 +389,7 @@ class MeasurementBase(BaseModel):
         return self
 
 class MeasurementCreate(MeasurementBase):
-    temperature: Optional[float] = Field(None, example=25.5, description="Temperatura en °C (20.0 a 32.0 °C)")
+    temperature: Optional[float] = None
 
 class MeasurementResponse(MeasurementBase):
     id: int
@@ -399,6 +399,17 @@ class MeasurementResponse(MeasurementBase):
     temperatura: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+# Esquemas y alias para compatibilidad con Parameter / ParameterLog
+class ParameterCreate(MeasurementCreate):
+    temperature: Optional[float] = None
+
+class ParameterResponse(MeasurementResponse):
+    temperature: Optional[float] = None
+
+ParameterBase = MeasurementBase
+ParameterLog = Measurement
+Parameter = Measurement
 
 
 # ==============================================================================
