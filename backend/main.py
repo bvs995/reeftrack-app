@@ -599,8 +599,8 @@ def update_aquarium(
     elif actual_volume is None and isinstance(payload, int):
         actual_volume = payload
 
-    if actual_volume is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Se requiere el campo 'volume_liters'")
+    if actual_volume is None and not (payload and any(k in payload for k in ["name", "tank_type", "type", "notes"])):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Se requiere el campo 'volume_liters' o datos a actualizar")
 
     tank = db.query(Aquarium).filter(Aquarium.id == aquarium_id).first()
     if not tank:
@@ -608,20 +608,42 @@ def update_aquarium(
     if not tank:
         raise HTTPException(status_code=404, detail="Acuario no encontrado")
 
-    tank.volume_liters = actual_volume
+    if actual_volume is not None:
+        tank.volume_liters = actual_volume
+
+    if payload and isinstance(payload, dict):
+        if "name" in payload and payload["name"]:
+            tank.name = str(payload["name"]).strip()
+        if "tank_type" in payload and payload["tank_type"]:
+            tank.tank_type = str(payload["tank_type"]).strip()
+        elif "type" in payload and payload["type"]:
+            tank.tank_type = str(payload["type"]).strip()
+        if "notes" in payload:
+            tank.notes = payload["notes"]
 
     # Sincronización entre tablas tanks y acuarios si coexisten
     if isinstance(tank, Tank):
         acuario_record = db.query(Acuario).filter(Acuario.id == aquarium_id).first()
         if acuario_record:
-            acuario_record.volumen_litros = actual_volume
+            if actual_volume is not None:
+                acuario_record.volumen_litros = actual_volume
+            if hasattr(tank, "name"):
+                acuario_record.nombre = tank.name
     elif isinstance(tank, Acuario):
         tank_record = db.query(Tank).filter(Tank.id == aquarium_id).first()
         if tank_record:
-            tank_record.volume_liters = actual_volume
+            if actual_volume is not None:
+                tank_record.volume_liters = actual_volume
+            if hasattr(tank, "nombre"):
+                tank_record.name = tank.nombre
 
     db.commit()
-    return {"message": "Litraje actualizado", "new_volume": actual_volume}
+    db.refresh(tank)
+    return {
+        "message": "Acuario actualizado",
+        "new_volume": getattr(tank, "volume_liters", actual_volume),
+        "tank_type": getattr(tank, "tank_type", None)
+    }
 
 @app.delete(
     "/api/tanks/{tank_id}",

@@ -68,18 +68,21 @@ export default function DashboardTrends({
   let defaultTipo = 'arrecife';
   if (rawTipo.includes('plant')) {
     defaultTipo = 'plantado';
+  } else if (rawTipo === 'peces_marinos' || rawTipo === 'marine_fish') {
+    defaultTipo = 'arrecife';
   } else if (rawTipo.includes('pece') || rawTipo.includes('community') || rawTipo.includes('comunitario') || rawTipo === 'dulce') {
     defaultTipo = 'dulce_peces';
-  } else if (rawTipo.includes('reef') || rawTipo.includes('arrecife') || rawTipo.includes('salada')) {
+  } else if (rawTipo.includes('reef') || rawTipo.includes('arrecife') || rawTipo.includes('mixto') || rawTipo.includes('salada')) {
     defaultTipo = 'arrecife';
   }
 
   const currentTipo = userSelectedEcosystem || defaultTipo;
+  const esAguaSalada = currentTipo === 'arrecife' || rawTipo === 'peces_marinos' || rawTipo === 'marine_fish' || rawTipo === 'mixto';
 
   const acuarioActual = {
     ...rawTank,
     tipo: currentTipo,
-    tipoAgua: currentTipo === 'arrecife' ? 'salada' : 'dulce'
+    tipoAgua: esAguaSalada ? 'salada' : 'dulce'
   };
 
   // Listas maestras de parámetros según el ecosistema seleccionado

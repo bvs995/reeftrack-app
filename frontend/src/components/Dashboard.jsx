@@ -70,9 +70,12 @@ export default function Dashboard({
   };
 
   const getTankTypeLabel = (type) => {
-    if (type === 'reef') return t('dashboard.reefType');
-    if (type === 'freshwater_planted') return t('dashboard.plantedType');
-    return t('dashboard.communityType');
+    if (type === 'arrecife' || type === 'reef') return 'Arrecife (Solo Corales)';
+    if (type === 'mixto' || type === 'mixed') return 'Arrecife Mixto (Corales y Peces)';
+    if (type === 'peces_marinos' || type === 'marine_fish') return 'Solo Peces Marinos';
+    if (type === 'plantado' || type === 'freshwater_planted') return 'Agua Dulce Plantado';
+    if (type === 'dulce' || type === 'freshwater_community') return 'Agua Dulce Estándar';
+    return type ? type.replace(/_/g, ' ') : t('dashboard.reefType');
   };
 
   const criticalParams = parameters.filter(p => p.is_critical);

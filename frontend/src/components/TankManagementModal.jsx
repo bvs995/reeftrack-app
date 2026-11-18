@@ -1,18 +1,48 @@
-import React, { useState } from 'react';
-import { X, Plus, Droplets, Waves, Check } from 'lucide-react';
-import { createTank } from '../api';
+import React, { useState, useEffect } from 'react';
+import { X, Check, Waves } from 'lucide-react';
+// Asegúrate de tener updateTank exportado en tu archivo api.js
+import { createTank, updateTank } from '../api';
 
 export default function TankManagementModal({
   isOpen,
   onClose,
-  onTankCreated
+  onTankCreated,
+  existingTank = null, // Prop nueva: Si le pasas un acuario, el modal cambia a modo "Edición"
+  onTankUpdated = null
 }) {
   const [name, setName] = useState('');
-  const [tankType, setTankType] = useState('reef');
+  const [tankType, setTankType] = useState('arrecife');
   const [volumeLiters, setVolumeLiters] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const normalizeTankType = (type) => {
+    if (!type) return 'arrecife';
+    const t = String(type).toLowerCase();
+    if (t === 'reef') return 'arrecife';
+    if (t === 'mixed') return 'mixto';
+    if (t === 'marine_fish') return 'peces_marinos';
+    if (t === 'freshwater_planted') return 'plantado';
+    if (t === 'freshwater_community') return 'dulce';
+    return t;
+  };
+
+  // Cargar datos automáticamente si estamos editando un acuario existente
+  useEffect(() => {
+    if (existingTank && isOpen) {
+      setName(existingTank.name || '');
+      setTankType(normalizeTankType(existingTank.tank_type || existingTank.type));
+      setVolumeLiters(existingTank.volume_liters || '');
+      setNotes(existingTank.notes || '');
+    } else if (!existingTank && isOpen) {
+      // Limpiar formulario si es creación nueva
+      setName('');
+      setTankType('arrecife');
+      setVolumeLiters('');
+      setNotes('');
+    }
+  }, [existingTank, isOpen]);
 
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -32,21 +62,36 @@ export default function TankManagementModal({
     setLoading(true);
     setError(null);
     try {
-      const newTank = await createTank({
-        name: name.trim(),
-        tank_type: tankType,
-        volume_liters: parseFloat(volumeLiters),
-        notes: notes.trim() || undefined
-      });
-      triggerHaptic();
-      onTankCreated(newTank);
+      if (existingTank) {
+        // MODO EDICIÓN
+        const updatedTank = await updateTank(existingTank.id, {
+          name: name.trim(),
+          tank_type: tankType,
+          volume_liters: parseFloat(volumeLiters),
+          notes: notes.trim() || undefined
+        });
+        triggerHaptic();
+        if (onTankUpdated) onTankUpdated(updatedTank);
+      } else {
+        // MODO CREACIÓN
+        const newTank = await createTank({
+          name: name.trim(),
+          tank_type: tankType,
+          volume_liters: parseFloat(volumeLiters),
+          notes: notes.trim() || undefined
+        });
+        triggerHaptic();
+        if (onTankCreated) onTankCreated(newTank);
+      }
       onClose();
     } catch (err) {
-      setError(err.message || 'Error al crear acuario');
+      setError(err.message || 'Error al procesar el acuario');
     } finally {
       setLoading(false);
     }
   };
+
+  const isEditing = !!existingTank;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -57,7 +102,9 @@ export default function TankManagementModal({
             <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center shadow-neon-cyan">
               <Waves className="w-5 h-5" />
             </div>
-            <h3 className="font-extrabold text-white text-base sm:text-lg">Crear Nuevo Acuario</h3>
+            <h3 className="font-extrabold text-white text-base sm:text-lg">
+              {isEditing ? 'Editar Acuario' : 'Crear Nuevo Acuario'}
+            </h3>
           </div>
           <button
             onClick={onClose}
@@ -92,30 +139,20 @@ export default function TankManagementModal({
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
               Biotipo / Ecosistema
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { type: 'reef', label: '🪸 Arrecife', desc: 'Corales y peces' },
-                { type: 'freshwater_planted', label: '🌿 Plantado', desc: 'Aquascaping CO2' },
-                { type: 'freshwater_community', label: '🐟 Dulce', desc: 'Comunitario' },
-              ].map((item) => (
-                <button
-                  key={item.type}
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic();
-                    setTankType(item.type);
-                  }}
-                  className={`min-h-[56px] p-2 rounded-xl border text-center transition flex flex-col justify-center items-center active:scale-95 ${
-                    tankType === item.type
-                      ? 'bg-cyan-500/25 border-cyan-400 text-white shadow-neon-cyan ring-2 ring-cyan-400/50'
-                      : 'bg-marine-950 border-marine-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span className="text-xs font-black">{item.label}</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5 font-medium">{item.desc}</span>
-                </button>
-              ))}
-            </div>
+            <select
+              value={tankType}
+              onChange={(e) => {
+                triggerHaptic();
+                setTankType(e.target.value);
+              }}
+              className="w-full min-h-[48px] bg-marine-950 border border-marine-700 focus:border-cyan-400 rounded-xl px-3.5 text-sm text-white focus:outline-none font-semibold shadow-inner cursor-pointer"
+            >
+              <option value="arrecife" className="bg-slate-900 text-white">Arrecife (Solo Corales)</option>
+              <option value="mixto" className="bg-slate-900 text-white">Arrecife Mixto (Corales y Peces)</option>
+              <option value="peces_marinos" className="bg-slate-900 text-white">Solo Peces Marinos</option>
+              <option value="plantado" className="bg-slate-900 text-white">Agua Dulce Plantado</option>
+              <option value="dulce" className="bg-slate-900 text-white">Agua Dulce Estándar</option>
+            </select>
           </div>
 
           <div>
@@ -160,7 +197,7 @@ export default function TankManagementModal({
               className="btn-touch-primary flex-1 sm:flex-none"
             >
               <Check className="w-5 h-5 stroke-[3]" />
-              <span>{loading ? 'Creando...' : 'Crear Acuario'}</span>
+              <span>{loading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Acuario')}</span>
             </button>
           </div>
         </form>
