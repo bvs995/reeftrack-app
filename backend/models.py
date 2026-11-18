@@ -168,6 +168,11 @@ class UserRegister(BaseModel):
     )
     full_name: Optional[str] = Field(None, example="Alex Valadez", description="Nombre del acuarista")
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower() if isinstance(v, str) else v
+
     @field_validator("password")
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
@@ -178,8 +183,18 @@ class UserLogin(BaseModel):
     email: str = Field(..., example="acuarista@reef.com")
     password: str = Field(..., example="PasswordSeguro123")
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower() if isinstance(v, str) else v
+
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(..., example="acuarista@reef.com", description="Correo para restablecer contraseña")
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower() if isinstance(v, str) else v
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., description="Token seguro de restablecimiento")

@@ -47,10 +47,11 @@ async function authFetch(endpoint, options = {}) {
 // ----------------- ENDPOINTS DE AUTENTICACIÓN -----------------
 
 export async function loginUser(email, password) {
+  const cleanEmail = (email || '').trim().toLowerCase();
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email: cleanEmail, password }),
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -64,10 +65,11 @@ export async function loginUser(email, password) {
 }
 
 export async function registerUser(email, password, fullName = null) {
+  const cleanEmail = (email || '').trim().toLowerCase();
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, full_name: fullName }),
+    body: JSON.stringify({ email: cleanEmail, password, full_name: fullName ? fullName.trim() : null }),
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -81,10 +83,11 @@ export async function registerUser(email, password, fullName = null) {
 }
 
 export async function requestPasswordReset(email) {
+  const cleanEmail = (email || '').trim().toLowerCase();
   const res = await fetch(`${API_BASE}/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email.trim() }),
+    body: JSON.stringify({ email: cleanEmail }),
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

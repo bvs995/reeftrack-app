@@ -13,20 +13,28 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv()
 
-# 1. Lectura de la variable de base de datos con fallback seguro a SQLite
+# 1. Lectura obligatoria de DATABASE_URL sin fallback a SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Si no está configurada la variable en el entorno, usar SQLite local por defecto
-if not SQLALCHEMY_DATABASE_URL:
-    logger.warning("⚠️ Variable DATABASE_URL no configurada. Usando SQLite local por defecto: sqlite:///./aquapulse.db")
-    SQLALCHEMY_DATABASE_URL = "sqlite:///./aquapulse.db"
+# Si no está configurada la variable en el entorno, fallar de forma estricta y ruidosa
+if not SQLALCHEMY_DATABASE_URL or not SQLALCHEMY_DATABASE_URL.strip():
+    error_msg = (
+        "🚨 ERROR CRÍTICO DE BASE DE DATOS: La variable de entorno DATABASE_URL no está configurada o está vacía.\n"
+        "No existe ningún fallback a SQLite en producción. La aplicación requiere estrictamente "
+        "la URL de conexión a PostgreSQL (Connection Pooler de Supabase en el puerto 6543 o 5432).\n"
+        "Configura DATABASE_URL en el panel de Render con la URI Transaction Pooler de Supabase."
+    )
+    logger.critical(error_msg)
+    raise ValueError(error_msg)
+
+SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.strip().strip("'\"")
 
 # 2. Corrección crítica: SQLAlchemy exige 'postgresql://' pero algunos proveedores (como Render) entregan 'postgres://'
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Asegurar driver psycopg2 si no está disponible psycopg v3
-if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql://") and not SQLALCHEMY_DATABASE_URL.startswith("postgresql+"):
     try:
         import psycopg
     except ImportError:
@@ -34,8 +42,9 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 
 DATABASE_URL = SQLALCHEMY_DATABASE_URL
 
-# 3. Conexión estricta a PostgreSQL (o SQLite si se configura en entorno local)
+# 3. Conexión estricta a PostgreSQL (o SQLite solo si explícitamente se configuró en DATABASE_URL para tests)
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    logger.warning("⚠️ Usando base de datos SQLite según variable explícita DATABASE_URL.")
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
         connect_args={"check_same_thread": False}
@@ -46,13 +55,19 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
 else:
-    logger.info("🐘 Conectando a base de datos PostgreSQL en modo producción.")
+    logger.info("🐘 Conectando a base de datos PostgreSQL / Supabase Pooler en modo producción.")
+    connect_args = {}
+    if "sslmode" not in SQLALCHEMY_DATABASE_URL:
+        connect_args["sslmode"] = "require"
+
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
-        pool_size=int(os.environ.get("DB_POOL_SIZE", "10")),
-        max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+        pool_size=int(os.environ.get("DB_POOL_SIZE", "5")),
+        max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "10")),
         pool_pre_ping=True,
-        pool_recycle=300
+        pool_recycle=int(os.environ.get("DB_POOL_RECYCLE", "300")),
+        pool_timeout=30,
+        connect_args=connect_args
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

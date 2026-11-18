@@ -25,7 +25,7 @@ sys.modules["models"] = backend.models
 
 # Importa la Base de donde heredan tus modelos (ej. from database import Base)
 from database import Base
-from models import Acuario, Medicion
+from models import User, Tank, Measurement, Acuario, Medicion
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -34,10 +34,11 @@ config = context.config
 # Sobrescribir sqlalchemy.url con la variable de entorno de Render (DATABASE_URL)
 database_url = os.getenv("DATABASE_URL")
 if database_url:
+    database_url = database_url.strip().strip("'\"")
     # Render a veces usa 'postgres://' pero SQLAlchemy requiere 'postgresql://'
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
-    if database_url.startswith("postgresql://") and "+psycopg2" not in database_url:
+    if database_url.startswith("postgresql://") and not database_url.startswith("postgresql+"):
         database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     config.set_main_option("sqlalchemy.url", database_url)
 
