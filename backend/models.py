@@ -247,24 +247,58 @@ class TokenResponse(BaseModel):
 # ESQUEMAS PYDANTIC v2 - ACUARIOS (TANKS)
 # ==============================================================================
 
-ValidBiotype = Literal[
-    "reef", "arrecife",
-    "mixed", "mixto",
-    "marine_fish", "peces_marinos",
-    "freshwater_planted", "plantado",
-    "freshwater_community", "dulce"
-]
-
 class AquariumCreate(BaseModel):
-    name: str
-    volume_liters: float
-    type: ValidBiotype = "arrecife"
+    name: str = Field(..., description="Nombre del acuario")
+    volume_liters: float = Field(..., gt=0, description="Volumen en litros")
+    tank_type: Literal["arrecife", "mixed", "marine_fish", "plantado", "dulce"] = Field(
+        default="mixed", description="Biotipo del acuario"
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_type_alias(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "tank_type" not in data and "type" in data:
+                data["tank_type"] = data["type"]
+            if "tank_type" in data:
+                mapping = {
+                    "reef": "arrecife",
+                    "mixto": "mixed",
+                    "peces_marinos": "marine_fish",
+                    "freshwater_planted": "plantado",
+                    "freshwater_community": "dulce"
+                }
+                data["tank_type"] = mapping.get(data["tank_type"], data["tank_type"])
+        return data
+
+    @property
+    def type(self) -> str:
+        return self.tank_type
 
 class TankCreate(BaseModel):
     name: str = Field(..., example="Arrecife Mixto SPS/LPS")
-    tank_type: ValidBiotype = Field("reef", example="mixed")
-    volume_liters: float = Field(280.0, example=280.0)
+    tank_type: Literal["arrecife", "mixed", "marine_fish", "plantado", "dulce"] = Field(
+        default="mixed", description="Biotipo del acuario"
+    )
+    volume_liters: float = Field(280.0, gt=0, example=280.0)
     notes: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_type_alias(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "tank_type" not in data and "type" in data:
+                data["tank_type"] = data["type"]
+            if "tank_type" in data:
+                mapping = {
+                    "reef": "arrecife",
+                    "mixto": "mixed",
+                    "peces_marinos": "marine_fish",
+                    "freshwater_planted": "plantado",
+                    "freshwater_community": "dulce"
+                }
+                data["tank_type"] = mapping.get(data["tank_type"], data["tank_type"])
+        return data
     
 class TankResponse(BaseModel):
     id: int

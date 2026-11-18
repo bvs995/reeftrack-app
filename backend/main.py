@@ -554,7 +554,7 @@ def create_aquarium_via_schema(
     new_tank = Tank(
         user_id=user_id,
         name=payload.name.strip(),
-        tank_type=payload.type,
+        tank_type=payload.tank_type,
         volume_liters=float(payload.volume_liters)
     )
     db.add(new_tank)
