@@ -64,8 +64,8 @@ export default function WaterChangesView({
 
   const expectedNO3AfterChange = (currentNO3 * (1 - simPct / 100)).toFixed(1);
   const simLiters = ((tank?.volume_liters || 100) * (simPct / 100)).toFixed(1);
-  const isReef = tank?.tank_type === 'reef';
-  const saltNeededKg = isReef ? ((simLiters * 38.5) / 1000).toFixed(2) : null;
+  const isMarine = ['reef', 'arrecife', 'mixed', 'mixto', 'marine_fish', 'peces_marinos'].includes(tank?.tank_type?.toLowerCase());
+  const saltNeededKg = isMarine ? ((simLiters * 38.5) / 1000).toFixed(2) : null;
 
   const handleVolumeChange = (litersVal) => {
     setVolumeLiters(litersVal);

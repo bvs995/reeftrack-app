@@ -100,6 +100,7 @@ function AppContent() {
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
   const [preselectedCode, setPreselectedCode] = useState(null);
   const [isNewTankOpen, setIsNewTankOpen] = useState(false);
+  const [editingTank, setEditingTank] = useState(null);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [selectedCodeForChart, setSelectedCodeForChart] = useState(null);
 
@@ -207,9 +208,30 @@ function AppContent() {
     setIsQuickLogOpen(true);
   };
 
+  const handleOpenEditTankModal = (tankToEdit = null) => {
+    triggerHaptic();
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
+    setEditingTank(tankToEdit || activeTank);
+    setIsNewTankOpen(true);
+  };
+
   const handleTankCreated = (newTank) => {
-    setTanks([...tanks, newTank]);
+    setTanks((prev) => [...prev, newTank]);
     setActiveTank(newTank);
+  };
+
+  const handleTankUpdated = (updatedTank) => {
+    // 1. Actualizar inmediatamente la lista de tanques
+    setTanks((prev) => prev.map((t) => (t.id === updatedTank.id ? { ...t, ...updatedTank } : t)));
+
+    // 2. Si el acuario editado es el activo, actualizar activeTank en tiempo real
+    if (activeTank && activeTank.id === updatedTank.id) {
+      setActiveTank((prev) => ({ ...prev, ...updatedTank }));
+      loadTankDetails(updatedTank.id);
+    }
   };
 
   const handleDataUpdated = () => {
@@ -240,9 +262,11 @@ function AppContent() {
           if (!isAuthenticated) {
             openAuthModal('login');
           } else {
+            setEditingTank(null);
             setIsNewTankOpen(true);
           }
         }}
+        onOpenEditTankModal={handleOpenEditTankModal}
         onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
         onOpenSettings={() => handleSelectTab('settings')}
         onOpenAdmin={() => handleSelectTab('admin')}
@@ -367,9 +391,11 @@ function AppContent() {
               {activeTab === 'dashboard' && (
                 <Dashboard
                   analytics={analytics}
+                  activeTank={activeTank}
                   loading={loading}
                   onOpenQuickLog={handleOpenQuickLog}
                   onOpenWaterChange={() => handleSelectTab('water')}
+                  onOpenEditTankModal={handleOpenEditTankModal}
                   onSelectTab={handleSelectTab}
                   onSelectParameterForChart={(code) => setSelectedCodeForChart(code)}
                   onMeasurementSaved={handleDataUpdated}
@@ -430,11 +456,16 @@ function AppContent() {
         onSuccess={handleDataUpdated}
       />
 
-      {/* Tank Creation Modal */}
+      {/* Tank Creation / Edition Modal */}
       <TankManagementModal
         isOpen={isNewTankOpen}
-        onClose={() => setIsNewTankOpen(false)}
+        onClose={() => {
+          setIsNewTankOpen(false);
+          setEditingTank(null);
+        }}
+        existingTank={editingTank}
         onTankCreated={handleTankCreated}
+        onTankUpdated={handleTankUpdated}
       />
 
       {/* Notification Reminders Settings Modal */}

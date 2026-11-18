@@ -268,6 +268,8 @@ export async function updateTank(tankId, data) {
   return res.json();
 }
 
+export const updateAquarium = updateTank;
+
 export async function deleteTank(tankId) {
   const res = await authFetch(`/tanks/${tankId}`, {
     method: 'DELETE',

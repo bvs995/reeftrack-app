@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, RefreshCw, Bell, User, LogIn, Globe, ShieldCheck } from 'lucide-react';
+import { ChevronDown, RefreshCw, Bell, User, LogIn, Globe, ShieldCheck, Pencil } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({
@@ -8,6 +8,7 @@ export default function Navbar({
   activeTank,
   onSelectTank,
   onOpenNewTankModal,
+  onOpenEditTankModal,
   onOpenNotificationModal,
   onOpenSettings,
   onOpenAdmin,
@@ -69,23 +70,41 @@ export default function Navbar({
         {/* Selector de Acuario & Grupo de Botones de la Cabecera */}
         <div className="flex items-center gap-2 sm:gap-3">
           {tanks.length > 0 && (
-            <div className="relative">
-              <select
-                value={activeTank ? activeTank.id : ''}
-                onChange={(e) => {
-                  triggerHaptic();
-                  const selected = tanks.find((t) => t.id === parseInt(e.target.value));
-                  if (selected) onSelectTank(selected);
-                }}
-                className="appearance-none min-h-[40px] sm:min-h-[44px] bg-marine-900 text-slate-100 text-xs sm:text-sm font-bold pl-3 pr-8 sm:pl-3.5 sm:pr-9 py-2 rounded-2xl border border-marine-700 hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 cursor-pointer transition shadow-inner max-w-[130px] sm:max-w-none truncate"
-              >
-                {tanks.map((tank) => (
-                  <option key={tank.id} value={tank.id}>
-                    {tank.name} ({formatTankVolume(tank.volume_liters)})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-cyan-400 absolute right-2.5 sm:right-3 top-3 sm:top-3.5 pointer-events-none" />
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <select
+                  value={activeTank ? activeTank.id : ''}
+                  onChange={(e) => {
+                    triggerHaptic();
+                    const selected = tanks.find((t) => t.id === parseInt(e.target.value));
+                    if (selected) onSelectTank(selected);
+                  }}
+                  className="appearance-none min-h-[40px] sm:min-h-[44px] bg-marine-900 text-slate-100 text-xs sm:text-sm font-bold pl-3 pr-8 sm:pl-3.5 sm:pr-9 py-2 rounded-2xl border border-marine-700 hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 cursor-pointer transition shadow-inner max-w-[130px] sm:max-w-none truncate"
+                >
+                  {tanks.map((tank) => (
+                    <option key={tank.id} value={tank.id}>
+                      {tank.name} ({formatTankVolume(tank.volume_liters)})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-cyan-400 absolute right-2.5 sm:right-3 top-3 sm:top-3.5 pointer-events-none" />
+              </div>
+
+              {activeTank && onOpenEditTankModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic();
+                    onOpenEditTankModal(activeTank);
+                  }}
+                  title="Editar Acuario / Litraje"
+                  aria-label="Editar Acuario / Litraje"
+                  className="min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] px-2.5 bg-marine-900 hover:bg-cyan-500/20 text-cyan-400 border border-marine-700 hover:border-cyan-400/60 rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-95 shadow-inner"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline text-xs font-bold">Editar</span>
+                </button>
+              )}
             </div>
           )}
 

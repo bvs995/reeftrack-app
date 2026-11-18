@@ -64,14 +64,26 @@ export default function TankManagementModal({
     try {
       if (existingTank) {
         // MODO EDICIÓN
-        const updatedTank = await updateTank(existingTank.id, {
+        const payload = {
           name: name.trim(),
           tank_type: tankType,
+          type: tankType,
           volume_liters: parseFloat(volumeLiters),
           notes: notes.trim() || undefined
-        });
+        };
+        const res = await updateTank(existingTank.id, payload);
+        const mergedTank = {
+          ...existingTank,
+          ...payload,
+          ...(typeof res === 'object' ? res : {}),
+          id: existingTank.id,
+          name: name.trim(),
+          tank_type: tankType,
+          type: tankType,
+          volume_liters: parseFloat(volumeLiters)
+        };
         triggerHaptic();
-        if (onTankUpdated) onTankUpdated(updatedTank);
+        if (onTankUpdated) onTankUpdated(mergedTank);
       } else {
         // MODO CREACIÓN
         const newTank = await createTank({

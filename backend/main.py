@@ -642,7 +642,11 @@ def update_aquarium(
     return {
         "message": "Acuario actualizado",
         "new_volume": getattr(tank, "volume_liters", actual_volume),
-        "tank_type": getattr(tank, "tank_type", None)
+        "tank_type": getattr(tank, "tank_type", None),
+        "id": tank.id,
+        "name": getattr(tank, "name", None) or getattr(tank, "nombre", None),
+        "volume_liters": getattr(tank, "volume_liters", actual_volume),
+        "notes": getattr(tank, "notes", None)
     }
 
 @app.delete(

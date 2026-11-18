@@ -24,9 +24,11 @@ import { updateAquariumVolume } from '../api';
 
 export default function Dashboard({
   analytics,
+  activeTank,
   loading,
   onOpenQuickLog,
   onOpenWaterChange,
+  onOpenEditTankModal,
   onSelectTab,
   onSelectParameterForChart,
   onMeasurementSaved
@@ -107,21 +109,32 @@ export default function Dashboard({
               </span>
               <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
                 {t('dashboard.netVolume')} <strong className="text-white font-bold">{volume_liters} {t('common.liters')}</strong>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic();
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic();
+                  const targetTank = activeTank || (analytics ? {
+                    id: analytics.tank_id || analytics.id,
+                    name: tank_name,
+                    volume_liters: volume_liters,
+                    tank_type: tank_type
+                  } : null);
+                  if (onOpenEditTankModal && targetTank) {
+                    onOpenEditTankModal(targetTank);
+                  } else {
                     const input = window.prompt("Ingresa el nuevo volumen neto del acuario en litros:", volume_liters);
                     if (input && !isNaN(input) && parseFloat(input) > 0) {
                       handleUpdateVolume(parseFloat(input));
                     }
-                  }}
-                  title="Actualizar litraje del acuario"
-                  className="text-cyan-400 hover:text-cyan-300 p-1 rounded-lg hover:bg-cyan-500/10 transition active:scale-90"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </span>
+                  }
+                }}
+                title="Editar Acuario / Litraje"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition active:scale-95 shadow-sm"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Editar Acuario / Litraje</span>
+              </button>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
               {tank_name}
