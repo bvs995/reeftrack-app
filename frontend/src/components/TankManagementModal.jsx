@@ -21,8 +21,8 @@ export default function TankManagementModal({
     if (!type) return 'arrecife';
     const t = String(type).toLowerCase();
     if (t === 'reef') return 'arrecife';
-    if (t === 'mixed') return 'mixto';
-    if (t === 'marine_fish') return 'peces_marinos';
+    if (t === 'mixto') return 'mixed';
+    if (t === 'peces_marinos') return 'marine_fish';
     if (t === 'freshwater_planted') return 'plantado';
     if (t === 'freshwater_community') return 'dulce';
     return t;
@@ -141,17 +141,14 @@ export default function TankManagementModal({
             </label>
             <select
               value={tankType}
-              onChange={(e) => {
-                triggerHaptic();
-                setTankType(e.target.value);
-              }}
+              onChange={(e) => setTankType(e.target.value)}
               className="w-full min-h-[48px] bg-marine-950 border border-marine-700 focus:border-cyan-400 rounded-xl px-3.5 text-sm text-white focus:outline-none font-semibold shadow-inner cursor-pointer"
             >
-              <option value="arrecife" className="bg-slate-900 text-white">Arrecife (Solo Corales)</option>
-              <option value="mixto" className="bg-slate-900 text-white">Arrecife Mixto (Corales y Peces)</option>
-              <option value="peces_marinos" className="bg-slate-900 text-white">Solo Peces Marinos</option>
-              <option value="plantado" className="bg-slate-900 text-white">Agua Dulce Plantado</option>
-              <option value="dulce" className="bg-slate-900 text-white">Agua Dulce Estándar</option>
+              <option value="arrecife">Arrecife (Solo Corales)</option>
+              <option value="mixed">Arrecife Mixto (Corales y Peces)</option>
+              <option value="marine_fish">Solo Peces Marinos</option>
+              <option value="plantado">Agua Dulce Plantado</option>
+              <option value="dulce">Agua Dulce Estándar</option>
             </select>
           </div>
 

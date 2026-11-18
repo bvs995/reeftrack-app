@@ -247,14 +247,22 @@ class TokenResponse(BaseModel):
 # ESQUEMAS PYDANTIC v2 - ACUARIOS (TANKS)
 # ==============================================================================
 
+ValidBiotype = Literal[
+    "reef", "arrecife",
+    "mixed", "mixto",
+    "marine_fish", "peces_marinos",
+    "freshwater_planted", "plantado",
+    "freshwater_community", "dulce"
+]
+
 class AquariumCreate(BaseModel):
     name: str
     volume_liters: float
-    type: Literal["reef", "mixed", "marine_fish", "freshwater_planted", "freshwater_community"]
+    type: ValidBiotype = "arrecife"
 
 class TankCreate(BaseModel):
     name: str = Field(..., example="Arrecife Mixto SPS/LPS")
-    tank_type: Literal["reef", "mixed", "marine_fish", "freshwater_planted", "freshwater_community"] = Field("reef", example="mixed")
+    tank_type: ValidBiotype = Field("reef", example="mixed")
     volume_liters: float = Field(280.0, example=280.0)
     notes: Optional[str] = None
     

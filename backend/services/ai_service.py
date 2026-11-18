@@ -88,7 +88,7 @@ def _generar_analisis_fallback(
     risk = "Bajo"
     tipo_normalizado = (tipo or "mixto").strip().lower()
     es_peces_marinos = tipo_normalizado in ["peces_marinos", "fish_only", "fowlr", "marine_fish"]
-    es_mixto = tipo_normalizado in ["mixto", "reef", "arrecife", "mixed_reef"]
+    es_mixto = tipo_normalizado in ["mixto", "reef", "arrecife", "mixed_reef", "mixed"]
 
     alert = f"Parámetros dentro de umbrales operativos estables para biotipo '{tipo}'. Mantener rutina regular de filtración y mantenimiento."
     acciones: List[DosisRecomendada] = []
@@ -387,8 +387,8 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
             "Eres AquaPulse AI, un biólogo marino experto en química del agua y mantenimiento de acuarios.\n"
             "Analiza los parámetros de entrada y genera una respuesta puramente técnica, predictiva y estructurada.\n\n"
             "Reglas específicas según el biotipo:\n"
-            "Si el acuario es 'peces_marinos', ignora niveles altos de nitratos (<40) y fosfatos (<1.0), y no exijas mediciones de calcio/magnesio.\n"
-            "Si el acuario es 'mixto', mantén un balance estricto: Nitratos entre 2-10 y Fosfatos entre 0.03-0.10."
+            "Si el acuario es 'peces_marinos' o 'marine_fish', ignora niveles altos de nitratos (<40) y fosfatos (<1.0), y no exijas mediciones de calcio/magnesio.\n"
+            "Si el acuario es 'mixto' o 'mixed', mantén un balance estricto: Nitratos entre 2-10 y Fosfatos entre 0.03-0.10."
         )
 
         user_prompt = f"""
