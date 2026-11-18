@@ -13,14 +13,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv()
 
-# 1. Fuerza la lectura de la variable de Render
+# 1. Lectura de la variable de base de datos con fallback seguro a SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Si el código no encuentra la variable, detiene la app en lugar de crear un SQLite falso
+# Si no está configurada la variable en el entorno, usar SQLite local por defecto
 if not SQLALCHEMY_DATABASE_URL:
-    raise ValueError("Falta configurar la variable DATABASE_URL en el entorno.")
+    logger.warning("⚠️ Variable DATABASE_URL no configurada. Usando SQLite local por defecto: sqlite:///./aquapulse.db")
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./aquapulse.db"
 
-# 2. Corrección crítica: SQLAlchemy exige 'postgresql://' pero algunos proveedores entregan 'postgres://'
+# 2. Corrección crítica: SQLAlchemy exige 'postgresql://' pero algunos proveedores (como Render) entregan 'postgres://'
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
