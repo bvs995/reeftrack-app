@@ -69,15 +69,17 @@ export default function DashboardTrends({
   if (rawTipo.includes('plant')) {
     defaultTipo = 'plantado';
   } else if (rawTipo === 'peces_marinos' || rawTipo === 'marine_fish') {
-    defaultTipo = 'arrecife';
+    defaultTipo = 'peces_marinos';
+  } else if (rawTipo === 'mixto' || rawTipo === 'mixed') {
+    defaultTipo = 'mixto';
   } else if (rawTipo.includes('pece') || rawTipo.includes('community') || rawTipo.includes('comunitario') || rawTipo === 'dulce') {
     defaultTipo = 'dulce_peces';
-  } else if (rawTipo.includes('reef') || rawTipo.includes('arrecife') || rawTipo.includes('mixto') || rawTipo.includes('salada')) {
+  } else if (rawTipo.includes('reef') || rawTipo.includes('arrecife') || rawTipo.includes('salada')) {
     defaultTipo = 'arrecife';
   }
 
   const currentTipo = userSelectedEcosystem || defaultTipo;
-  const esAguaSalada = currentTipo === 'arrecife' || rawTipo === 'peces_marinos' || rawTipo === 'marine_fish' || rawTipo === 'mixto';
+  const esAguaSalada = currentTipo === 'arrecife' || currentTipo === 'mixto' || currentTipo === 'peces_marinos';
 
   const acuarioActual = {
     ...rawTank,
@@ -93,6 +95,24 @@ export default function DashboardTrends({
     { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' },
     { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
     { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' }
+  ];
+
+  const parametrosMixto = [
+    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
+    { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
+    { id: 'alcalinidad', nombre: 'Alcalinidad', unidad: '(dKH)' },
+    { id: 'calcio', nombre: 'Calcio', unidad: '(ppm)' },
+    { id: 'magnesio', nombre: 'Magnesio', unidad: '(ppm)' },
+    { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' }
+  ];
+
+  const parametrosPecesMarinos = [
+    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
+    { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
+    { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' },
+    { id: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' },
+    { id: 'amoniaco', nombre: 'Amoníaco', unidad: '(NH3)' }
   ];
 
   const parametrosDulcePeces = [
@@ -117,7 +137,11 @@ export default function DashboardTrends({
 
   // Lógica de ruteo según el perfil del acuario guardado en la base de datos o estado
   let parametrosAMostrar = [];
-  if (acuarioActual.tipo === 'arrecife') {
+  if (acuarioActual.tipo === 'mixto') {
+    parametrosAMostrar = parametrosMixto;
+  } else if (acuarioActual.tipo === 'peces_marinos') {
+    parametrosAMostrar = parametrosPecesMarinos;
+  } else if (acuarioActual.tipo === 'arrecife') {
     parametrosAMostrar = parametrosSalada;
   } else if (acuarioActual.tipo === 'plantado') {
     parametrosAMostrar = parametrosPlantado;
@@ -127,6 +151,7 @@ export default function DashboardTrends({
 
   const [activeParam, setActiveParam] = useState(() => {
     if (acuarioActual.tipo === 'plantado') return 'potasio';
+    if (acuarioActual.tipo === 'mixto' || acuarioActual.tipo === 'peces_marinos') return 'nitratos';
     if (acuarioActual.tipo === 'arrecife') return 'fosfatos';
     return 'ph';
   });
@@ -425,7 +450,54 @@ export default function DashboardTrends({
   PARAM_CONFIG.k = PARAM_CONFIG.potasio;
   PARAM_CONFIG.fe = PARAM_CONFIG.hierro;
 
-  const currentParam = PARAM_CONFIG[activeParam] || PARAM_CONFIG[parametrosAMostrar[0]?.id] || PARAM_CONFIG.fosfatos;
+  const currentParam = useMemo(() => {
+    const base = PARAM_CONFIG[activeParam] || PARAM_CONFIG[parametrosAMostrar[0]?.id] || PARAM_CONFIG.fosfatos;
+    const param = { ...base };
+    const tipo = acuarioActual.tipo;
+
+    if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
+      if (tipo === 'mixto') {
+        param.safeMin = 2.0;
+        param.safeMax = 10.0;
+        param.suggestedMax = 20.0;
+      } else if (tipo === 'peces_marinos') {
+        param.safeMin = 0.0;
+        param.safeMax = 40.0;
+        param.suggestedMax = 55.0;
+      } else if (tipo === 'arrecife') {
+        param.safeMin = 2.0;
+        param.safeMax = 15.0;
+        param.suggestedMax = 25.0;
+      } else if (tipo === 'plantado') {
+        param.safeMin = 10.0;
+        param.safeMax = 25.0;
+        param.suggestedMax = 35.0;
+      } else if (tipo === 'dulce_peces') {
+        param.safeMin = 0.0;
+        param.safeMax = 40.0;
+        param.suggestedMax = 55.0;
+      }
+    } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
+      if (tipo === 'mixto') {
+        param.safeMin = 0.03;
+        param.safeMax = 0.10;
+        param.suggestedMax = 0.25;
+      } else if (tipo === 'peces_marinos') {
+        param.safeMin = 0.0;
+        param.safeMax = 1.00;
+        param.suggestedMax = 1.50;
+      } else if (tipo === 'arrecife') {
+        param.safeMin = 0.02;
+        param.safeMax = 0.08;
+        param.suggestedMax = 0.25;
+      } else if (tipo === 'plantado') {
+        param.safeMin = 0.5;
+        param.safeMax = 2.0;
+        param.suggestedMax = 3.0;
+      }
+    }
+    return param;
+  }, [activeParam, parametrosAMostrar, acuarioActual.tipo]);
 
   // Filtrar lecturas válidas para el parámetro activo
   const validReadings = useMemo(() => {
@@ -558,12 +630,12 @@ export default function DashboardTrends({
     scales: {
       y: {
         min: 0, // CRÍTICO: Bloquea el eje Y para que nunca sea negativo
-        suggestedMax: isPhosphate ? 0.25 : (currentParam.suggestedMax || currentParam.safeMax * 1.1), // Da aire por encima de tu lectura de 0.20
+        suggestedMax: currentParam.suggestedMax || (currentParam.safeMax ? currentParam.safeMax * 1.25 : 1.0),
         grid: {
           color: 'rgba(255, 255, 255, 0.05)',
         },
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        ...(isPhosphate ? {} : { suggestedMin: currentParam.safeMin ? currentParam.safeMin * 0.9 : 0 })
+        suggestedMin: currentParam.safeMin && currentParam.safeMin > 0 ? currentParam.safeMin * 0.8 : 0
       },
       x: {
         grid: {
@@ -594,8 +666,8 @@ export default function DashboardTrends({
         annotations: {
           zonaSegura: {
             type: 'box',
-            yMin: isPhosphate ? 0.02 : (currentParam.safeMin !== undefined ? currentParam.safeMin : 0.02), // Límite inferior de fosfatos
-            yMax: isPhosphate ? 0.08 : (currentParam.safeMax !== undefined ? currentParam.safeMax : 0.08), // Límite superior de fosfatos
+            yMin: currentParam.safeMin !== undefined ? currentParam.safeMin : 0,
+            yMax: currentParam.safeMax !== undefined ? currentParam.safeMax : 0.08,
             backgroundColor: 'rgba(16, 185, 129, 0.15)', // Verde translúcido (#10b981 al 15%)
             borderWidth: 0,
             drawTime: 'beforeDatasetsDraw', // Pinta la caja de fondo, detrás de las líneas
@@ -837,7 +909,7 @@ export default function DashboardTrends({
           ))}
         </div>
 
-        {/* Conmutador de Ecosistema */}
+        {/* Conmutador de Ecosistema con los 5 Biotipos */}
         <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 self-start sm:self-auto shrink-0 flex-wrap">
           <button
             type="button"
@@ -853,6 +925,36 @@ export default function DashboardTrends({
             }`}
           >
             🪸 Arrecife
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setUserSelectedEcosystem('mixto');
+              setParametroActivo('nitratos');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              acuarioActual.tipo === 'mixto'
+                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-neon-cyan'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🌊 Mixto
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setUserSelectedEcosystem('peces_marinos');
+              setParametroActivo('nitratos');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              acuarioActual.tipo === 'peces_marinos'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-neon-amber'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🐠 Peces Marinos
           </button>
           <button
             type="button"
@@ -893,7 +995,14 @@ export default function DashboardTrends({
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 pb-4 border-b border-marine-800">
           <div>
             <h2 className="text-2xl font-bold text-white flex items-center flex-wrap gap-y-2">
-              {currentParam.name} <span className="ml-3 text-xs bg-emerald-900/50 text-emerald-400 px-2 py-1 rounded border border-emerald-800">Zona Segura: {currentParam.safeMin} - {currentParam.safeMax} {currentParam.unit}</span>
+              {currentParam.name}{' '}
+              <span className="ml-3 text-xs bg-emerald-900/50 text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-800 font-semibold">
+                Zona Segura:{' '}
+                {currentParam.safeMin !== undefined && currentParam.safeMin > 0
+                  ? `${currentParam.safeMin} - ${currentParam.safeMax}`
+                  : `< ${currentParam.safeMax}`}{' '}
+                {currentParam.unit}
+              </span>
             </h2>
             <p className="text-sm text-gray-400 mt-1">Serie histórica con franja verde de rango seguro y proyección punteada a 3 días.</p>
           </div>
