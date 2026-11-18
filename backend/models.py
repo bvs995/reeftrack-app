@@ -59,6 +59,7 @@ class Tank(Base):
     # Sinónimos para compatibilidad bilingüe
     nombre = synonym("name")
     volumen = synonym("volume_liters")
+    tipo = synonym("tank_type")
 
     owner = relationship("User", back_populates="tanks")
     measurements = relationship("Measurement", back_populates="tank", cascade="all, delete-orphan")
@@ -394,6 +395,8 @@ AnalisisAcuarioResponse = AnalisisAcuarioSchema
 class AquariumDataRequest(BaseModel):
     nombre_acuario: str = Field("Principal", example="Arrecife Mixto SPS/LPS", description="Nombre del acuario")
     volumen_litros: float = Field(280.0, example=280.0, description="Volumen del acuario en litros")
+    tipo: Optional[str] = Field("mixto", example="peces_marinos", description="Tipo de acuario: peces_marinos, mixto, arrecife, plantado, dulce")
+    tank_type: Optional[str] = Field(None, example="peces_marinos", description="Alias de tipo de acuario")
     acuario_id: Optional[int] = Field(None, example=1, description="ID del acuario para cargar historial automático")
     tank_id: Optional[int] = Field(None, example=1, description="ID del acuario (alias de acuario_id)")
     ph: Optional[float] = Field(None, example=8.2, description="Nivel de pH (Ideal: 8.1 - 8.4)")

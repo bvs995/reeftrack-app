@@ -845,9 +845,16 @@ def obtener_analisis_json(
     try:
         data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
         target_id = data.acuario_id or data.tank_id
-        if target_id and (not data.tendencia_reciente or data.tendencia_reciente in ["Estable en las últimas 24h", "Estable"]):
-            historial_48h = obtener_tendencia_ultimas_48h(db, target_id)
-            data_dict["tendencia_reciente"] = historial_48h
+        if target_id:
+            if not data.tendencia_reciente or data.tendencia_reciente in ["Estable en las últimas 24h", "Estable"]:
+                historial_48h = obtener_tendencia_ultimas_48h(db, target_id)
+                data_dict["tendencia_reciente"] = historial_48h
+            tank_obj = db.query(Tank).filter(Tank.id == target_id).first() or db.query(Acuario).filter(Acuario.id == target_id).first()
+            if tank_obj:
+                db_type = getattr(tank_obj, "tank_type", None) or getattr(tank_obj, "tipo", None)
+                if db_type and (not data_dict.get("tipo") or data_dict.get("tipo") == "mixto"):
+                    data_dict["tipo"] = db_type
+                    data_dict["tank_type"] = db_type
 
         resultado_estructurado = analizar_parametros_estructurado(data_dict)
         return {"status": "success", "data": resultado_estructurado}
@@ -911,16 +918,19 @@ def endpoint_analisis_con_historial(
 
         # 3. Preparar el paquete de datos para la IA
         tank_obj = (
-            ultima_medicion.acuario
-            if hasattr(ultima_medicion, "acuario") and ultima_medicion.acuario
-            else db.query(Acuario).filter(Acuario.id == target_id).first()
+            db.query(Tank).filter(Tank.id == target_id).first()
+            or (ultima_medicion.acuario if hasattr(ultima_medicion, "acuario") and ultima_medicion.acuario else None)
+            or db.query(Acuario).filter(Acuario.id == target_id).first()
         )
         nombre_acuario = getattr(tank_obj, "nombre", None) or getattr(tank_obj, "name", "Principal") if tank_obj else "Principal"
         volumen_litros = float(getattr(tank_obj, "volumen", None) or getattr(tank_obj, "volume_liters", 280.0) if tank_obj else 280.0)
+        tipo_acuario = getattr(tank_obj, "tank_type", None) or getattr(tank_obj, "tipo", "mixto") if tank_obj else "mixto"
 
         datos_para_ia = {
             "nombre_acuario": nombre_acuario,
             "volumen_litros": volumen_litros,
+            "tipo": tipo_acuario,
+            "tank_type": tipo_acuario,
             "ph": ultima_medicion.ph,
             "kh": ultima_medicion.kh,
             "calcio": ultima_medicion.calcio,
