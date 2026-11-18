@@ -240,6 +240,21 @@ export async function createTank(data) {
   return res.json();
 }
 
+export async function updateAquariumVolume(tankId, newVolume) {
+  const res = await authFetch(`/aquariums/${tankId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volume_liters: newVolume })
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al actualizar litraje del acuario');
+  }
+  return res.json();
+}
+
+export const updateTankVolume = updateAquariumVolume;
+
 export async function deleteTank(tankId) {
   const res = await authFetch(`/tanks/${tankId}`, {
     method: 'DELETE',

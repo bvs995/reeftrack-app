@@ -16,9 +16,11 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Pencil
 } from 'lucide-react';
 import QuickEntryForm from './QuickEntryForm';
+import { updateAquariumVolume } from '../api';
 
 export default function Dashboard({
   analytics,
@@ -76,6 +78,17 @@ export default function Dashboard({
   const criticalParams = parameters.filter(p => p.is_critical);
   const secondaryParams = parameters.filter(p => !p.is_critical);
 
+  const handleUpdateVolume = async (newVolume) => {
+    try {
+      const tankId = analytics.tank_id || analytics.id;
+      await updateAquariumVolume(tankId, newVolume);
+      if (onMeasurementSaved) onMeasurementSaved(); // Recarga el dashboard
+    } catch (err) {
+      console.error('Error al actualizar litraje:', err);
+      alert(err.message || 'Error al actualizar el litraje del acuario');
+    }
+  };
+
   return (
     <div className="space-y-6 pb-28 max-w-7xl mx-auto px-3 sm:px-6 pt-4">
       {/* Hero Overview Card - Slate-900 con acentos cian y azul marino */}
@@ -89,8 +102,22 @@ export default function Dashboard({
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-marine-800 text-cyan-300 border border-cyan-500/30">
                 {getTankTypeLabel(tank_type)}
               </span>
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
                 {t('dashboard.netVolume')} <strong className="text-white font-bold">{volume_liters} {t('common.liters')}</strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic();
+                    const input = window.prompt("Ingresa el nuevo volumen neto del acuario en litros:", volume_liters);
+                    if (input && !isNaN(input) && parseFloat(input) > 0) {
+                      handleUpdateVolume(parseFloat(input));
+                    }
+                  }}
+                  title="Actualizar litraje del acuario"
+                  className="text-cyan-400 hover:text-cyan-300 p-1 rounded-lg hover:bg-cyan-500/10 transition active:scale-90"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
