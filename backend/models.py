@@ -249,15 +249,15 @@ class TokenResponse(BaseModel):
 
 class AquariumCreate(BaseModel):
     name: str
-    volume_liters: int
-    type: Literal["arrecife", "plantado", "dulce", "peces_marinos", "mixto"]
+    volume_liters: float
+    type: Literal["reef", "mixed", "marine_fish", "freshwater_planted", "freshwater_community"]
 
 class TankCreate(BaseModel):
     name: str = Field(..., example="Arrecife Mixto SPS/LPS")
-    tank_type: str = Field("reef", example="reef")
+    tank_type: Literal["reef", "mixed", "marine_fish", "freshwater_planted", "freshwater_community"] = Field("reef", example="mixed")
     volume_liters: float = Field(280.0, example=280.0)
     notes: Optional[str] = None
-
+    
 class TankResponse(BaseModel):
     id: int
     user_id: int
