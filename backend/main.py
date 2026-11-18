@@ -1013,15 +1013,33 @@ def endpoint_analizar_acuario(data: AquariumDataRequest):
 @app.get("/api/tanks/{tank_id}/parameters")
 def get_tank_parameters(
     tank_id: int,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
+    tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    t_type = (tank.tank_type or "reef").lower() if tank else "reef"
+    if t_type in ["freshwater_planted", "plantado"]:
+        return [
+            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 6.6, "min_safe": 6.0, "max_safe": 7.2, "is_critical": True},
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 15.0, "min_safe": 5.0, "max_safe": 25.0, "is_critical": True},
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 1.2, "min_safe": 0.5, "max_safe": 2.5, "is_critical": True},
+            {"code": "gh", "name": "Dureza General (GH)", "unit": "dGH", "optimal_target": 6.0, "min_safe": 4.0, "max_safe": 9.0, "is_critical": False},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 24.5, "min_safe": 22.0, "max_safe": 26.5, "is_critical": False}
+        ]
+    elif t_type in ["freshwater", "dulce", "freshwater_community"]:
+        return [
+            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 7.2, "min_safe": 6.5, "max_safe": 7.8, "is_critical": True},
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 0.0, "max_safe": 30.0, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 23.0, "max_safe": 27.0, "is_critical": False}
+        ]
     return [
         {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.3, "min_safe": 7.5, "max_safe": 9.0, "is_critical": True},
         {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 420.0, "min_safe": 400.0, "max_safe": 450.0, "is_critical": True},
         {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1350.0, "min_safe": 1280.0, "max_safe": 1420.0, "is_critical": False},
         {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 5.0, "min_safe": 2.0, "max_safe": 20.0, "is_critical": True},
         {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.04, "min_safe": 0.02, "max_safe": 0.08, "is_critical": True},
-        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.025, "min_safe": 1.024, "max_safe": 1.026, "is_critical": True}
+        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.025, "min_safe": 1.024, "max_safe": 1.026, "is_critical": True},
+        {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.5, "min_safe": 24.5, "max_safe": 26.5, "is_critical": False}
     ]
 
 @app.get("/api/tanks/{tank_id}/analytics")

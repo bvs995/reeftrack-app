@@ -274,13 +274,13 @@ export default function QuickEntryForm({
       label: 'Temperatura',
       unit: '°C',
       step: '0.1',
-      min: '15',
-      max: '35',
+      min: '10',
+      max: '40',
       placeholder: '25.5',
       ideal: '24.5 - 26.0 °C',
       safeRange: '24.5 - 26.0 °C',
-      accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
-      badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+      accentColor: 'border-cyan-500/40 focus-within:border-cyan-400 focus-within:ring-cyan-400/20',
+      badgeColor: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
       lastValue: lastMeasurement?.temperature || lastMeasurement?.temperatura
     }
   ] : [
@@ -355,13 +355,13 @@ export default function QuickEntryForm({
       label: 'Temperatura',
       unit: '°C',
       step: '0.1',
-      min: '15',
-      max: '35',
+      min: '10',
+      max: '40',
       placeholder: '25.5',
       ideal: '24.5 - 26.0 °C',
       safeRange: '24.5 - 26.0 °C',
-      accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
-      badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+      accentColor: 'border-cyan-500/40 focus-within:border-cyan-400 focus-within:ring-cyan-400/20',
+      badgeColor: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
       lastValue: lastMeasurement?.temperature || lastMeasurement?.temperatura
     }
   ];
@@ -449,8 +449,8 @@ export default function QuickEntryForm({
               {/* Header de la tarjeta con nombre, escáner rápido y badge de rango seguro */}
               <div className="flex items-center justify-between gap-2 mb-2.5">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-extrabold text-sm text-slate-100 tracking-tight truncate">
-                    {card.label}
+                  <span className={card.key === 'temperature' ? "block text-xs font-medium text-cyan-300 uppercase tracking-wider mb-1" : "font-extrabold text-sm text-slate-100 tracking-tight truncate"}>
+                    {card.key === 'temperature' ? `Temperatura (${card.unit})` : card.label}
                   </span>
                   <button
                     type="button"
@@ -481,12 +481,20 @@ export default function QuickEntryForm({
                   min={card.min}
                   max={card.max}
                   inputMode="decimal"
-                  value={formData[card.key]}
-                  onChange={(e) => handleChange(card.key, e.target.value)}
+                  value={formData[card.key] || ''}
+                  onChange={(e) => {
+                    handleChange(card.key, e.target.value);
+                    if (card.key === 'temperature') {
+                      setFormData(prev => ({ ...prev, temperature: e.target.value, temperatura: e.target.value }));
+                    }
+                  }}
                   placeholder={card.placeholder}
-                  className={`w-full min-h-[50px] bg-marine-950 border ${
-                    isHighlighted ? 'border-cyan-400/80 text-cyan-100' : 'border-marine-700/80 text-white'
-                  } rounded-xl px-3.5 text-xl font-black focus:outline-none focus:border-cyan-400 placeholder:text-slate-600 tracking-wide shadow-inner`}
+                  className={card.key === 'temperature'
+                    ? "w-full px-3 py-2 bg-slate-900/80 border border-cyan-500/30 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                    : `w-full min-h-[50px] bg-marine-950 border ${
+                        isHighlighted ? 'border-cyan-400/80 text-cyan-100' : 'border-marine-700/80 text-white'
+                      } rounded-xl px-3.5 text-xl font-black focus:outline-none focus:border-cyan-400 placeholder:text-slate-600 tracking-wide shadow-inner`
+                  }
                 />
                 <span className="absolute right-3.5 text-xs font-extrabold text-cyan-400 pointer-events-none select-none">
                   {card.unit}
