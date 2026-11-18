@@ -63,6 +63,9 @@ class Tank(Base):
     owner = relationship("User", back_populates="tanks")
     measurements = relationship("Measurement", back_populates="tank", cascade="all, delete-orphan")
 
+# Alias para compatibilidad
+Aquarium = Tank
+
 
 class Measurement(Base):
     __tablename__ = "measurements"

@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Body, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -40,7 +40,8 @@ from backend.models import (
     AquariumAnalysisResponse,
     PredictiveAnalysisJsonResponse,
     MedicionAcuario,
-    Acuario
+    Acuario,
+    Aquarium
 )
 from backend.services.ai_service import (
     analizar_parametros_acuario,
@@ -530,6 +531,53 @@ def create_user_tank(
     db.commit()
     db.refresh(new_tank)
     return TankResponse.model_validate(new_tank)
+
+@app.put(
+    "/api/aquariums/{aquarium_id}",
+    summary="Actualizar litraje del acuario",
+    tags=["Acuarios"]
+)
+@app.put("/api/acuarios/{aquarium_id}", include_in_schema=False)
+@app.put("/api/tanks/{aquarium_id}", include_in_schema=False)
+def update_aquarium(
+    aquarium_id: int,
+    volume_liters: Optional[int] = Query(None, description="Nuevo volumen en litros"),
+    payload: Optional[dict] = Body(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza el volumen en litros de un acuario por su ID.
+    Acepta el parámetro volume_liters como query param o en el cuerpo JSON.
+    """
+    actual_volume = volume_liters
+    if actual_volume is None and payload and "volume_liters" in payload:
+        actual_volume = payload["volume_liters"]
+    elif actual_volume is None and isinstance(payload, int):
+        actual_volume = payload
+
+    if actual_volume is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Se requiere el campo 'volume_liters'")
+
+    tank = db.query(Aquarium).filter(Aquarium.id == aquarium_id).first()
+    if not tank:
+        tank = db.query(Acuario).filter(Acuario.id == aquarium_id).first()
+    if not tank:
+        raise HTTPException(status_code=404, detail="Acuario no encontrado")
+
+    tank.volume_liters = actual_volume
+
+    # Sincronización entre tablas tanks y acuarios si coexisten
+    if isinstance(tank, Tank):
+        acuario_record = db.query(Acuario).filter(Acuario.id == aquarium_id).first()
+        if acuario_record:
+            acuario_record.volumen_litros = actual_volume
+    elif isinstance(tank, Acuario):
+        tank_record = db.query(Tank).filter(Tank.id == aquarium_id).first()
+        if tank_record:
+            tank_record.volume_liters = actual_volume
+
+    db.commit()
+    return {"message": "Litraje actualizado", "new_volume": actual_volume}
 
 @app.delete(
     "/api/tanks/{tank_id}",
