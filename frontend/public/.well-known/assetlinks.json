@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.vercel.reeftrack_app_pi.twa",
+    "sha256_cert_fingerprints": [
+      "25:6A:1A:56:CA:56:66:84:8D:7E:7E:D2:BB:39:A9:08:69:3D:33:52:87:42:78:1E:2B:62:C5:14:A9:64:44:CE"
+    ]
+  }
+}]
