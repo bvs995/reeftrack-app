@@ -31,10 +31,26 @@ from models import User, Tank, Measurement, Acuario, Medicion
 # access to the values within the .ini file in use.
 config = context.config
 
-# Sobrescribir sqlalchemy.url con la variable de entorno de Render (DATABASE_URL)
-database_url = os.getenv("DATABASE_URL")
+# Sobrescribir sqlalchemy.url con la variable de entorno de Render (DATABASE_URL o alias DATEBASE_URL)
+database_url = os.getenv("DATABASE_URL") or os.getenv("DATEBASE_URL")
 if database_url:
     database_url = database_url.strip().strip("'\"")
+    import re
+    import urllib.parse
+    url_match = re.match(
+        r"^(?P<proto>postgresql(?:\+[a-zA-Z0-9_]+)?://|postgres://)(?P<user>[^:]+):(?P<pass>.+?)@(?P<rest>[^@]+)$",
+        database_url
+    )
+    if url_match:
+        proto = url_match.group("proto")
+        user = url_match.group("user")
+        pwd = url_match.group("pass")
+        rest = url_match.group("rest")
+        if pwd.startswith("[") and pwd.endswith("]"):
+            pwd = pwd[1:-1]
+        pwd = urllib.parse.quote_plus(urllib.parse.unquote_plus(pwd))
+        database_url = f"{proto}{user}:{pwd}@{rest}"
+
     # Render a veces usa 'postgres://' pero SQLAlchemy requiere 'postgresql://'
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)

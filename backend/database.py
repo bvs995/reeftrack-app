@@ -14,7 +14,8 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv()
 
 # 1. Lectura obligatoria de DATABASE_URL sin fallback a SQLite
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+# Soporta DATEBASE_URL como alias defensivo por error tipográfico común
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATEBASE_URL")
 
 # Si no está configurada la variable en el entorno, fallar de forma estricta y ruidosa
 if not SQLALCHEMY_DATABASE_URL or not SQLALCHEMY_DATABASE_URL.strip():
@@ -28,6 +29,26 @@ if not SQLALCHEMY_DATABASE_URL or not SQLALCHEMY_DATABASE_URL.strip():
     raise ValueError(error_msg)
 
 SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.strip().strip("'\"")
+
+# Saneamiento automático de contraseñas con corchetes literales [password] o caracteres especiales (#, /, @)
+import re
+import urllib.parse
+
+url_match = re.match(
+    r"^(?P<proto>postgresql(?:\+[a-zA-Z0-9_]+)?://|postgres://)(?P<user>[^:]+):(?P<pass>.+?)@(?P<rest>[^@]+)$",
+    SQLALCHEMY_DATABASE_URL
+)
+if url_match:
+    proto = url_match.group("proto")
+    user = url_match.group("user")
+    pwd = url_match.group("pass")
+    rest = url_match.group("rest")
+    # Remover corchetes si fueron dejados literalmente desde el placeholder de documentación
+    if pwd.startswith("[") and pwd.endswith("]"):
+        pwd = pwd[1:-1]
+    # Codificar caracteres especiales en la contraseña para no romper el parser URI
+    pwd = urllib.parse.quote_plus(urllib.parse.unquote_plus(pwd))
+    SQLALCHEMY_DATABASE_URL = f"{proto}{user}:{pwd}@{rest}"
 
 # 2. Corrección crítica: SQLAlchemy exige 'postgresql://' pero algunos proveedores (como Render) entregan 'postgres://'
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
