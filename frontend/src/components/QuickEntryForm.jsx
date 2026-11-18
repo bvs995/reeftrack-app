@@ -185,9 +185,8 @@ export default function QuickEntryForm({
   };
 
   // Detección del tipo de agua para adaptar el catálogo de registro
-  const isDulce = tank?.tipoAgua === 'dulce' ||
-    (typeof tank?.tank_type === 'string' && tank.tank_type.toLowerCase().includes('freshwater')) ||
-    (typeof tank?.type === 'string' && tank.type.toLowerCase().includes('freshwater'));
+  const tankTypeNormalized = (tank?.tank_type || tank?.tipoAgua || tank?.type || '').toLowerCase();
+  const isDulce = ['dulce', 'plantado', 'freshwater'].some(t => tankTypeNormalized.includes(t));
 
   // Definición de las tarjetas compactas de parámetros según el ecosistema
   const PARAM_CARDS = isDulce ? [
