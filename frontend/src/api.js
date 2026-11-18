@@ -256,14 +256,14 @@ export async function updateAquariumVolume(tankId, newVolume) {
 export const updateTankVolume = updateAquariumVolume;
 
 export async function updateTank(tankId, data) {
-  const res = await authFetch(`/aquariums/${tankId}`, {
+  const res = await authFetch(`/tanks/${tankId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || 'Error al actualizar acuario');
+    throw new Error(errData.detail || 'Error al actualizar el acuario');
   }
   return res.json();
 }
