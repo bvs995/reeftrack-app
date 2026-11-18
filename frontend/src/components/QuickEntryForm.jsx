@@ -36,6 +36,7 @@ export default function QuickEntryForm({
     ammonia_ppm: '',
     nitrite_ppm: '',
     gh_dgh: '',
+    temperature: '',
     temperatura: '',
     notes: '',
     timestamp: new Date().toISOString().slice(0, 16)
@@ -77,7 +78,12 @@ export default function QuickEntryForm({
   };
 
   const handleChange = (field, val) => {
-    setFormData(prev => ({ ...prev, [field]: val }));
+    setFormData(prev => {
+      const next = { ...prev, [field]: val };
+      if (field === 'temperature') next.temperatura = val;
+      if (field === 'temperatura') next.temperature = val;
+      return next;
+    });
   };
 
   const handleScanComplete = (result) => {
@@ -121,7 +127,11 @@ export default function QuickEntryForm({
       'magnesium_ppm',
       'nitrate_ppm',
       'phosphate_ppm',
-      'salinity_ppt'
+      'salinity_ppt',
+      'ph',
+      'ammonia_ppm',
+      'nitrite_ppm',
+      'gh_dgh'
     ];
 
     numericKeys.forEach(key => {
@@ -131,6 +141,14 @@ export default function QuickEntryForm({
         hasValue = true;
       }
     });
+
+    // Inclusión explícita de temperature en el payload
+    const tempVal = formData.temperature || formData.temperatura;
+    fieldsToSubmit.temperature = tempVal ? parseFloat(tempVal) : null;
+    if (fieldsToSubmit.temperature !== null) {
+      fieldsToSubmit.temperatura = fieldsToSubmit.temperature;
+      hasValue = true;
+    }
 
     if (!hasValue) {
       setErrorMessage(t('quickEntry.emptyError'));
@@ -171,6 +189,12 @@ export default function QuickEntryForm({
           nitrate_ppm: '',
           phosphate_ppm: '',
           salinity_ppt: '',
+          ph: '',
+          ammonia_ppm: '',
+          nitrite_ppm: '',
+          gh_dgh: '',
+          temperature: '',
+          temperatura: '',
           notes: ''
         }));
         if (onSuccess) onSuccess(saved);
@@ -246,15 +270,15 @@ export default function QuickEntryForm({
       lastValue: lastMeasurement?.gh_dgh
     },
     {
-      key: 'temperatura',
+      key: 'temperature',
       label: 'Temperatura',
       unit: '°C',
       step: '0.1',
-      placeholder: '24.5',
-      safeRange: '22.0 - 26.0 °C',
+      placeholder: '25.5',
+      safeRange: '20.0 - 32.0 °C',
       accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
       badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-      lastValue: lastMeasurement?.temperatura
+      lastValue: lastMeasurement?.temperature || lastMeasurement?.temperatura
     }
   ] : [
     {
@@ -322,6 +346,17 @@ export default function QuickEntryForm({
       accentColor: 'border-sky-500/40 focus-within:border-sky-400 focus-within:ring-sky-400/20',
       badgeColor: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
       lastValue: lastMeasurement?.salinity_ppt
+    },
+    {
+      key: 'temperature',
+      label: 'Temperatura',
+      unit: '°C',
+      step: '0.1',
+      placeholder: '25.5',
+      safeRange: '20.0 - 32.0 °C',
+      accentColor: 'border-emerald-500/40 focus-within:border-emerald-400 focus-within:ring-emerald-400/20',
+      badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+      lastValue: lastMeasurement?.temperature || lastMeasurement?.temperatura
     }
   ];
 

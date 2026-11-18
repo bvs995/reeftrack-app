@@ -715,16 +715,21 @@ def create_measurement(
             db.refresh(user_tank)
         target_tank_id = user_tank.id
 
+    temp_val = payload.temperature if payload.temperature is not None else payload.temperatura
+
     db_measurement = Measurement(
         user_id=current_user.id,
         tank_id=target_tank_id,
         timestamp=measurement_time,
+        ph=payload.ph,
         alkalinity_dkh=payload.alkalinity_dkh,
         calcium_ppm=payload.calcium_ppm,
         magnesium_ppm=payload.magnesium_ppm,
         nitrate_ppm=payload.nitrate_ppm,
         phosphate_ppm=payload.phosphate_ppm,
         salinity_ppt=payload.salinity_ppt,
+        temperature=temp_val,
+        temperatura=temp_val,
         notes=payload.notes
     )
     db.add(db_measurement)

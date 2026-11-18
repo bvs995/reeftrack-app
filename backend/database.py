@@ -126,6 +126,9 @@ def init_db():
                 if "ph" not in columns:
                     conn.execute(text("ALTER TABLE measurements ADD COLUMN ph FLOAT;"))
                     logger.info("Auto-migración: Columna ph añadida a measurements.")
+                if "temperature" not in columns:
+                    conn.execute(text("ALTER TABLE measurements ADD COLUMN temperature FLOAT;"))
+                    logger.info("Auto-migración: Columna temperature añadida a measurements.")
                 if "temperatura" not in columns:
                     conn.execute(text("ALTER TABLE measurements ADD COLUMN temperatura FLOAT;"))
                     logger.info("Auto-migración: Columna temperatura añadida a measurements.")
@@ -134,6 +137,9 @@ def init_db():
         if "mediciones" in table_names:
             med_columns = [c["name"] for c in inspector.get_columns("mediciones")]
             with engine.begin() as conn:
+                if "temperature" not in med_columns:
+                    conn.execute(text("ALTER TABLE mediciones ADD COLUMN temperature FLOAT;"))
+                    logger.info("Auto-migración: Columna temperature añadida a mediciones.")
                 if "temperatura" not in med_columns:
                     conn.execute(text("ALTER TABLE mediciones ADD COLUMN temperatura FLOAT;"))
                     logger.info("Auto-migración: Columna temperatura añadida a mediciones.")

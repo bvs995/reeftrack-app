@@ -340,10 +340,19 @@ export async function recordMeasurement(tankId, data) {
       phosphate: 'phosphate_ppm',
       phosphate_ppm: 'phosphate_ppm',
       salinity: 'salinity_ppt',
-      salinity_ppt: 'salinity_ppt'
+      salinity_ppt: 'salinity_ppt',
+      temp: 'temperature',
+      temperatura: 'temperature',
+      temperature: 'temperature'
     };
     const field = codeMap[payload.parameter_code] || payload.parameter_code;
     payload[field] = parseFloat(payload.value);
+  }
+
+  if (payload.temperature !== undefined && payload.temperature !== null) {
+    payload.temperature = parseFloat(payload.temperature);
+  } else if (payload.temperatura !== undefined && payload.temperatura !== null) {
+    payload.temperature = parseFloat(payload.temperatura);
   }
 
   // Soporta tanto la ruta /api/tanks/:id/measurements como /api/measurements
