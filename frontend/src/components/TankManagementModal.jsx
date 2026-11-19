@@ -13,6 +13,10 @@ export default function TankManagementModal({
   const [name, setName] = useState('');
   const [tankType, setTankType] = useState('arrecife');
   const [volumeLiters, setVolumeLiters] = useState('');
+  const [reefProfile, setReefProfile] = useState('lps_reef');
+  const [dosingMethod, setDosingMethod] = useState('water_changes');
+  const [lightingPar, setLightingPar] = useState('');
+  const [flowProfile, setFlowProfile] = useState('moderate_indirect');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -28,19 +32,30 @@ export default function TankManagementModal({
     return t;
   };
 
+  const isMarine = ['arrecife', 'mixed', 'marine_fish', 'reef'].includes(tankType);
+
   // Cargar datos automáticamente si estamos editando un acuario existente
   useEffect(() => {
     if (existingTank && isOpen) {
       setName(existingTank.name || '');
-      setTankType(normalizeTankType(existingTank.tank_type || existingTank.type));
+      const nType = normalizeTankType(existingTank.tank_type || existingTank.type);
+      setTankType(nType);
       setVolumeLiters(existingTank.volume_liters || '');
       setNotes(existingTank.notes || '');
+      setReefProfile(existingTank.reef_profile || (nType === 'marine_fish' ? 'fowlr_soft' : 'lps_reef'));
+      setDosingMethod(existingTank.dosing_method || 'water_changes');
+      setLightingPar(existingTank.lighting_par !== null && existingTank.lighting_par !== undefined ? String(existingTank.lighting_par) : '');
+      setFlowProfile(existingTank.flow_profile || 'moderate_indirect');
     } else if (!existingTank && isOpen) {
       // Limpiar formulario si es creación nueva
       setName('');
       setTankType('arrecife');
       setVolumeLiters('');
       setNotes('');
+      setReefProfile('lps_reef');
+      setDosingMethod('water_changes');
+      setLightingPar('');
+      setFlowProfile('moderate_indirect');
     }
   }, [existingTank, isOpen]);
 
@@ -69,6 +84,10 @@ export default function TankManagementModal({
           tank_type: tankType,
           type: tankType,
           volume_liters: parseFloat(volumeLiters),
+          reef_profile: isMarine ? (reefProfile || 'lps_reef') : null,
+          dosing_method: isMarine ? (dosingMethod || 'water_changes') : null,
+          lighting_par: isMarine && lightingPar !== '' ? parseInt(lightingPar, 10) : null,
+          flow_profile: isMarine ? (flowProfile || 'moderate_indirect') : null,
           notes: notes.trim() || undefined
         };
         const res = await updateTank(existingTank.id, payload);
@@ -80,7 +99,11 @@ export default function TankManagementModal({
           name: name.trim(),
           tank_type: tankType,
           type: tankType,
-          volume_liters: parseFloat(volumeLiters)
+          volume_liters: parseFloat(volumeLiters),
+          reef_profile: payload.reef_profile,
+          dosing_method: payload.dosing_method,
+          lighting_par: payload.lighting_par,
+          flow_profile: payload.flow_profile
         };
         triggerHaptic();
         if (onTankUpdated) onTankUpdated(mergedTank);
@@ -90,6 +113,10 @@ export default function TankManagementModal({
           name: name.trim(),
           tank_type: tankType,
           volume_liters: parseFloat(volumeLiters),
+          reef_profile: isMarine ? (reefProfile || 'lps_reef') : null,
+          dosing_method: isMarine ? (dosingMethod || 'water_changes') : null,
+          lighting_par: isMarine && lightingPar !== '' ? parseInt(lightingPar, 10) : null,
+          flow_profile: isMarine ? (flowProfile || 'moderate_indirect') : null,
           notes: notes.trim() || undefined
         });
         triggerHaptic();
@@ -107,9 +134,9 @@ export default function TankManagementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-marine-900 border-t sm:border border-marine-700/80 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-md bg-marine-900 border-t sm:border border-marine-700/80 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-marine-800 bg-marine-950/80">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-marine-800 bg-marine-950/80 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center shadow-neon-cyan">
               <Waves className="w-5 h-5" />
@@ -127,12 +154,12 @@ export default function TankManagementModal({
         </div>
 
         {error && (
-          <div className="mx-4 mt-3 p-3.5 rounded-2xl bg-coral-500/15 border border-coral-500/40 text-coral-300 text-xs font-semibold">
+          <div className="mx-4 mt-3 p-3.5 rounded-2xl bg-coral-500/15 border border-coral-500/40 text-coral-300 text-xs font-semibold flex-shrink-0">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
               Nombre del Acuario
@@ -153,7 +180,15 @@ export default function TankManagementModal({
             </label>
             <select
               value={tankType}
-              onChange={(e) => setTankType(e.target.value)}
+              onChange={(e) => {
+                const newT = e.target.value;
+                setTankType(newT);
+                if (newT === 'marine_fish') {
+                  setReefProfile('fowlr_soft');
+                } else if (['arrecife', 'mixed'].includes(newT) && reefProfile === 'fowlr_soft') {
+                  setReefProfile('lps_reef');
+                }
+              }}
               className="w-full min-h-[48px] bg-marine-950 border border-marine-700 focus:border-cyan-400 rounded-xl px-3.5 text-sm text-white focus:outline-none font-semibold shadow-inner cursor-pointer"
             >
               <option value="arrecife">Arrecife (Solo Corales)</option>
@@ -163,6 +198,80 @@ export default function TankManagementModal({
               <option value="dulce">Agua Dulce Estándar</option>
             </select>
           </div>
+
+          {/* Configuración avanzada de perfil marino si aplica */}
+          {isMarine && (
+            <div className="p-3.5 rounded-2xl bg-cyan-950/30 border border-cyan-500/20 space-y-3">
+              <div className="text-[11px] font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                Perfil y Parámetros Marinos Especializados
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  Perfil de Arrecife
+                </label>
+                <select
+                  value={reefProfile}
+                  onChange={(e) => setReefProfile(e.target.value)}
+                  className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
+                >
+                  <option value="fowlr_soft">Solo Peces / Corales Blandos (FOWLR / Soft)</option>
+                  <option value="lps_reef">Arrecife LPS (Pólipo Largo)</option>
+                  <option value="sps_reef">Arrecife SPS (Pólipo Corto - Alta Exigencia)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Método de Dosificación
+                  </label>
+                  <select
+                    value={dosingMethod}
+                    onChange={(e) => setDosingMethod(e.target.value)}
+                    className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
+                  >
+                    <option value="water_changes">Cambios de Agua</option>
+                    <option value="manual_dosing">Dosificación Manual</option>
+                    <option value="peristaltic_balling">Balling / Peristálticas</option>
+                    <option value="kalkwasser">Kalkwasser (Agua de Cal)</option>
+                    <option value="calcium_reactor">Reactor de Calcio (CaRx)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Iluminación PAR (estimado)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000"
+                    placeholder="Ej. 180"
+                    value={lightingPar}
+                    onChange={(e) => setLightingPar(e.target.value)}
+                    className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none placeholder-slate-500 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  Perfil de Flujo / Circulación
+                </label>
+                <select
+                  value={flowProfile}
+                  onChange={(e) => setFlowProfile(e.target.value)}
+                  className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
+                >
+                  <option value="low_moderate">Bajo a Moderado (Soft / Peces)</option>
+                  <option value="moderate_indirect">Moderado e Indirecto (LPS)</option>
+                  <option value="high_turbulent">Alto, Turbulento y Variable (SPS)</option>
+                </select>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">

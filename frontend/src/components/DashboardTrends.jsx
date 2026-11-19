@@ -29,6 +29,7 @@ import {
   Camera
 } from 'lucide-react';
 import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis } from '../api';
+import { getMarineProfile } from '../utils/marineProfiles';
 
 // Registrar plugins requeridos de Chart.js incluyendo annotationPlugin oficial
 ChartJS.register(
@@ -455,6 +456,37 @@ export default function DashboardTrends({
     const param = { ...base };
     const tipo = acuarioActual.tipo;
 
+    // Si es acuario marino / arrecife, aplicar rangos del perfil especializado
+    if (esAguaSalada) {
+      const rKey = rawTank?.reef_profile || (tipo === 'peces_marinos' ? 'fowlr_soft' : 'lps_reef');
+      const profile = getMarineProfile(rKey);
+
+      if (profile && profile.targets) {
+        if (param.key === 'alkalinity_dkh' || activeParam === 'alcalinidad' || activeParam === 'dkh') {
+          param.safeMin = profile.targets.kh.min;
+          param.safeMax = profile.targets.kh.max;
+        } else if (param.key === 'calcium_ppm' || activeParam === 'calcio' || activeParam === 'ca') {
+          param.safeMin = profile.targets.calcium.min;
+          param.safeMax = profile.targets.calcium.max;
+        } else if (param.key === 'magnesium_ppm' || activeParam === 'magnesio' || activeParam === 'mg') {
+          param.safeMin = profile.targets.magnesium.min;
+          param.safeMax = profile.targets.magnesium.max;
+        } else if (param.key === 'salinity_ppt' || activeParam === 'salinidad' || activeParam === 'salinity') {
+          param.safeMin = profile.targets.salinity.min;
+          param.safeMax = profile.targets.salinity.max;
+        } else if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
+          param.safeMin = profile.targets.nitrate.min;
+          param.safeMax = profile.targets.nitrate.max;
+          param.suggestedMax = Math.max(profile.targets.nitrate.max * 1.5, 20.0);
+        } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
+          param.safeMin = profile.targets.phosphate.min;
+          param.safeMax = profile.targets.phosphate.max;
+          param.suggestedMax = Math.max(profile.targets.phosphate.max * 2.0, 0.20);
+        }
+        return param;
+      }
+    }
+
     if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
       if (tipo === 'mixto') {
         param.safeMin = 2.0;
@@ -497,7 +529,88 @@ export default function DashboardTrends({
       }
     }
     return param;
-  }, [activeParam, parametrosAMostrar, acuarioActual.tipo]);
+  }, [activeParam, parametrosAMostrar, acuarioActual.tipo, esAguaSalada, rawTank?.reef_profile]);
+
+  // Alertas dinámicas especializadas (Oscilación KH 24h, Nutrientes en cero, Fotómetro ULR)
+  const marineAlerts = useMemo(() => {
+    if (!esAguaSalada || !measurements || measurements.length === 0) return [];
+    const alerts = [];
+    const rProfile = rawTank?.reef_profile || (rawTank?.tank_type === 'marine_fish' ? 'fowlr_soft' : 'lps_reef');
+
+    const sorted = [...measurements].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const latest = sorted[0];
+
+    // 1. Oscilación KH 24h
+    const latestKh = latest?.kh ?? latest?.alkalinity_dkh;
+    const latestTime = latest?.timestamp ? new Date(latest.timestamp).getTime() : 0;
+
+    if (latestKh !== null && latestKh !== undefined && rProfile !== 'fowlr_soft') {
+      const oneDayAgo = latestTime - 24 * 3600 * 1000;
+      const prev24h = sorted.slice(1).find(m => {
+        const t = new Date(m.timestamp).getTime();
+        const khV = m.kh ?? m.alkalinity_dkh;
+        return t >= oneDayAgo && khV !== null && khV !== undefined;
+      });
+
+      if (prev24h) {
+        const prevKh = prev24h.kh ?? prev24h.alkalinity_dkh;
+        const delta = Math.abs(Number(latestKh) - Number(prevKh));
+        if (rProfile === 'sps_reef') {
+          if (delta >= 0.5) {
+            alerts.push({
+              type: 'critical',
+              title: 'Alerta Crítica: Oscilación Brusca de KH',
+              message: `Variación de ${delta.toFixed(2)} dKH en las últimas 24h (de ${prevKh} a ${latestKh}). Alto riesgo de necrosis tisular rápida o lenta (RTN/STN) en corales SPS.`
+            });
+          } else if (delta >= 0.3) {
+            alerts.push({
+              type: 'warning',
+              title: 'Advertencia: Inestabilidad de KH en SPS',
+              message: `Variación de ${delta.toFixed(2)} dKH en 24h. La estabilidad diaria es vital para SPS; mantén la fluctuación menor a 0.3 dKH.`
+            });
+          }
+        } else if (rProfile === 'lps_reef') {
+          if (delta >= 0.6) {
+            alerts.push({
+              type: 'warning',
+              title: 'Advertencia: Oscilación de KH en LPS',
+              message: `Variación de ${delta.toFixed(2)} dKH en 24h. Se recomienda no exceder 0.6 dKH/día para proteger los pólipos carnosos.`
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Nutrientes en cero (Piso mínimo)
+    if (['lps_reef', 'sps_reef'].includes(rProfile) && latest) {
+      const no3 = latest?.nitrate ?? latest?.nitrate_ppm;
+      const po4 = latest?.phosphate ?? latest?.phosphate_ppm;
+      const zeroNo3 = no3 !== null && no3 !== undefined && Number(no3) === 0;
+      const zeroPo4 = po4 !== null && po4 !== undefined && Number(po4) === 0;
+
+      if (zeroNo3 || zeroPo4) {
+        alerts.push({
+          type: 'critical',
+          title: 'Alerta de Inanición: Nutrientes en Cero (0.00 ppm)',
+          message: `Se detectó ${zeroNo3 && zeroPo4 ? 'NO3 y PO4 en 0.00 ppm' : zeroNo3 ? 'NO3 en 0.00 ppm' : 'PO4 en 0.00 ppm'}. Riesgo inminente de encogimiento/inanición en corales LPS y proliferación de dinoflagelados en SPS. Dosificar nutrientes o reducir filtración química.`
+        });
+      }
+    }
+
+    // 3. Resolución de Test PO4
+    if (['lps_reef', 'sps_reef'].includes(rProfile) && latest) {
+      const po4Method = latest?.test_methods?.po4;
+      if (po4Method === 'drop_kit') {
+        alerts.push({
+          type: 'info',
+          title: 'Recomendación de Resolución: Fotómetro ULR',
+          message: 'Has registrado fosfato con kit de gotas. En acuarios de arrecife (LPS/SPS), se recomienda fotómetro digital de rango ultra bajo (ej. Hanna ULR HI774/HI736) o test ICP debido a la baja resolución de las gotas por debajo de 0.05 ppm.'
+        });
+      }
+    }
+
+    return alerts;
+  }, [measurements, rawTank, esAguaSalada]);
 
   // Filtrar lecturas válidas para el parámetro activo
   const validReadings = useMemo(() => {
@@ -721,6 +834,49 @@ export default function DashboardTrends({
               {t('dashboard.quickLogCTA')}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Alertas dinámicas marinas especializadas (KH 24h, Nutrientes en cero, Fotómetro ULR) */}
+      {marineAlerts && marineAlerts.length > 0 && (
+        <div className="space-y-2.5">
+          {marineAlerts.map((alert, idx) => {
+            const isCrit = alert.type === 'critical';
+            const isWarn = alert.type === 'warning';
+            return (
+              <div
+                key={idx}
+                className={`p-4 rounded-2xl border flex items-start gap-3 shadow-lg animate-in fade-in ${
+                  isCrit
+                    ? 'bg-rose-950/40 border-rose-500/50 text-rose-200 shadow-rose-950/30'
+                    : isWarn
+                    ? 'bg-amber-950/40 border-amber-500/50 text-amber-200 shadow-amber-950/30'
+                    : 'bg-cyan-950/40 border-cyan-500/50 text-cyan-200 shadow-cyan-950/30'
+                }`}
+              >
+                <div className={`p-2 rounded-xl shrink-0 ${
+                  isCrit ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' :
+                  isWarn ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
+                  'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                }`}>
+                  {isCrit ? <ShieldAlert className="w-5 h-5 stroke-[2.2]" /> : <AlertTriangle className="w-5 h-5 stroke-[2.2]" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm text-white">{alert.title}</span>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                      isCrit ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
+                      isWarn ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                      'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    }`}>
+                      {isCrit ? 'Alerta Crítica' : isWarn ? 'Advertencia' : 'Recomendación'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">{alert.message}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

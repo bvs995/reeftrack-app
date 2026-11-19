@@ -2,7 +2,8 @@ import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, synonym
 from backend.database import Base
 
@@ -53,6 +54,10 @@ class Tank(Base):
     name = Column(String(255), nullable=False)
     tank_type = Column(String(50), default="reef", nullable=False) # 'reef', 'freshwater_planted', 'freshwater_community'
     volume_liters = Column(Float, default=280.0, nullable=False)
+    reef_profile = Column(String(50), nullable=True) # "fowlr_soft", "lps_reef", "sps_reef"
+    dosing_method = Column(String(50), nullable=True) # "water_changes", "manual_dosing", "peristaltic_balling", "kalkwasser", "calcium_reactor"
+    lighting_par = Column(Integer, nullable=True) # PAR
+    flow_profile = Column(String(50), nullable=True) # "low_moderate", "moderate_indirect", "high_turbulent"
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -77,28 +82,40 @@ class Measurement(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     ph = Column(Float, nullable=True)
     alkalinity_dkh = Column(Float, nullable=True)
+    kh = Column(Float, nullable=True)
     calcium_ppm = Column(Float, nullable=True)
+    calcium = Column(Float, nullable=True)
     magnesium_ppm = Column(Float, nullable=True)
+    magnesium = Column(Float, nullable=True)
     nitrate_ppm = Column(Float, nullable=True)
+    nitrate = Column(Float, nullable=True)
     phosphate_ppm = Column(Float, nullable=True)
+    phosphate = Column(Float, nullable=True)
     salinity_ppt = Column(Float, nullable=True)
+    salinity = Column(Float, nullable=True)
     temperature = Column(Float, nullable=True)
     temperatura = Column(Float, nullable=True)
+    ammonia = Column(Float, nullable=True)
+    nitrite = Column(Float, nullable=True)
+    trace_elements = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    test_methods = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     notes = Column(Text, nullable=True)
 
     # Sinónimos para consultas nativas en español (MedicionAcuario)
     acuario_id = synonym("tank_id")
     fecha_registro = synonym("timestamp")
-    kh = synonym("alkalinity_dkh")
-    calcio = synonym("calcium_ppm")
-    magnesio = synonym("magnesium_ppm")
-    nitrato = synonym("nitrate_ppm")
-    fosfato = synonym("phosphate_ppm")
+    calcio = synonym("calcium")
+    magnesio = synonym("magnesium")
+    nitrato = synonym("nitrate")
+    fosfato = synonym("phosphate")
     temperature_c = synonym("temperature")
 
     user = relationship("User", back_populates="measurements")
     tank = relationship("Tank", back_populates="measurements")
     acuario = synonym("tank")
+
+# Alias canónico de tabla
+ParameterLog = Measurement
 
 # ==============================================================================
 # MODELOS SQLALCHEMY ORM OFICIALES EN ESPAÑOL (acuarios y mediciones)
@@ -111,6 +128,10 @@ class Acuario(Base):
     nombre = Column(String(100), nullable=False)
     volumen_litros = Column(Float, nullable=False)
     usuario_id = Column(String(100), nullable=False, default="1", index=True)
+    reef_profile = Column(String(50), nullable=True)
+    dosing_method = Column(String(50), nullable=True)
+    lighting_par = Column(Integer, nullable=True)
+    flow_profile = Column(String(50), nullable=True)
     creado_en = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
 
     # Sinónimos para interoperabilidad total
@@ -131,11 +152,20 @@ class MedicionAcuario(Base):
     ph = Column(Float, nullable=True)
     kh = Column(Float, nullable=True)
     calcio = Column(Float, nullable=True)
+    calcium = Column(Float, nullable=True)
     magnesio = Column(Float, nullable=True)
+    magnesium = Column(Float, nullable=True)
     nitrato = Column(Float, nullable=True)
+    nitrate = Column(Float, nullable=True)
     fosfato = Column(Float, nullable=True)
+    phosphate = Column(Float, nullable=True)
+    salinity = Column(Float, nullable=True)
     temperature = Column(Float, nullable=True)
     temperatura = Column(Float, nullable=True)
+    ammonia = Column(Float, nullable=True)
+    nitrite = Column(Float, nullable=True)
+    trace_elements = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    test_methods = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
 
     # Sinónimos para interoperabilidad total
@@ -268,6 +298,11 @@ class AquariumCreate(BaseModel):
     tank_type: Literal["arrecife", "mixed", "marine_fish", "plantado", "dulce"] = Field(
         default="mixed", description="Biotipo del acuario"
     )
+    reef_profile: Optional[str] = Field(None, description="Perfil marino: fowlr_soft, lps_reef, sps_reef")
+    dosing_method: Optional[str] = Field(None, description="Método de dosificación: water_changes, manual_dosing, peristaltic_balling, kalkwasser, calcium_reactor")
+    lighting_par: Optional[int] = Field(None, description="Intensidad lumínica estimada o medida en PAR")
+    flow_profile: Optional[str] = Field(None, description="Perfil de flujo: low_moderate, moderate_indirect, high_turbulent")
+    notes: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -296,6 +331,10 @@ class TankCreate(BaseModel):
         default="mixed", description="Biotipo del acuario"
     )
     volume_liters: float = Field(280.0, gt=0, example=280.0)
+    reef_profile: Optional[str] = Field(None, description="Perfil marino: fowlr_soft, lps_reef, sps_reef")
+    dosing_method: Optional[str] = Field(None, description="Método de dosificación")
+    lighting_par: Optional[int] = Field(None, description="Intensidad lumínica PAR")
+    flow_profile: Optional[str] = Field(None, description="Perfil de flujo")
     notes: Optional[str] = None
 
     @model_validator(mode="before")
@@ -314,6 +353,19 @@ class TankCreate(BaseModel):
                 }
                 data["tank_type"] = mapping.get(data["tank_type"], data["tank_type"])
         return data
+
+class TankUpdate(BaseModel):
+    name: Optional[str] = None
+    tank_type: Optional[str] = None
+    volume_liters: Optional[float] = None
+    reef_profile: Optional[str] = None
+    dosing_method: Optional[str] = None
+    lighting_par: Optional[int] = None
+    flow_profile: Optional[str] = None
+    notes: Optional[str] = None
+
+class AquariumUpdate(TankUpdate):
+    pass
     
 class TankResponse(BaseModel):
     id: int
@@ -321,14 +373,21 @@ class TankResponse(BaseModel):
     name: str
     tank_type: str
     volume_liters: float
+    reef_profile: Optional[str] = None
+    dosing_method: Optional[str] = None
+    lighting_par: Optional[int] = None
+    flow_profile: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
+class AquariumResponse(TankResponse):
+    pass
+
 
 # ==============================================================================
-# ESQUEMAS PYDANTIC v2 - MEDICIONES (MEASUREMENTS)
+# ESQUEMAS PYDANTIC v2 - MEDICIONES (MEASUREMENTS / PARAMETERS)
 # ==============================================================================
 
 class MeasurementBase(BaseModel):
@@ -336,42 +395,61 @@ class MeasurementBase(BaseModel):
     timestamp: Optional[datetime] = None
     ph: Optional[float] = Field(None, example=8.2, description="Nivel de pH (ej: 8.1 - 8.4)")
     alkalinity_dkh: Optional[float] = Field(None, example=8.2, description="Alcalinidad en dKH")
+    kh: Optional[float] = Field(None, example=8.2, description="Alcalinidad en dKH (alias)")
     calcium_ppm: Optional[float] = Field(None, example=420.0, description="Calcio en ppm")
+    calcium: Optional[float] = Field(None, example=420.0, description="Calcio en ppm (alias)")
     magnesium_ppm: Optional[float] = Field(None, example=1350.0, description="Magnesio en ppm")
+    magnesium: Optional[float] = Field(None, example=1350.0, description="Magnesio en ppm (alias)")
     nitrate_ppm: Optional[float] = Field(None, example=5.0, description="Nitrato (NO3) en ppm")
+    nitrate: Optional[float] = Field(None, example=5.0, description="Nitrato (NO3) en ppm (alias)")
     phosphate_ppm: Optional[float] = Field(None, example=0.04, description="Fosfato (PO4) en ppm")
+    phosphate: Optional[float] = Field(None, example=0.04, description="Fosfato (PO4) en ppm (alias)")
     salinity_ppt: Optional[float] = Field(None, example=35.0, description="Salinidad en ppt o Gravedad Específica")
+    salinity: Optional[float] = Field(None, example=1.025, description="Salinidad en SG o ppt (alias)")
     temperature: Optional[float] = Field(None, example=25.5, description="Temperatura en °C (Ideal: 20.0 a 32.0 °C)")
-    temperatura: Optional[float] = Field(None, example=25.5, description="Temperatura en °C (Ideal: 20.0 a 32.0 °C)")
+    temperatura: Optional[float] = Field(None, example=25.5, description="Temperatura en °C")
+    ammonia_ppm: Optional[float] = Field(None, example=0.0, description="Amoníaco en ppm")
+    ammonia: Optional[float] = Field(None, example=0.0, description="Amoníaco en ppm (alias)")
+    nitrite_ppm: Optional[float] = Field(None, example=0.0, description="Nitrito en ppm")
+    nitrite: Optional[float] = Field(None, example=0.0, description="Nitrito en ppm (alias)")
+    gh_dgh: Optional[float] = Field(None, example=6.0, description="Dureza General GH")
+
+    trace_elements: Optional[Dict[str, Optional[float]]] = Field(None, description="Elementos traza (k, sr, i, fe)")
+    test_methods: Optional[Dict[str, Optional[str]]] = Field(None, description="Métodos de test (ej: {'po4': 'photometer_ulr', 'kh': 'drop_kit'})")
     notes: Optional[str] = Field(None, example="Test Hanna Checker HI772", description="Notas o kit de test")
 
     # Campos de compatibilidad con entrada rápida Numpad
-    parameter_code: Optional[str] = Field(None, description="Código de parámetro rápido (ej: dkh, ca, mg, no3, po4, salinity, temp)")
+    parameter_code: Optional[str] = Field(None, description="Código de parámetro rápido")
     value: Optional[float] = Field(None, description="Valor numérico de la medición individual")
     measured_at: Optional[datetime] = Field(None, description="Timestamp alternativo de medición")
 
     @model_validator(mode="after")
     def map_parameter_code_if_present(self):
-        """Mapea automáticamente campos individuales tipo {parameter_code: 'dkh', value: 8.3} a la columna correcta."""
+        """Sincroniza y mapea automáticamente nombres canónicos y alias de parámetros."""
         code_map = {
             "ph": "ph",
-            "dkh": "alkalinity_dkh",
-            "alkalinity": "alkalinity_dkh",
-            "alkalinity_dkh": "alkalinity_dkh",
-            "ca": "calcium_ppm",
-            "calcium": "calcium_ppm",
-            "calcium_ppm": "calcium_ppm",
-            "mg": "magnesium_ppm",
-            "magnesium": "magnesium_ppm",
-            "magnesium_ppm": "magnesium_ppm",
-            "no3": "nitrate_ppm",
-            "nitrate": "nitrate_ppm",
-            "nitrate_ppm": "nitrate_ppm",
-            "po4": "phosphate_ppm",
-            "phosphate": "phosphate_ppm",
-            "phosphate_ppm": "phosphate_ppm",
-            "salinity": "salinity_ppt",
-            "salinity_ppt": "salinity_ppt",
+            "dkh": "kh",
+            "alkalinity": "kh",
+            "alkalinity_dkh": "kh",
+            "kh": "kh",
+            "ca": "calcium",
+            "calcium": "calcium",
+            "calcium_ppm": "calcium",
+            "mg": "magnesium",
+            "magnesium": "magnesium",
+            "magnesium_ppm": "magnesium",
+            "no3": "nitrate",
+            "nitrate": "nitrate",
+            "nitrate_ppm": "nitrate",
+            "po4": "phosphate",
+            "phosphate": "phosphate",
+            "phosphate_ppm": "phosphate",
+            "salinity": "salinity",
+            "salinity_ppt": "salinity",
+            "ammonia": "ammonia",
+            "ammonia_ppm": "ammonia",
+            "nitrite": "nitrite",
+            "nitrite_ppm": "nitrite",
             "temp": "temperature",
             "temperatura": "temperature",
             "temperature": "temperature",
@@ -380,32 +458,72 @@ class MeasurementBase(BaseModel):
             field_name = code_map.get(str(self.parameter_code).lower().strip())
             if field_name:
                 setattr(self, field_name, self.value)
+
+        # Sincronización bidireccional estricta
+        if self.kh is not None and self.alkalinity_dkh is None:
+            self.alkalinity_dkh = self.kh
+        elif self.alkalinity_dkh is not None and self.kh is None:
+            self.kh = self.alkalinity_dkh
+
+        if self.calcium is not None and self.calcium_ppm is None:
+            self.calcium_ppm = self.calcium
+        elif self.calcium_ppm is not None and self.calcium is None:
+            self.calcium = self.calcium_ppm
+
+        if self.magnesium is not None and self.magnesium_ppm is None:
+            self.magnesium_ppm = self.magnesium
+        elif self.magnesium_ppm is not None and self.magnesium is None:
+            self.magnesium = self.magnesium_ppm
+
+        if self.nitrate is not None and self.nitrate_ppm is None:
+            self.nitrate_ppm = self.nitrate
+        elif self.nitrate_ppm is not None and self.nitrate is None:
+            self.nitrate = self.nitrate_ppm
+
+        if self.phosphate is not None and self.phosphate_ppm is None:
+            self.phosphate_ppm = self.phosphate
+        elif self.phosphate_ppm is not None and self.phosphate is None:
+            self.phosphate = self.phosphate_ppm
+
+        if self.salinity is not None and self.salinity_ppt is None:
+            self.salinity_ppt = self.salinity
+        elif self.salinity_ppt is not None and self.salinity is None:
+            self.salinity = self.salinity_ppt
+
+        if self.ammonia is not None and self.ammonia_ppm is None:
+            self.ammonia_ppm = self.ammonia
+        elif self.ammonia_ppm is not None and self.ammonia is None:
+            self.ammonia = self.ammonia_ppm
+
+        if self.nitrite is not None and self.nitrite_ppm is None:
+            self.nitrite_ppm = self.nitrite
+        elif self.nitrite_ppm is not None and self.nitrite is None:
+            self.nitrite = self.nitrite_ppm
+
         if self.temperature is not None and self.temperatura is None:
             self.temperatura = self.temperature
         elif self.temperatura is not None and self.temperature is None:
             self.temperature = self.temperatura
+
         if not self.timestamp and self.measured_at:
             self.timestamp = self.measured_at
         return self
 
 class MeasurementCreate(MeasurementBase):
-    temperature: Optional[float] = None
+    pass
 
 class MeasurementResponse(MeasurementBase):
     id: int
     user_id: Optional[int] = None
     timestamp: datetime
-    temperature: Optional[float] = None
-    temperatura: Optional[float] = None
-
     model_config = ConfigDict(from_attributes=True)
 
 # Esquemas y alias para compatibilidad con Parameter / ParameterLog
 class ParameterCreate(MeasurementCreate):
-    temperature: Optional[float] = None
+    pass
 
 class ParameterResponse(MeasurementResponse):
-    temperature: Optional[float] = None
+    pass
 
 ParameterBase = MeasurementBase
 ParameterLog = Measurement

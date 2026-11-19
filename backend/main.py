@@ -526,6 +526,10 @@ def create_user_tank(
         name=payload.name.strip(),
         tank_type=payload.tank_type,
         volume_liters=payload.volume_liters,
+        reef_profile=payload.reef_profile,
+        dosing_method=payload.dosing_method,
+        lighting_par=payload.lighting_par,
+        flow_profile=payload.flow_profile,
         notes=payload.notes
     )
     db.add(new_tank)
@@ -555,7 +559,12 @@ def create_aquarium_via_schema(
         user_id=user_id,
         name=payload.name.strip(),
         tank_type=payload.tank_type,
-        volume_liters=float(payload.volume_liters)
+        volume_liters=float(payload.volume_liters),
+        reef_profile=payload.reef_profile,
+        dosing_method=payload.dosing_method,
+        lighting_par=payload.lighting_par,
+        flow_profile=payload.flow_profile,
+        notes=payload.notes
     )
     db.add(new_tank)
     db.commit()
@@ -567,7 +576,11 @@ def create_aquarium_via_schema(
             id=new_tank.id,
             nombre=new_tank.name,
             volumen_litros=new_tank.volume_liters,
-            usuario_id=str(user_id)
+            usuario_id=str(user_id),
+            reef_profile=new_tank.reef_profile,
+            dosing_method=new_tank.dosing_method,
+            lighting_par=new_tank.lighting_par,
+            flow_profile=new_tank.flow_profile
         )
         db.add(nuevo_acuario)
         db.commit()
@@ -618,6 +631,14 @@ def update_aquarium(
             tank.tank_type = str(payload["tank_type"]).strip()
         elif "type" in payload and payload["type"]:
             tank.tank_type = str(payload["type"]).strip()
+        if "reef_profile" in payload:
+            tank.reef_profile = payload["reef_profile"]
+        if "dosing_method" in payload:
+            tank.dosing_method = payload["dosing_method"]
+        if "lighting_par" in payload:
+            tank.lighting_par = int(payload["lighting_par"]) if payload["lighting_par"] is not None and str(payload["lighting_par"]).strip() != "" else None
+        if "flow_profile" in payload:
+            tank.flow_profile = payload["flow_profile"]
         if "notes" in payload:
             tank.notes = payload["notes"]
 
@@ -629,6 +650,10 @@ def update_aquarium(
                 acuario_record.volumen_litros = actual_volume
             if hasattr(tank, "name"):
                 acuario_record.nombre = tank.name
+            acuario_record.reef_profile = getattr(tank, "reef_profile", None)
+            acuario_record.dosing_method = getattr(tank, "dosing_method", None)
+            acuario_record.lighting_par = getattr(tank, "lighting_par", None)
+            acuario_record.flow_profile = getattr(tank, "flow_profile", None)
     elif isinstance(tank, Acuario):
         tank_record = db.query(Tank).filter(Tank.id == aquarium_id).first()
         if tank_record:
@@ -636,6 +661,10 @@ def update_aquarium(
                 tank_record.volume_liters = actual_volume
             if hasattr(tank, "nombre"):
                 tank_record.name = tank.nombre
+            tank_record.reef_profile = getattr(tank, "reef_profile", None)
+            tank_record.dosing_method = getattr(tank, "dosing_method", None)
+            tank_record.lighting_par = getattr(tank, "lighting_par", None)
+            tank_record.flow_profile = getattr(tank, "flow_profile", None)
 
     db.commit()
     db.refresh(tank)
@@ -646,6 +675,10 @@ def update_aquarium(
         "id": tank.id,
         "name": getattr(tank, "name", None) or getattr(tank, "nombre", None),
         "volume_liters": getattr(tank, "volume_liters", actual_volume),
+        "reef_profile": getattr(tank, "reef_profile", None),
+        "dosing_method": getattr(tank, "dosing_method", None),
+        "lighting_par": getattr(tank, "lighting_par", None),
+        "flow_profile": getattr(tank, "flow_profile", None),
         "notes": getattr(tank, "notes", None)
     }
 
@@ -716,20 +749,38 @@ def create_measurement(
         target_tank_id = user_tank.id
 
     temp_val = payload.temperature if payload.temperature is not None else payload.temperatura
+    kh_val = payload.kh if payload.kh is not None else payload.alkalinity_dkh
+    ca_val = payload.calcium if payload.calcium is not None else payload.calcium_ppm
+    mg_val = payload.magnesium if payload.magnesium is not None else payload.magnesium_ppm
+    no3_val = payload.nitrate if payload.nitrate is not None else payload.nitrate_ppm
+    po4_val = payload.phosphate if payload.phosphate is not None else payload.phosphate_ppm
+    sal_val = payload.salinity if payload.salinity is not None else payload.salinity_ppt
+    nh3_val = payload.ammonia if payload.ammonia is not None else payload.ammonia_ppm
+    no2_val = payload.nitrite if payload.nitrite is not None else payload.nitrite_ppm
 
     db_measurement = Measurement(
         user_id=current_user.id,
         tank_id=target_tank_id,
         timestamp=measurement_time,
         ph=payload.ph,
-        alkalinity_dkh=payload.alkalinity_dkh,
-        calcium_ppm=payload.calcium_ppm,
-        magnesium_ppm=payload.magnesium_ppm,
-        nitrate_ppm=payload.nitrate_ppm,
-        phosphate_ppm=payload.phosphate_ppm,
-        salinity_ppt=payload.salinity_ppt,
+        alkalinity_dkh=kh_val,
+        kh=kh_val,
+        calcium_ppm=ca_val,
+        calcium=ca_val,
+        magnesium_ppm=mg_val,
+        magnesium=mg_val,
+        nitrate_ppm=no3_val,
+        nitrate=no3_val,
+        phosphate_ppm=po4_val,
+        phosphate=po4_val,
+        salinity_ppt=sal_val,
+        salinity=sal_val,
         temperature=temp_val,
         temperatura=temp_val,
+        ammonia=nh3_val,
+        nitrite=no2_val,
+        trace_elements=payload.trace_elements,
+        test_methods=payload.test_methods,
         notes=payload.notes
     )
     db.add(db_measurement)
@@ -886,6 +937,37 @@ def obtener_analisis_json(
                 if db_type and (not data_dict.get("tipo") or data_dict.get("tipo") == "mixto"):
                     data_dict["tipo"] = db_type
                     data_dict["tank_type"] = db_type
+                if not data_dict.get("reef_profile"):
+                    data_dict["reef_profile"] = getattr(tank_obj, "reef_profile", None)
+                if not data_dict.get("dosing_method"):
+                    data_dict["dosing_method"] = getattr(tank_obj, "dosing_method", None)
+                if not data_dict.get("lighting_par"):
+                    data_dict["lighting_par"] = getattr(tank_obj, "lighting_par", None)
+                if not data_dict.get("flow_profile"):
+                    data_dict["flow_profile"] = getattr(tank_obj, "flow_profile", None)
+
+            # Extraer mediciones recientes para evaluación de alertas de delta KH y dosificación
+            recent_meas = (
+                db.query(Measurement)
+                .filter(Measurement.tank_id == target_id)
+                .order_by(Measurement.timestamp.desc())
+                .limit(20)
+                .all()
+            )
+            if recent_meas:
+                data_dict["history_measurements"] = [
+                    {
+                        "timestamp": m.timestamp.isoformat() if hasattr(m.timestamp, "isoformat") else str(m.timestamp),
+                        "kh": m.kh or m.alkalinity_dkh,
+                        "temperature": m.temperature or m.temperatura,
+                        "ph": m.ph,
+                        "calcium": m.calcium or m.calcium_ppm,
+                        "magnesium": m.magnesium or m.magnesium_ppm,
+                        "nitrate": m.nitrate or m.nitrate_ppm,
+                        "phosphate": m.phosphate or m.phosphate_ppm,
+                    }
+                    for m in recent_meas
+                ]
 
         resultado_estructurado = analizar_parametros_estructurado(data_dict)
         return {"status": "success", "data": resultado_estructurado}
@@ -957,19 +1039,52 @@ def endpoint_analisis_con_historial(
         volumen_litros = float(getattr(tank_obj, "volumen", None) or getattr(tank_obj, "volume_liters", 280.0) if tank_obj else 280.0)
         tipo_acuario = getattr(tank_obj, "tank_type", None) or getattr(tank_obj, "tipo", "mixto") if tank_obj else "mixto"
 
+        recent_meas = (
+            db.query(Measurement)
+            .filter(Measurement.tank_id == target_id)
+            .order_by(Measurement.timestamp.desc())
+            .limit(20)
+            .all()
+        )
+        hist_list = []
+        if recent_meas:
+            hist_list = [
+                {
+                    "timestamp": m.timestamp.isoformat() if hasattr(m.timestamp, "isoformat") else str(m.timestamp),
+                    "kh": m.kh or m.alkalinity_dkh,
+                    "temperature": m.temperature or m.temperatura,
+                    "ph": m.ph,
+                    "calcium": m.calcium or m.calcium_ppm,
+                    "magnesium": m.magnesium or m.magnesium_ppm,
+                    "nitrate": m.nitrate or m.nitrate_ppm,
+                    "phosphate": m.phosphate or m.phosphate_ppm,
+                }
+                for m in recent_meas
+            ]
+
         datos_para_ia = {
             "nombre_acuario": nombre_acuario,
             "volumen_litros": volumen_litros,
             "tipo": tipo_acuario,
             "tank_type": tipo_acuario,
+            "reef_profile": getattr(tank_obj, "reef_profile", None),
+            "dosing_method": getattr(tank_obj, "dosing_method", None),
+            "lighting_par": getattr(tank_obj, "lighting_par", None),
+            "flow_profile": getattr(tank_obj, "flow_profile", None),
             "ph": ultima_medicion.ph,
-            "kh": ultima_medicion.kh,
-            "calcio": ultima_medicion.calcio,
-            "magnesio": ultima_medicion.magnesio,
-            "nitrato": ultima_medicion.nitrato,
-            "fosfato": ultima_medicion.fosfato,
-            "temperatura": getattr(ultima_medicion, "temperatura", None),
-            "tendencia_reciente": tendencia  # <--- Aquí inyectamos el historial formateado
+            "kh": getattr(ultima_medicion, "kh", None) or getattr(ultima_medicion, "alkalinity_dkh", None),
+            "calcio": getattr(ultima_medicion, "calcium", None) or getattr(ultima_medicion, "calcium_ppm", None) or getattr(ultima_medicion, "calcio", None),
+            "magnesio": getattr(ultima_medicion, "magnesium", None) or getattr(ultima_medicion, "magnesium_ppm", None) or getattr(ultima_medicion, "magnesio", None),
+            "nitrato": getattr(ultima_medicion, "nitrate", None) or getattr(ultima_medicion, "nitrate_ppm", None) or getattr(ultima_medicion, "nitrato", None),
+            "fosfato": getattr(ultima_medicion, "phosphate", None) or getattr(ultima_medicion, "phosphate_ppm", None) or getattr(ultima_medicion, "fosfato", None),
+            "temperatura": getattr(ultima_medicion, "temperature", None) or getattr(ultima_medicion, "temperatura", None),
+            "salinity": getattr(ultima_medicion, "salinity", None) or getattr(ultima_medicion, "salinity_ppt", None),
+            "ammonia": getattr(ultima_medicion, "ammonia", None),
+            "nitrite": getattr(ultima_medicion, "nitrite", None),
+            "trace_elements": getattr(ultima_medicion, "trace_elements", None),
+            "test_methods": getattr(ultima_medicion, "test_methods", None),
+            "tendencia_reciente": tendencia,
+            "history_measurements": hist_list
         }
 
         # 4. Llamar a tu función de Gemini estructurada
@@ -1032,14 +1147,39 @@ def get_tank_parameters(
             {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 0.0, "max_safe": 30.0, "is_critical": True},
             {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 23.0, "max_safe": 27.0, "is_critical": False}
         ]
+    
+    # Manejo específico por perfil marino (fowlr_soft, lps_reef, sps_reef)
+    r_profile = getattr(tank, "reef_profile", None) if tank else None
+    if r_profile == "fowlr_soft":
+        return [
+            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 7.0, "max_safe": 10.0, "is_critical": False},
+            {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 400.0, "min_safe": 380.0, "max_safe": 420.0, "is_critical": False},
+            {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1300.0, "min_safe": 1250.0, "max_safe": 1350.0, "is_critical": False},
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 5.0, "max_safe": 20.0, "is_critical": False},
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.08, "min_safe": 0.03, "max_safe": 0.15, "is_critical": False},
+            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.024, "min_safe": 1.023, "max_safe": 1.025, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.0, "max_safe": 26.0, "is_critical": False}
+        ]
+    elif r_profile == "sps_reef":
+        return [
+            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.0, "min_safe": 7.5, "max_safe": 8.5, "is_critical": True},
+            {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 435.0, "min_safe": 420.0, "max_safe": 450.0, "is_critical": True},
+            {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1350.0, "min_safe": 1300.0, "max_safe": 1400.0, "is_critical": True},
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 3.0, "min_safe": 1.0, "max_safe": 5.0, "is_critical": True},
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.025, "min_safe": 0.01, "max_safe": 0.04, "is_critical": True},
+            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": True}
+        ]
+
+    # lps_reef o arrecife por defecto
     return [
-        {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.3, "min_safe": 7.5, "max_safe": 9.0, "is_critical": True},
-        {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 420.0, "min_safe": 400.0, "max_safe": 450.0, "is_critical": True},
-        {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1350.0, "min_safe": 1280.0, "max_safe": 1420.0, "is_critical": False},
-        {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 5.0, "min_safe": 2.0, "max_safe": 20.0, "is_critical": True},
-        {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.04, "min_safe": 0.02, "max_safe": 0.08, "is_critical": True},
-        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.025, "min_safe": 1.024, "max_safe": 1.026, "is_critical": True},
-        {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.5, "min_safe": 24.5, "max_safe": 26.5, "is_critical": False}
+        {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 8.0, "max_safe": 9.0, "is_critical": True},
+        {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 420.0, "min_safe": 400.0, "max_safe": 440.0, "is_critical": True},
+        {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1325.0, "min_safe": 1300.0, "max_safe": 1350.0, "is_critical": False},
+        {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 7.5, "min_safe": 5.0, "max_safe": 10.0, "is_critical": True},
+        {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.05, "min_safe": 0.03, "max_safe": 0.08, "is_critical": True},
+        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
+        {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": False}
     ]
 
 @app.get("/api/tanks/{tank_id}/analytics")

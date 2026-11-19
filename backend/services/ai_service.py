@@ -11,7 +11,14 @@ from backend.models import (
     AnalisisAcuarioSchema,
     AnalisisAcuarioResponse,
     DosisRecomendada,
-    MedicionAcuario
+    MedicionAcuario,
+    Measurement
+)
+from backend.marine_profiles import (
+    get_marine_profile,
+    evaluate_marine_alerts,
+    DOSING_METHOD_LABELS,
+    FLOW_PROFILE_LABELS
 )
 
 # Cargar variables de entorno
@@ -29,10 +36,8 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     Obtiene el historial cronológico de mediciones de un acuario en las últimas 48 horas
     y lo resume en texto estructurado comprensible para la IA de AquaPulse.
     """
-    # Definir el umbral de tiempo (hace exactamente 48 horas)
     hace_48_horas = datetime.utcnow() - timedelta(hours=48)
 
-    # Consulta en SQLAlchemy ordenada de la más antigua a la más reciente
     registros = (
         db.query(MedicionAcuario)
         .filter(MedicionAcuario.acuario_id == acuario_id)
@@ -42,9 +47,7 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     )
 
     if not registros:
-        # Fallback a tabla legacy measurements si aplica
         try:
-            from backend.models import Measurement
             registros = (
                 db.query(Measurement)
                 .filter(Measurement.tank_id == acuario_id)
@@ -58,14 +61,25 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     if not registros:
         return "No hay registros en las últimas 48 horas. Estado inicial o estable."
 
-    # Convertir los registros en un texto estructurado para que la IA entienda la tendencia
     resumen_historial = []
     for reg in registros:
-        fecha_str = reg.fecha_registro.strftime("%Y-%m-%d %H:%M")
-        temp_val = getattr(reg, "temperatura", None)
-        temp_str = f", Temp: {temp_val} °C" if temp_val is not None else ""
+        fecha_str = getattr(reg, "fecha_registro", None) or getattr(reg, "timestamp", None)
+        fecha_display = fecha_str.strftime("%Y-%m-%d %H:%M") if hasattr(fecha_str, "strftime") else str(fecha_str)
+        temp_val = getattr(reg, "temperature", None) or getattr(reg, "temperatura", None)
+        kh_val = getattr(reg, "kh", None) or getattr(reg, "alkalinity_dkh", None)
+        ca_val = getattr(reg, "calcium", None) or getattr(reg, "calcium_ppm", None) or getattr(reg, "calcio", None)
+        po4_val = getattr(reg, "phosphate", None) or getattr(reg, "phosphate_ppm", None) or getattr(reg, "fosfato", None)
+        sal_val = getattr(reg, "salinity", None) or getattr(reg, "salinity_ppt", None)
+
+        extra = []
+        if temp_val is not None:
+            extra.append(f"Temp: {temp_val} °C")
+        if sal_val is not None:
+            extra.append(f"Salinidad: {sal_val}")
+
+        extra_str = f", {', '.join(extra)}" if extra else ""
         resumen_historial.append(
-            f"[{fecha_str}] pH: {reg.ph}, KH: {reg.kh} dKH, Calcio: {reg.calcio} ppm, Fosfato: {reg.fosfato} ppm{temp_str}"
+            f"[{fecha_display}] pH: {reg.ph}, KH: {kh_val} dKH, Ca: {ca_val} ppm, PO4: {po4_val} ppm{extra_str}"
         )
 
     return "\n".join(resumen_historial)
@@ -82,250 +96,180 @@ def _generar_analisis_fallback(
     fosfato: Optional[float],
     tendencia: str,
     temperatura: Optional[float] = None,
-    tipo: str = "mixto"
+    tipo: str = "mixto",
+    reef_profile: Optional[str] = None,
+    dosing_method: Optional[str] = None,
+    lighting_par: Optional[int] = None,
+    flow_profile: Optional[str] = None,
+    salinity: Optional[float] = None,
+    ammonia: Optional[float] = None,
+    nitrite: Optional[float] = None,
+    trace_elements: Optional[Dict[str, Any]] = None,
+    test_methods: Optional[Dict[str, Any]] = None,
+    delta_kh_24h: Optional[float] = None,
+    dynamic_alerts: Optional[List[Dict[str, Any]]] = None
 ) -> AnalisisAcuarioResponse:
-    """Genera un análisis clínico estructurado inteligente de respaldo respetando las reglas de biotipo del acuario."""
+    """Genera un análisis clínico estructurado inteligente de respaldo respetando las reglas de biotipo y perfiles marinos."""
     risk = "Bajo"
     tipo_normalizado = (tipo or "mixto").strip().lower()
-    es_peces_marinos = tipo_normalizado in ["peces_marinos", "fish_only", "fowlr", "marine_fish"]
-    es_mixto = tipo_normalizado in ["mixto", "reef", "arrecife", "mixed_reef", "mixed"]
+    es_marino = tipo_normalizado in ["arrecife", "reef", "mixed", "mixto", "marine_fish", "peces_marinos", "fowlr"]
+    
+    profile_info = get_marine_profile(reef_profile or ("fowlr_soft" if tipo_normalizado in ["marine_fish", "peces_marinos"] else "lps_reef"))
+    profile_id = profile_info["id"]
 
-    alert = f"Parámetros dentro de umbrales operativos estables para biotipo '{tipo}'. Mantener rutina regular de filtración y mantenimiento."
+    alert = f"Parámetros dentro de umbrales operativos estables para '{profile_info['name']}'. Mantener rutina regular de filtración."
     acciones: List[DosisRecomendada] = []
 
-    # 1. Monitoreo de Temperatura
-    if temperatura is not None and temperatura > 27.5:
-        risk = "Crítico" if temperatura >= 28.5 else "Moderado"
-        alert = (
-            f"Temperatura a {temperatura} °C por encima del rango óptimo (24.5 - 26.5 °C). "
-            f"Riesgo de estrés térmico e hipoxia en el tanque si no se disipa calor."
-        )
-        acciones.append(
-            DosisRecomendada(
-                parametro="Temperatura",
-                producto="Ventiladores de evaporación o Enfriador (Chiller)",
-                cantidad_sugerida="Activar enfriamiento forzado y aumentar oxigenación superficial"
-            )
-        )
-    elif temperatura is not None and temperatura < 23.5:
-        risk = "Moderado"
-        alert = (
-            f"Temperatura a {temperatura} °C por debajo del rango seguro. "
-            f"Ralentización metabólica y estrés en fauna marina."
-        )
-        acciones.append(
-            DosisRecomendada(
-                parametro="Temperatura",
-                producto="Calentador con termostato calibrado",
-                cantidad_sugerida="Verificar calentador y elevar gradualmente a 25.0 °C"
-            )
-        )
-
-    # 2. Alcalinidad (KH)
-    if es_peces_marinos:
-        # En acuarios de peces marinos se tolera mayor rango, sólo alerta si hay riesgo de desplome de pH
-        if kh is not None and kh < 6.5:
-            risk = "Moderado"
-            alert = f"Alcalinidad a {kh} dKH baja. Riesgo de inestabilidad y caída de pH en acuario marino."
+    # 1. Integración de alertas dinámicas prioritarias
+    if dynamic_alerts:
+        for d_alert in dynamic_alerts:
+            sev = d_alert.get("severity")
+            if sev == "critical":
+                risk = "Crítico"
+                alert = d_alert["message"]
+            elif sev == "warning" and risk != "Crítico":
+                risk = "Moderado"
+                alert = d_alert["message"]
+            
             acciones.append(
                 DosisRecomendada(
-                    parametro="Alcalinidad (KH)",
-                    producto="Buffer de carbonatos o bicarbonato de sodio",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.03, 1)} ml/g en solución diluida"
-                )
-            )
-    else:
-        # En arrecife / mixto se exige balance estricto para calcificación
-        if kh is not None and kh < 7.5:
-            risk = "Crítico" if kh < 6.8 else "Moderado"
-            alert = (
-                f"Alcalinidad a {kh} dKH por debajo del umbral óptimo (7.5 - 8.5 dKH). "
-                f"Riesgo de estrés osmótico y calcificación comprometida en corales en las próximas 48 horas si no se repone."
-            )
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Alcalinidad (KH)",
-                    producto="Bicarbonato de sodio grado alimenticio / Buffer comercial de carbonatos",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.05, 1)} ml en solución diluida en zona de alto flujo"
-                )
-            )
-        elif kh is not None and kh > 9.0:
-            risk = "Moderado"
-            alert = (
-                f"Alcalinidad a {kh} dKH por encima del rango natural seguro (7.5 - 8.5 dKH). "
-                f"Riesgo de lisis celular y quemado de puntas de crecimiento (tip burn) en corales duros bajo alta radiación lumínica."
-            )
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Alcalinidad (KH)",
-                    producto="Pausa o recalibración de bomba dosificadora",
-                    cantidad_sugerida="Suspender dosificación de KH durante 24 horas y monitorear caída natural"
+                    parametro=d_alert.get("title", "Alerta Dinámica"),
+                    producto=d_alert.get("recommendation", "Acción preventiva"),
+                    cantidad_sugerida=d_alert.get("message", "")
                 )
             )
 
-    # 3. Calcio y Magnesio:
-    # "Si el acuario es 'peces_marinos', ignora niveles altos de nitratos (<40) y fosfatos (<1.0), y no exijas mediciones de calcio/magnesio."
-    if not es_peces_marinos:
-        if calcio is not None and calcio < 400:
+    # 2. Monitoreo de Temperatura
+    if temperatura is not None:
+        if temperatura > 27.5:
+            risk = "Crítico" if temperatura >= 28.5 else ("Moderado" if risk == "Bajo" else risk)
+            acciones.append(
+                DosisRecomendada(
+                    parametro="Temperatura",
+                    producto="Enfriador (Chiller) o ventiladores de superficie",
+                    cantidad_sugerida=f"Temperatura a {temperatura} °C excede el rango óptimo. Aumentar disipación térmica."
+                )
+            )
+        elif temperatura < 23.5:
             risk = "Moderado" if risk == "Bajo" else risk
             acciones.append(
                 DosisRecomendada(
-                    parametro="Calcio (Ca)",
-                    producto="Cloruro de calcio anhidro o suplemento líquido de calcio",
-                    cantidad_sugerida="10 ml diarios hasta alcanzar 430 ppm"
-                )
-            )
-        if magnesio is not None and magnesio < 1250:
-            risk = "Moderado" if risk == "Bajo" else risk
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Magnesio (Mg)",
-                    producto="Suplemento de magnesio líquido / sales de magnesio",
-                    cantidad_sugerida="15 ml diarios hasta estabilizar en 1350 ppm"
+                    parametro="Temperatura",
+                    producto="Calentador termostático",
+                    cantidad_sugerida=f"Temperatura a {temperatura} °C por debajo del rango seguro. Calibrar calentador a 25.0 °C."
                 )
             )
 
-    # 4. Nitratos (NO3) y Fosfatos (PO4):
-    # Reglas específicas:
-    # - 'peces_marinos': ignora niveles altos de nitratos (<40) y fosfatos (<1.0)
-    # - 'mixto': mantén un balance estricto: Nitratos entre 2-10 y Fosfatos entre 0.03-0.10
-    if es_peces_marinos:
-        if nitrato is not None and nitrato >= 40:
-            risk = "Moderado"
-            alert = (
-                f"Nitrato a {nitrato} ppm excede el umbral seguro para peces marinos (>= 40 ppm). "
-                f"Riesgo de estrés crónico e inmunodepresión en peces marinos."
-            )
+    # 3. Monitoreo de Salinidad
+    if salinity is not None and es_marino:
+        targets = profile_info["targets"]["salinity"]
+        if salinity < targets["min"]:
+            risk = "Moderado" if risk == "Bajo" else risk
             acciones.append(
                 DosisRecomendada(
-                    parametro="Nitrato (NO3)",
-                    producto="Cambio parcial de agua y mantenimiento de filtración biológica",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.20, 1)} litros (20% del volumen total)"
+                    parametro="Salinidad",
+                    producto="Agua salada concentrada en reposición",
+                    cantidad_sugerida=f"Salinidad a {salinity} SG por debajo del mínimo ({targets['min']} SG). Rellenar evaporación con agua salada suavemente."
                 )
             )
-        if fosfato is not None and fosfato >= 1.0:
-            risk = "Moderado"
-            alert = (
-                f"Fosfato a {fosfato} ppm excede el umbral seguro para peces marinos (>= 1.0 ppm). "
-                f"Proliferación descontrolada de microalgas y cianobacteria."
-            )
+        elif salinity > targets["max"]:
+            risk = "Moderado" if risk == "Bajo" else risk
             acciones.append(
                 DosisRecomendada(
-                    parametro="Fosfato (PO4)",
-                    producto="Resina de absorción de fosfatos o cambio de medios filtrantes",
-                    cantidad_sugerida="50 g de resina en lecho pasivo o reactor de medios"
+                    parametro="Salinidad",
+                    producto="Agua pura de osmosis (RO/DI)",
+                    cantidad_sugerida=f"Salinidad a {salinity} SG por encima del máximo ({targets['max']} SG). Retirar agua salada y agregar RO/DI."
                 )
             )
-    elif es_mixto:
-        # Balance estricto: Nitratos entre 2-10 ppm
+
+    # 4. Amoníaco y Nitrito
+    if ammonia is not None and ammonia > 0.05:
+        risk = "Crítico"
+        alert = f"Amoníaco detectable a {ammonia} ppm. Riesgo inminente de toxicidad branquial en peces e invertebrados."
+        acciones.append(
+            DosisRecomendada(
+                parametro="Amoníaco (NH3)",
+                producto="Acondicionador neutralizador de amonio (ej. Seachem Prime) y bacterias vivas nitrificantes",
+                cantidad_sugerida="Dosis de emergencia y suspender alimentación."
+            )
+        )
+    if nitrite is not None and nitrite > 0.1:
+        risk = "Crítico" if risk != "Crítico" else risk
+        acciones.append(
+            DosisRecomendada(
+                parametro="Nitrito (NO2)",
+                producto="Bacterias nitrificantes y cambio de agua parcial",
+                cantidad_sugerida=f"Nitrito a {nitrite} ppm. Añadir ampolletas de bacterias heterótrofas/autótrofas."
+            )
+        )
+
+    # 5. KH y Balance de Nutrientes
+    if kh is not None and es_marino:
+        kh_targets = profile_info["targets"]["kh"]
+        if kh < kh_targets["min"]:
+            risk = "Crítico" if kh < 6.8 else ("Moderado" if risk == "Bajo" else risk)
+            acciones.append(
+                DosisRecomendada(
+                    parametro="Alcalinidad (KH)",
+                    producto="Solución tampón de carbonatos / Bicarbonato sódico",
+                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.04, 1)} ml/g diluido en zona de alto flujo. Incrementar máx 0.5 dKH/día."
+                )
+            )
+        elif kh > kh_targets["max"]:
+            risk = "Moderado" if risk == "Bajo" else risk
+            acciones.append(
+                DosisRecomendada(
+                    parametro="Alcalinidad (KH)",
+                    producto="Ajuste de dosificadora",
+                    cantidad_sugerida=f"KH a {kh} dKH por encima del rango de {profile_info['name']} ({kh_targets['min']}-{kh_targets['max']} dKH). Suspender dosificación 24h."
+                )
+            )
+
+    # 6. Nutrientes NO3 y PO4
+    if es_marino:
+        no3_targets = profile_info["targets"]["nitrate"]
+        po4_targets = profile_info["targets"]["phosphate"]
         if nitrato is not None:
-            if nitrato > 10:
-                risk = "Moderado"
-                alert = (
-                    f"Nitrato a {nitrato} ppm excede el balance estricto para arrecife mixto (2 - 10 ppm). "
-                    f"Riesgo de oscurecimiento y estrés en corales, y proliferación de algas."
-                )
-                acciones.append(
-                    DosisRecomendada(
-                        parametro="Nitrato (NO3)",
-                        producto="Cambio parcial de agua con agua desionizada (RO/DI) y sal sintética",
-                        cantidad_sugerida=f"{round(float(volumen or 280) * 0.15, 1)} litros (15% del volumen total)"
-                    )
-                )
-            elif nitrato < 2:
+            if nitrato > no3_targets["max"]:
                 risk = "Moderado" if risk == "Bajo" else risk
-                alert = (
-                    f"Nitrato a {nitrato} ppm por debajo del rango mínimo estricto (2 - 10 ppm). "
-                    f"Riesgo de inanición de zooxantelas y proliferación de dinoflagelados por agua ultra oligotrófica."
-                )
                 acciones.append(
                     DosisRecomendada(
                         parametro="Nitrato (NO3)",
-                        producto="Dosificación leve de nitrato o incremento controlado de alimentación",
-                        cantidad_sugerida="Dosificar nitrato para situar el nivel entre 3 - 5 ppm"
+                        producto="Cambio parcial de agua y ajuste de skimmer",
+                        cantidad_sugerida=f"{round(float(volumen or 280) * 0.15, 1)} L (15%) con agua RO/DI y sal marina de calidad."
                     )
                 )
-
-        # Balance estricto: Fosfatos entre 0.03-0.10 ppm
         if fosfato is not None:
-            if fosfato > 0.10:
-                risk = "Moderado"
-                alert = (
-                    f"Fosfato a {fosfato} ppm excede el rango estricto para arrecife mixto (0.03 - 0.10 ppm). "
-                    f"Inhibición de calcificación en corales duros y riesgo de algas filamentosas."
-                )
-                acciones.append(
-                    DosisRecomendada(
-                        parametro="Fosfato (PO4)",
-                        producto="Resina de óxido de hierro granular (GFO) o reductor base lantano",
-                        cantidad_sugerida="50 g de resina en reactor pasivo de flujo moderado"
-                    )
-                )
-            elif fosfato < 0.03:
+            if fosfato > po4_targets["max"]:
                 risk = "Moderado" if risk == "Bajo" else risk
-                alert = (
-                    f"Fosfato a {fosfato} ppm por debajo del rango mínimo estricto (0.03 - 0.10 ppm). "
-                    f"Riesgo de inanición de corales y desbalance del ratio de Redfield."
-                )
                 acciones.append(
                     DosisRecomendada(
                         parametro="Fosfato (PO4)",
-                        producto="Ajuste de medios absorbentes o dosificación ligera de fósforo",
-                        cantidad_sugerida="Retirar resinas antifosfatos activas hasta estabilizar en 0.04 ppm"
+                        producto="Resina de óxido férrico (GFO) o eliminador de PO4 a base de lantano",
+                        cantidad_sugerida="Añadir en reactor de lecho fluido con flujo lento para evitar precipitación."
                     )
                 )
-    else:
-        # Otros biotipos generales (plantado, dulce, general)
-        if nitrato is not None and nitrato > 25:
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Nitrato (NO3)",
-                    producto="Cambio parcial de agua",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.15, 1)} litros (15%)"
-                )
-            )
-        if fosfato is not None and fosfato > 0.25:
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Fosfato (PO4)",
-                    producto="Control de nutrientes y medios filtrantes",
-                    cantidad_sugerida="Ajustar rutina de alimentación y filtración"
-                )
-            )
 
     if not acciones:
-        if es_peces_marinos:
-            acciones = [
-                DosisRecomendada(
-                    parametro="Mantenimiento General",
-                    producto="Cambio de agua regular y limpieza de skimmer/filtración",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.1, 1)} litros (10%) quincenal"
-                )
-            ]
-        else:
-            acciones = [
-                DosisRecomendada(
-                    parametro="Alcalinidad / KH",
-                    producto="Mantenimiento preventivo de tampones",
-                    cantidad_sugerida="Mantener dosis basal de 5 ml/día"
-                ),
-                DosisRecomendada(
-                    parametro="Nutrientes y Elementos Traza",
-                    producto="Cambio de agua regular con sal de arrecife",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.1, 1)} litros (10%) semanal"
-                )
-            ]
+        acciones = [
+            DosisRecomendada(
+                parametro="Rutina de Mantenimiento",
+                producto="Cambio de agua regular y monitoreo semanal",
+                cantidad_sugerida=f"{round(float(volumen or 280) * 0.1, 1)} litros (10%) para reposición de oligoelementos."
+            )
+        ]
 
     diagnostico = (
-        f"Evaluación química del acuario '{nombre}' ({volumen} L, biotipo '{tipo}'): "
+        f"Diagnóstico técnico AquaPulse para '{nombre}' ({volumen} L, biotipo '{tipo}', perfil '{profile_info['name']}'): "
         f"pH={ph if ph is not None else '8.2'}, "
         f"KH={kh if kh is not None else '8.2'} dKH, "
-        f"Ca={calcio if calcio is not None else ('N/A (Peces)' if es_peces_marinos else '420')} ppm, "
-        f"Mg={magnesio if magnesio is not None else ('N/A (Peces)' if es_peces_marinos else '1350')} ppm, "
+        f"Ca={calcio if calcio is not None else '420'} ppm, "
+        f"Mg={magnesio if magnesio is not None else '1350'} ppm, "
         f"NO3={nitrato if nitrato is not None else '5.0'} ppm, "
         f"PO4={fosfato if fosfato is not None else '0.04'} ppm"
-        f"{f', Temp={temperatura} °C' if temperatura is not None else ''}. "
-        f"Tendencia reportada: '{tendencia}'."
+        f"{f', Temp={temperatura} °C' if temperatura is not None else ''}"
+        f"{f', Salinidad={salinity} SG' if salinity is not None else ''}. "
+        f"Tendencia: '{tendencia}'."
     )
 
     return AnalisisAcuarioResponse(
@@ -340,7 +284,7 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
     """
     Analiza los parámetros químicos actuales de un acuario y genera un diagnóstico predictivo
     y clínico puramente técnico y estructurado utilizando Google GenAI (Gemini SDK oficial) con Structured Outputs.
-    Devuelve un modelo Pydantic AnalisisAcuarioResponse (alias de AnalisisAcuarioSchema) directamente parseado.
+    Soporta los perfiles marinos fowlr_soft, lps_reef y sps_reef con alertas dinámicas.
     """
     api_key = (
         os.environ.get("GEMINI_API_KEY") or
@@ -362,47 +306,102 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
         datos_acuario.get("type") or
         "mixto"
     )
-    ph = datos_acuario.get("ph")
-    kh = datos_acuario.get("kh")
-    calcio = datos_acuario.get("calcio")
-    magnesio = datos_acuario.get("magnesio")
-    nitrato = datos_acuario.get("nitrato")
-    fosfato = datos_acuario.get("fosfato")
-    temperatura = datos_acuario.get("temperatura")
-    tendencia = datos_acuario.get("tendencia_reciente", "Estable")
+    reef_profile = datos_acuario.get("reef_profile")
+    dosing_method = datos_acuario.get("dosing_method")
+    lighting_par = datos_acuario.get("lighting_par")
+    flow_profile = datos_acuario.get("flow_profile")
 
-    # Si no hay API key disponible en entorno local, devolver diagnóstico clínico inteligente estructurado de respaldo
+    ph = datos_acuario.get("ph")
+    kh = datos_acuario.get("kh") or datos_acuario.get("alkalinity_dkh")
+    calcio = datos_acuario.get("calcio") or datos_acuario.get("calcium") or datos_acuario.get("calcium_ppm")
+    magnesio = datos_acuario.get("magnesio") or datos_acuario.get("magnesium") or datos_acuario.get("magnesium_ppm")
+    nitrato = datos_acuario.get("nitrato") or datos_acuario.get("nitrate") or datos_acuario.get("nitrate_ppm")
+    fosfato = datos_acuario.get("fosfato") or datos_acuario.get("phosphate") or datos_acuario.get("phosphate_ppm")
+    temperatura = datos_acuario.get("temperatura") or datos_acuario.get("temperature")
+    salinity = datos_acuario.get("salinity") or datos_acuario.get("salinity_ppt")
+    ammonia = datos_acuario.get("ammonia") or datos_acuario.get("ammonia_ppm")
+    nitrite = datos_acuario.get("nitrite") or datos_acuario.get("nitrite_ppm")
+    trace_elements = datos_acuario.get("trace_elements") or {}
+    test_methods = datos_acuario.get("test_methods") or {}
+    tendencia = datos_acuario.get("tendencia_reciente", "Estable")
+    history_measurements = datos_acuario.get("history_measurements") or []
+
+    # Evaluación de alertas dinámicas especializadas
+    dynamic_alerts = evaluate_marine_alerts(
+        reef_profile=reef_profile,
+        current_data=datos_acuario,
+        history_measurements=history_measurements,
+        dosing_method=dosing_method
+    )
+
+    profile_info = get_marine_profile(reef_profile)
+
     if is_dummy_key:
-        logger.warning("⚠️ GEMINI_API_KEY no detectada. Generando diagnóstico clínico estructurado de respaldo (demo fallback).")
-        return _generar_analisis_fallback(nombre, volumen, ph, kh, calcio, magnesio, nitrato, fosfato, tendencia, temperatura, tipo)
+        logger.warning("⚠️ GEMINI_API_KEY no detectada. Generando diagnóstico estructurado inteligente con reglas marinas locales.")
+        return _generar_analisis_fallback(
+            nombre=nombre,
+            volumen=volumen,
+            ph=ph,
+            kh=kh,
+            calcio=calcio,
+            magnesio=magnesio,
+            nitrato=nitrato,
+            fosfato=fosfato,
+            tendencia=tendencia,
+            temperatura=temperatura,
+            tipo=tipo,
+            reef_profile=reef_profile,
+            dosing_method=dosing_method,
+            lighting_par=lighting_par,
+            flow_profile=flow_profile,
+            salinity=salinity,
+            ammonia=ammonia,
+            nitrite=nitrite,
+            trace_elements=trace_elements,
+            test_methods=test_methods,
+            dynamic_alerts=dynamic_alerts
+        )
 
     try:
         from google import genai
         from google.genai import types
 
-        # Inicializa cliente con api_key explícita si existe
         client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
         system_instruction = (
-            "Eres AquaPulse AI, un biólogo marino experto en química del agua y mantenimiento de acuarios.\n"
-            "Analiza los parámetros de entrada y genera una respuesta puramente técnica, predictiva y estructurada.\n\n"
-            "Reglas específicas según el biotipo:\n"
-            "Si el acuario es 'marine_fish' o 'peces_marinos', ignora niveles altos de nitratos (<40) y fosfatos (<1.0), y no exijas mediciones de calcio/magnesio.\n"
-            "Si el acuario es 'mixed' o 'mixto', mantén un balance estricto: Nitratos entre 2-10 y Fosfatos entre 0.03-0.10."
+            "Eres AquaPulse AI, biólogo marino sénior experto en química de acuarios de arrecife.\n"
+            "Analiza rigurosamente los parámetros, biotipo y perfil marino del acuario.\n"
+            "Reglas críticas:\n"
+            "1. En arrecife SPS (sps_reef): la estabilidad diaria de KH es crítica. Un delta 24h > 0.3 dKH es advertencia y > 0.5 dKH es crítico por riesgo de RTN/STN. Mantener NO3 (1-5 ppm) y PO4 (0.01-0.04 ppm).\n"
+            "2. En arrecife LPS (lps_reef): nutrientes en cero (NO3=0 o PO4=0) provocan inanición de tejido carnoso. PO4 ideal 0.03-0.08 ppm.\n"
+            "3. En solo peces (fowlr_soft): tolerar NO3 hasta 20-30 ppm y PO4 hasta 0.15 ppm sin exigir dosificación de Ca/Mg.\n"
+            "4. Si se detectan nutrientes en cero en LPS/SPS, advertir el brote inminente de dinoflagelados.\n"
+            "5. Recomienda fotómetro digital ULR si se usa kit de gotas para fosfato en SPS/LPS.\n"
+            "Genera un diagnóstico en JSON puro cumpliendo estrictamente con el esquema Pydantic."
         )
 
         user_prompt = f"""
-    Analiza los datos del acuario '{nombre}':
-    - Biotipo / Tipo de Acuario: {tipo}
-    - pH: {ph if ph is not None else 'No registrado'}
-    - KH: {kh if kh is not None else 'No registrado'} dKH
-    - Calcio: {calcio if calcio is not None else 'No registrado'} ppm
-    - Magnesio: {magnesio if magnesio is not None else 'No registrado'} ppm
-    - Nitrato: {nitrato if nitrato is not None else 'No registrado'} ppm
-    - Fosfato: {fosfato if fosfato is not None else 'No registrado'} ppm
-    - Temperatura: {temperatura if temperatura is not None else 'No registrado'} °C
-    - Historial: {tendencia}
-    """
+        Analiza los datos del acuario '{nombre}':
+        - Biotipo general: {tipo}
+        - Perfil de Arrecife: {profile_info['name']} ({profile_info['id']})
+        - Método de dosificación: {DOSING_METHOD_LABELS.get(dosing_method, dosing_method or 'No especificado')}
+        - Iluminación PAR: {lighting_par if lighting_par is not None else 'No especificado'}
+        - Perfil de flujo: {FLOW_PROFILE_LABELS.get(flow_profile, flow_profile or 'No especificado')}
+        - Salinidad: {salinity if salinity is not None else 'No registrado'} SG
+        - Temperatura: {temperatura if temperatura is not None else 'No registrado'} °C
+        - pH: {ph if ph is not None else 'No registrado'}
+        - KH / Alcalinidad: {kh if kh is not None else 'No registrado'} dKH
+        - Calcio: {calcio if calcio is not None else 'No registrado'} ppm
+        - Magnesio: {magnesio if magnesio is not None else 'No registrado'} ppm
+        - Nitrato (NO3): {nitrato if nitrato is not None else 'No registrado'} ppm
+        - Fosfato (PO4): {fosfato if fosfato is not None else 'No registrado'} ppm
+        - Amoníaco (NH3): {ammonia if ammonia is not None else '0.00'} ppm
+        - Nitrito (NO2): {nitrite if nitrite is not None else '0.00'} ppm
+        - Elementos Traza: {json.dumps(trace_elements) if trace_elements else 'No registrados'}
+        - Métodos de Test: {json.dumps(test_methods) if test_methods else 'No especificados'}
+        - Historial / Tendencia: {tendencia}
+        - Alertas Dinámicas Pre-evaluadas: {json.dumps(dynamic_alerts, ensure_ascii=False) if dynamic_alerts else 'Ninguna detectada'}
+        """
 
         candidate_models = list(dict.fromkeys(FALLBACK_MODELS))
         last_error = None
@@ -414,17 +413,15 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
                     contents=user_prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
-                        temperature=0.1,  # Temperatura ultra baja para precisión en esquemas
+                        temperature=0.1,
                         response_mime_type="application/json",
-                        response_schema=AnalisisAcuarioResponse,  # ¡Aquí ocurre la magia!
+                        response_schema=AnalisisAcuarioResponse,
                     ),
                 )
                 if response:
-                    # Si el SDK soporta response.parsed directamente, devolverlo
                     if hasattr(response, "parsed") and response.parsed is not None:
                         return response.parsed
 
-                    # Si devuelve texto JSON estructurado, validarlo contra el esquema
                     if response.text:
                         clean_text = response.text.strip()
                         if clean_text.startswith("```"):
@@ -445,7 +442,29 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
         logger.error(f"Error generando análisis de parámetros con Gemini: {e}")
         if allow_fallback:
             logger.info("Activando fallback estructurado de emergencia para garantizar disponibilidad.")
-            return _generar_analisis_fallback(nombre, volumen, ph, kh, calcio, magnesio, nitrato, fosfato, tendencia, temperatura, tipo)
+            return _generar_analisis_fallback(
+                nombre=nombre,
+                volumen=volumen,
+                ph=ph,
+                kh=kh,
+                calcio=calcio,
+                magnesio=magnesio,
+                nitrato=nitrato,
+                fosfato=fosfato,
+                tendencia=tendencia,
+                temperatura=temperatura,
+                tipo=tipo,
+                reef_profile=reef_profile,
+                dosing_method=dosing_method,
+                lighting_par=lighting_par,
+                flow_profile=flow_profile,
+                salinity=salinity,
+                ammonia=ammonia,
+                nitrite=nitrite,
+                trace_elements=trace_elements,
+                test_methods=test_methods,
+                dynamic_alerts=dynamic_alerts
+            )
         raise e
 
 
