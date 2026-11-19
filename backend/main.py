@@ -1148,38 +1148,65 @@ def get_tank_parameters(
             {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 23.0, "max_safe": 27.0, "is_critical": False}
         ]
     
-    # Manejo específico por perfil marino (fowlr_soft, lps_reef, sps_reef)
+    # Manejo específico por perfil marino (fish_only, soft_reef, lps_reef, mixed_reef, sps_reef)
+    from backend.marine_profiles import get_marine_profile
     r_profile = getattr(tank, "reef_profile", None) if tank else None
-    if r_profile == "fowlr_soft":
+    profile = get_marine_profile(r_profile or ("fish_only" if t_type in ["marine_fish", "peces_marinos", "fowlr"] else "lps_reef"))
+    pid = profile["id"]
+
+    if pid == "fish_only":
         return [
-            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 7.0, "max_safe": 10.0, "is_critical": False},
+            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.023, "min_safe": 1.020, "max_safe": 1.025, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.0, "max_safe": 26.0, "is_critical": False},
+            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.15, "min_safe": 8.0, "max_safe": 8.3, "is_critical": True},
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 15.0, "min_safe": 0.0, "max_safe": 30.0, "is_critical": True},
+            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 7.0, "max_safe": 11.0, "is_critical": False},
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.10, "min_safe": 0.0, "max_safe": 0.25, "is_critical": False}
+        ]
+    elif pid == "soft_reef":
+        return [
+            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.024, "min_safe": 1.023, "max_safe": 1.025, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.0, "max_safe": 26.0, "is_critical": False},
+            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.15, "min_safe": 8.0, "max_safe": 8.3, "is_critical": True},
+            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.2, "min_safe": 7.5, "max_safe": 9.5, "is_critical": True},
             {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 400.0, "min_safe": 380.0, "max_safe": 420.0, "is_critical": False},
             {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1300.0, "min_safe": 1250.0, "max_safe": 1350.0, "is_critical": False},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 5.0, "max_safe": 20.0, "is_critical": False},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.08, "min_safe": 0.03, "max_safe": 0.15, "is_critical": False},
-            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.024, "min_safe": 1.023, "max_safe": 1.025, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.0, "max_safe": 26.0, "is_critical": False}
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 5.0, "max_safe": 15.0, "is_critical": True},
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.08, "min_safe": 0.05, "max_safe": 0.15, "is_critical": True}
         ]
-    elif r_profile == "sps_reef":
+    elif pid == "mixed_reef":
         return [
+            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": True},
+            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.2, "min_safe": 8.1, "max_safe": 8.3, "is_critical": True},
+            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.25, "min_safe": 8.0, "max_safe": 8.5, "is_critical": True},
+            {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 430.0, "min_safe": 420.0, "max_safe": 440.0, "is_critical": True},
+            {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1325.0, "min_safe": 1300.0, "max_safe": 1350.0, "is_critical": True},
+            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 5.0, "min_safe": 3.0, "max_safe": 8.0, "is_critical": True},
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.045, "min_safe": 0.03, "max_safe": 0.06, "is_critical": True}
+        ]
+    elif pid == "sps_reef":
+        return [
+            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
+            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": True},
+            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.25, "min_safe": 8.2, "max_safe": 8.3, "is_critical": True},
             {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.0, "min_safe": 7.5, "max_safe": 8.5, "is_critical": True},
             {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 435.0, "min_safe": 420.0, "max_safe": 450.0, "is_critical": True},
             {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1350.0, "min_safe": 1300.0, "max_safe": 1400.0, "is_critical": True},
             {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 3.0, "min_safe": 1.0, "max_safe": 5.0, "is_critical": True},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.025, "min_safe": 0.01, "max_safe": 0.04, "is_critical": True},
-            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": True}
+            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.025, "min_safe": 0.01, "max_safe": 0.04, "is_critical": True}
         ]
 
-    # lps_reef o arrecife por defecto
+    # lps_reef por defecto
     return [
+        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
+        {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": False},
+        {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.2, "min_safe": 8.1, "max_safe": 8.3, "is_critical": True},
         {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 8.0, "max_safe": 9.0, "is_critical": True},
         {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 420.0, "min_safe": 400.0, "max_safe": 440.0, "is_critical": True},
         {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1325.0, "min_safe": 1300.0, "max_safe": 1350.0, "is_critical": False},
         {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 7.5, "min_safe": 5.0, "max_safe": 10.0, "is_critical": True},
-        {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.05, "min_safe": 0.03, "max_safe": 0.08, "is_critical": True},
-        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
-        {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": False}
+        {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.05, "min_safe": 0.03, "max_safe": 0.08, "is_critical": True}
     ]
 
 @app.get("/api/tanks/{tank_id}/analytics")

@@ -92,8 +92,9 @@ export default function QuickEntryForm({
   const tankTypeNormalized = (tank?.tank_type || tank?.tipoAgua || tank?.type || '').toLowerCase();
   const isDulce = ['dulce', 'plantado', 'freshwater'].some(t => tankTypeNormalized.includes(t));
   const isMarine = !isDulce;
-  const reefProfileKey = tank?.reef_profile || (tankTypeNormalized === 'marine_fish' ? 'fowlr_soft' : 'lps_reef');
+  const reefProfileKey = tank?.reef_profile || (tankTypeNormalized === 'marine_fish' ? 'fish_only' : 'lps_reef');
   const profileInfo = getMarineProfile(reefProfileKey);
+  const visibleFields = profileInfo?.visible_fields || {};
 
   // Feedback háptico táctil en dispositivos móviles
   const triggerHaptic = (pattern = 25) => {
@@ -237,39 +238,46 @@ export default function QuickEntryForm({
     const iVal = parseNumOrNull(traceElements.i);
     const feVal = parseNumOrNull(traceElements.fe);
 
-    // Preparar trace_elements solo con los elementos introducidos
+    // Preparar trace_elements solo con los elementos introducidos y si el perfil lo permite
     const tracePayload = {};
-    if (kVal !== null) tracePayload.k = kVal;
-    if (srVal !== null) tracePayload.sr = srVal;
-    if (iVal !== null) tracePayload.i = iVal;
-    if (feVal !== null) tracePayload.fe = feVal;
+    if (visibleFields.trace_elements !== false) {
+      if (kVal !== null) tracePayload.k = kVal;
+      if (srVal !== null) tracePayload.sr = srVal;
+      if (iVal !== null) tracePayload.i = iVal;
+      if (feVal !== null) tracePayload.fe = feVal;
+    }
+
+    const isVisible = (fKey) => {
+      if (isDulce) return true;
+      return visibleFields[fKey] !== false;
+    };
 
     const fieldsToSubmit = {
-      ph: phVal,
-      salinity: salVal,
-      salinity_ppt: salVal,
-      temperature: tempVal,
-      temperatura: tempVal,
-      ammonia: nh3Val,
-      ammonia_ppm: nh3Val,
-      nitrite: no2Val,
-      nitrite_ppm: no2Val,
-      kh: khVal,
-      alkalinity_dkh: khVal,
-      calcium: caVal,
-      calcium_ppm: caVal,
-      magnesium: mgVal,
-      magnesium_ppm: mgVal,
-      nitrate: no3Val,
-      nitrate_ppm: no3Val,
-      phosphate: po4Val,
-      phosphate_ppm: po4Val,
-      gh_dgh: ghVal,
-      test_methods: isMarine ? {
+      ph: isVisible('ph') ? phVal : null,
+      salinity: isVisible('salinity') ? salVal : null,
+      salinity_ppt: isVisible('salinity') ? salVal : null,
+      temperature: isVisible('temperature') ? tempVal : null,
+      temperatura: isVisible('temperature') ? tempVal : null,
+      ammonia: isVisible('ammonia') ? nh3Val : null,
+      ammonia_ppm: isVisible('ammonia') ? nh3Val : null,
+      nitrite: isVisible('nitrite') ? no2Val : null,
+      nitrite_ppm: isVisible('nitrite') ? no2Val : null,
+      kh: isVisible('kh') ? khVal : null,
+      alkalinity_dkh: isVisible('kh') ? khVal : null,
+      calcium: isVisible('calcium') ? caVal : null,
+      calcium_ppm: isVisible('calcium') ? caVal : null,
+      magnesium: isVisible('magnesium') ? mgVal : null,
+      magnesium_ppm: isVisible('magnesium') ? mgVal : null,
+      nitrate: isVisible('nitrate') ? no3Val : null,
+      nitrate_ppm: isVisible('nitrate') ? no3Val : null,
+      phosphate: isVisible('phosphate') ? po4Val : null,
+      phosphate_ppm: isVisible('phosphate') ? po4Val : null,
+      gh_dgh: isDulce ? ghVal : null,
+      test_methods: (isMarine && visibleFields.test_methods) ? {
         po4: testMethods.po4 || 'drop_kit',
         kh: testMethods.kh || 'drop_kit'
       } : null,
-      trace_elements: (isMarine && Object.keys(tracePayload).length > 0) ? tracePayload : null
+      trace_elements: (isMarine && visibleFields.trace_elements && Object.keys(tracePayload).length > 0) ? tracePayload : null
     };
 
     // Validar que al menos un campo numérico contenga información
@@ -680,7 +688,7 @@ export default function QuickEntryForm({
                 </h4>
               </div>
               <span className="text-[10px] text-slate-400 font-semibold">
-                KH, Calcio, Magnesio, Nitratos y Fosfatos
+                {visibleFields.calcium !== false ? 'KH, Calcio, Magnesio, Nitratos y Fosfatos' : 'KH, Nitratos y Fosfatos'}
               </span>
             </div>
 
@@ -697,7 +705,7 @@ export default function QuickEntryForm({
                 value: formData.kh,
                 onChange: (v) => handleChange('kh', v),
                 lastVal: lastMeasurement?.kh || lastMeasurement?.alkalinity_dkh,
-                methodSelector: (
+                methodSelector: visibleFields.test_methods ? (
                   <select
                     value={testMethods.kh}
                     onChange={(e) => setTestMethods(prev => ({ ...prev, kh: e.target.value }))}
@@ -708,10 +716,10 @@ export default function QuickEntryForm({
                     <option value="photometer_ulr">Fotómetro</option>
                     <option value="icp">Test ICP</option>
                   </select>
-                )
+                ) : null
               })}
 
-              {renderParamInput({
+              {visibleFields.calcium !== false && profileInfo.targets.calcium && renderParamInput({
                 key: 'calcium',
                 label: 'Calcio (Ca)',
                 unit: 'ppm',
@@ -725,7 +733,7 @@ export default function QuickEntryForm({
                 lastVal: lastMeasurement?.calcium || lastMeasurement?.calcium_ppm
               })}
 
-              {renderParamInput({
+              {visibleFields.magnesium !== false && profileInfo.targets.magnesium && renderParamInput({
                 key: 'magnesium',
                 label: 'Magnesio (Mg)',
                 unit: 'ppm',
@@ -765,7 +773,7 @@ export default function QuickEntryForm({
                 value: formData.phosphate,
                 onChange: (v) => handleChange('phosphate', v),
                 lastVal: lastMeasurement?.phosphate || lastMeasurement?.phosphate_ppm,
-                methodSelector: (
+                methodSelector: visibleFields.test_methods ? (
                   <select
                     value={testMethods.po4}
                     onChange={(e) => setTestMethods(prev => ({ ...prev, po4: e.target.value }))}
@@ -776,12 +784,13 @@ export default function QuickEntryForm({
                     <option value="photometer_ulr">Fotómetro ULR</option>
                     <option value="icp">Test ICP</option>
                   </select>
-                )
+                ) : null
               })}
             </div>
           </div>
 
-          {/* SECCIÓN 3: ELEMENTOS TRAZA (COLAPSABLE PARA LPS/SPS) */}
+          {/* SECCIÓN 3: ELEMENTOS TRAZA (COLAPSABLE PARA LPS/SPS/MIXTO) */}
+          {visibleFields.trace_elements && (
           <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/40 overflow-hidden transition-all">
             <button
               type="button"
@@ -870,6 +879,7 @@ export default function QuickEntryForm({
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 

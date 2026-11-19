@@ -112,9 +112,9 @@ def _generar_analisis_fallback(
     """Genera un análisis clínico estructurado inteligente de respaldo respetando las reglas de biotipo y perfiles marinos."""
     risk = "Bajo"
     tipo_normalizado = (tipo or "mixto").strip().lower()
-    es_marino = tipo_normalizado in ["arrecife", "reef", "mixed", "mixto", "marine_fish", "peces_marinos", "fowlr"]
+    es_marino = tipo_normalizado in ["arrecife", "reef", "mixed", "mixto", "marine_fish", "peces_marinos", "fowlr", "fish_only", "soft_reef", "mixed_reef", "sps_reef", "lps_reef"]
     
-    profile_info = get_marine_profile(reef_profile or ("fowlr_soft" if tipo_normalizado in ["marine_fish", "peces_marinos"] else "lps_reef"))
+    profile_info = get_marine_profile(reef_profile or ("fish_only" if tipo_normalizado in ["marine_fish", "peces_marinos", "fowlr", "fish_only"] else "lps_reef"))
     profile_id = profile_info["id"]
 
     alert = f"Parámetros dentro de umbrales operativos estables para '{profile_info['name']}'. Mantener rutina regular de filtración."
@@ -203,8 +203,8 @@ def _generar_analisis_fallback(
             )
         )
 
-    # 5. KH y Balance de Nutrientes
-    if kh is not None and es_marino:
+    # 5. KH y Balance de Nutrientes (Solo para perfiles con corales)
+    if kh is not None and es_marino and profile_id != "fish_only":
         kh_targets = profile_info["targets"]["kh"]
         if kh < kh_targets["min"]:
             risk = "Crítico" if kh < 6.8 else ("Moderado" if risk == "Bajo" else risk)
@@ -239,7 +239,7 @@ def _generar_analisis_fallback(
                         cantidad_sugerida=f"{round(float(volumen or 280) * 0.15, 1)} L (15%) con agua RO/DI y sal marina de calidad."
                     )
                 )
-        if fosfato is not None:
+        if fosfato is not None and profile_id != "fish_only":
             if fosfato > po4_targets["max"]:
                 risk = "Moderado" if risk == "Bajo" else risk
                 acciones.append(
@@ -255,7 +255,7 @@ def _generar_analisis_fallback(
             DosisRecomendada(
                 parametro="Rutina de Mantenimiento",
                 producto="Cambio de agua regular y monitoreo semanal",
-                cantidad_sugerida=f"{round(float(volumen or 280) * 0.1, 1)} litros (10%) para reposición de oligoelementos."
+                cantidad_sugerida=f"{round(float(volumen or 280) * 0.1, 1)} litros (10%) para reposición de oligoelementos y dilución de compuestos orgánicos."
             )
         ]
 
@@ -263,8 +263,7 @@ def _generar_analisis_fallback(
         f"Diagnóstico técnico AquaPulse para '{nombre}' ({volumen} L, biotipo '{tipo}', perfil '{profile_info['name']}'): "
         f"pH={ph if ph is not None else '8.2'}, "
         f"KH={kh if kh is not None else '8.2'} dKH, "
-        f"Ca={calcio if calcio is not None else '420'} ppm, "
-        f"Mg={magnesio if magnesio is not None else '1350'} ppm, "
+        f"{f'Ca={calcio} ppm, Mg={magnesio} ppm, ' if profile_id != 'fish_only' else ''}"
         f"NO3={nitrato if nitrato is not None else '5.0'} ppm, "
         f"PO4={fosfato if fosfato is not None else '0.04'} ppm"
         f"{f', Temp={temperatura} °C' if temperatura is not None else ''}"
@@ -284,7 +283,7 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
     """
     Analiza los parámetros químicos actuales de un acuario y genera un diagnóstico predictivo
     y clínico puramente técnico y estructurado utilizando Google GenAI (Gemini SDK oficial) con Structured Outputs.
-    Soporta los perfiles marinos fowlr_soft, lps_reef y sps_reef con alertas dinámicas.
+    Soporta los perfiles marinos fish_only, soft_reef, lps_reef, mixed_reef y sps_reef con alertas dinámicas.
     """
     api_key = (
         os.environ.get("GEMINI_API_KEY") or
@@ -369,14 +368,13 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
         client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
         system_instruction = (
-            "Eres AquaPulse AI, biólogo marino sénior experto en química de acuarios de arrecife.\n"
-            "Analiza rigurosamente los parámetros, biotipo y perfil marino del acuario.\n"
-            "Reglas críticas:\n"
-            "1. En arrecife SPS (sps_reef): la estabilidad diaria de KH es crítica. Un delta 24h > 0.3 dKH es advertencia y > 0.5 dKH es crítico por riesgo de RTN/STN. Mantener NO3 (1-5 ppm) y PO4 (0.01-0.04 ppm).\n"
-            "2. En arrecife LPS (lps_reef): nutrientes en cero (NO3=0 o PO4=0) provocan inanición de tejido carnoso. PO4 ideal 0.03-0.08 ppm.\n"
-            "3. En solo peces (fowlr_soft): tolerar NO3 hasta 20-30 ppm y PO4 hasta 0.15 ppm sin exigir dosificación de Ca/Mg.\n"
-            "4. Si se detectan nutrientes en cero en LPS/SPS, advertir el brote inminente de dinoflagelados.\n"
-            "5. Recomienda fotómetro digital ULR si se usa kit de gotas para fosfato en SPS/LPS.\n"
+            "Eres AquaPulse AI, biólogo marino sénior experto en química de acuarios de arrecife y marinos.\n"
+            f"ADAPTA ESTRICTAMENTE tus consejos al perfil marino '{profile_info['name']}' ({profile_info['id']}):\n"
+            "1. En 'fish_only' (Solo Peces / FOWLR): NUNCA des recomendaciones ni ajustes sobre corales, calcio, magnesio, elementos traza ni calcificación. Tolera NO3 hasta 30-40 ppm y PO4 hasta 0.25 ppm. Solo enfócate en salinidad, temperatura, pH, amoníaco, nitrito y nitratos para peces.\n"
+            "2. En 'soft_reef' (Corales Blandos): Tolera nutrientes moderados (NO3 5-15 ppm, PO4 0.05-0.15 ppm). No exijas fotómetros ULR ni dosificación estricta de trazas.\n"
+            "3. En 'lps_reef' (Arrecife LPS): Requieren nutrientes detectables (NO3 5-10, PO4 0.03-0.08 ppm, ideal 0.05). NUNCA exijas nutrientes ultra-bajos; nutrientes en cero causan inanición y encogimiento de tejido. Recomienda flujo moderado e indirecto.\n"
+            "4. En 'mixed_reef' (Arrecife Mixto): Equilibrio entre estabilidad de KH (8.0-8.5, delta máx 0.4) y nutrientes detectables (NO3 3-8 ppm, PO4 0.03-0.06 ppm) para no matar de hambre los LPS ni blanquear SPS.\n"
+            "5. En 'sps_reef' (Arrecife SPS): Altísima exigencia de estabilidad de KH (7.5-8.5, delta máx 0.3 dKH diario por riesgo crítico de RTN/STN) y nutrientes bajos controlados (NO3 1-5 ppm, PO4 0.01-0.04 ppm, advertencia de dinoflagelados si llegan a cero).\n"
             "Genera un diagnóstico en JSON puro cumpliendo estrictamente con el esquema Pydantic."
         )
 

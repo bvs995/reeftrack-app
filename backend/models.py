@@ -54,7 +54,7 @@ class Tank(Base):
     name = Column(String(255), nullable=False)
     tank_type = Column(String(50), default="reef", nullable=False) # 'reef', 'freshwater_planted', 'freshwater_community'
     volume_liters = Column(Float, default=280.0, nullable=False)
-    reef_profile = Column(String(50), nullable=True) # "fowlr_soft", "lps_reef", "sps_reef"
+    reef_profile = Column(String(50), nullable=True) # "fish_only", "soft_reef", "lps_reef", "mixed_reef", "sps_reef"
     dosing_method = Column(String(50), nullable=True) # "water_changes", "manual_dosing", "peristaltic_balling", "kalkwasser", "calcium_reactor"
     lighting_par = Column(Integer, nullable=True) # PAR
     flow_profile = Column(String(50), nullable=True) # "low_moderate", "moderate_indirect", "high_turbulent"
@@ -298,7 +298,7 @@ class AquariumCreate(BaseModel):
     tank_type: Literal["arrecife", "mixed", "marine_fish", "plantado", "dulce"] = Field(
         default="mixed", description="Biotipo del acuario"
     )
-    reef_profile: Optional[str] = Field(None, description="Perfil marino: fowlr_soft, lps_reef, sps_reef")
+    reef_profile: Optional[str] = Field(None, description="Perfil marino: fish_only, soft_reef, lps_reef, mixed_reef, sps_reef")
     dosing_method: Optional[str] = Field(None, description="Método de dosificación: water_changes, manual_dosing, peristaltic_balling, kalkwasser, calcium_reactor")
     lighting_par: Optional[int] = Field(None, description="Intensidad lumínica estimada o medida en PAR")
     flow_profile: Optional[str] = Field(None, description="Perfil de flujo: low_moderate, moderate_indirect, high_turbulent")
@@ -331,7 +331,7 @@ class TankCreate(BaseModel):
         default="mixed", description="Biotipo del acuario"
     )
     volume_liters: float = Field(280.0, gt=0, example=280.0)
-    reef_profile: Optional[str] = Field(None, description="Perfil marino: fowlr_soft, lps_reef, sps_reef")
+    reef_profile: Optional[str] = Field(None, description="Perfil marino: fish_only, soft_reef, lps_reef, mixed_reef, sps_reef")
     dosing_method: Optional[str] = Field(None, description="Método de dosificación")
     lighting_par: Optional[int] = Field(None, description="Intensidad lumínica PAR")
     flow_profile: Optional[str] = Field(None, description="Perfil de flujo")

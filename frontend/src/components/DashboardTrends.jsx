@@ -88,32 +88,22 @@ export default function DashboardTrends({
     tipoAgua: esAguaSalada ? 'salada' : 'dulce'
   };
 
-  // Listas maestras de parámetros según el ecosistema seleccionado
-  const parametrosSalada = [
-    { id: 'alcalinidad', nombre: 'Alcalinidad', unidad: '(dKH)' },
-    { id: 'calcio', nombre: 'Calcio', unidad: '(ppm)' },
-    { id: 'magnesio', nombre: 'Magnesio', unidad: '(ppm)' },
-    { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' },
-    { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
-    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' }
-  ];
+  // Detección del perfil marino activo
+  const marineProfileKey = rawTank?.reef_profile || (rawTank?.tank_type === 'marine_fish' || rawTipo === 'peces_marinos' ? 'fish_only' : 'lps_reef');
+  const activeMarineProfile = getMarineProfile(marineProfileKey);
 
-  const parametrosMixto = [
-    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
-    { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
-    { id: 'alcalinidad', nombre: 'Alcalinidad', unidad: '(dKH)' },
-    { id: 'calcio', nombre: 'Calcio', unidad: '(ppm)' },
-    { id: 'magnesio', nombre: 'Magnesio', unidad: '(ppm)' },
-    { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' }
-  ];
-
-  const parametrosPecesMarinos = [
-    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
-    { id: 'fosfatos', nombre: 'Fosfatos', unidad: '(ppm)' },
-    { id: 'salinidad', nombre: 'Salinidad', unidad: '(SG / ppt)' },
-    { id: 'ph', nombre: 'pH', unidad: '' },
-    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' },
-    { id: 'amoniaco', nombre: 'Amoníaco', unidad: '(NH3)' }
+  // Listas maestras de parámetros según el ecosistema y perfil seleccionado
+  const parametrosMarinosPool = [
+    { id: 'salinidad', key: 'salinity', nombre: 'Salinidad', unidad: '(SG / ppt)' },
+    { id: 'temperatura', key: 'temperature', nombre: 'Temperatura', unidad: '(°C)' },
+    { id: 'ph', key: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'alcalinidad', key: 'kh', nombre: 'Alcalinidad', unidad: '(dKH)' },
+    { id: 'calcio', key: 'calcium', nombre: 'Calcio', unidad: '(ppm)' },
+    { id: 'magnesio', key: 'magnesium', nombre: 'Magnesio', unidad: '(ppm)' },
+    { id: 'nitratos', key: 'nitrate', nombre: 'Nitratos', unidad: '(ppm)' },
+    { id: 'fosfatos', key: 'phosphate', nombre: 'Fosfatos', unidad: '(ppm)' },
+    { id: 'amoniaco', key: 'ammonia', nombre: 'Amoníaco', unidad: '(NH3)' },
+    { id: 'nitritos', key: 'nitrite', nombre: 'Nitritos', unidad: '(NO2)' }
   ];
 
   const parametrosDulcePeces = [
@@ -138,12 +128,11 @@ export default function DashboardTrends({
 
   // Lógica de ruteo según el perfil del acuario guardado en la base de datos o estado
   let parametrosAMostrar = [];
-  if (acuarioActual.tipo === 'mixto') {
-    parametrosAMostrar = parametrosMixto;
-  } else if (acuarioActual.tipo === 'peces_marinos') {
-    parametrosAMostrar = parametrosPecesMarinos;
-  } else if (acuarioActual.tipo === 'arrecife') {
-    parametrosAMostrar = parametrosSalada;
+  if (esAguaSalada) {
+    const vFields = activeMarineProfile?.visible_fields || {};
+    parametrosAMostrar = parametrosMarinosPool
+      .filter(p => vFields[p.key] !== false)
+      .map(({ id, nombre, unidad }) => ({ id, nombre, unidad }));
   } else if (acuarioActual.tipo === 'plantado') {
     parametrosAMostrar = parametrosPlantado;
   } else {
@@ -152,8 +141,10 @@ export default function DashboardTrends({
 
   const [activeParam, setActiveParam] = useState(() => {
     if (acuarioActual.tipo === 'plantado') return 'potasio';
-    if (acuarioActual.tipo === 'mixto' || acuarioActual.tipo === 'peces_marinos') return 'nitratos';
-    if (acuarioActual.tipo === 'arrecife') return 'fosfatos';
+    if (esAguaSalada) {
+      if (marineProfileKey === 'fish_only') return 'nitratos';
+      return 'alcalinidad';
+    }
     return 'ph';
   });
 
@@ -163,22 +154,33 @@ export default function DashboardTrends({
     setActiveParam(id);
   };
 
-  // Asegurar que el parámetro seleccionado sea coherente con el ecosistema
+  // Asegurar que el parámetro seleccionado sea coherente con el ecosistema y perfil
   useEffect(() => {
     const aliasMap = {
       dkh: 'alcalinidad',
+      kh: 'alcalinidad',
       calcium: 'calcio',
+      ca: 'calcio',
       magnesium: 'magnesio',
+      mg: 'magnesio',
       salinity: 'salinidad',
       phosphate: 'fosfatos',
-      nitrate: 'nitratos'
+      po4: 'fosfatos',
+      nitrate: 'nitratos',
+      no3: 'nitratos',
+      temperature: 'temperatura',
+      temp: 'temperatura',
+      ammonia: 'amoniaco',
+      nh3: 'amoniaco',
+      nitrite: 'nitritos',
+      no2: 'nitritos'
     };
     const currentId = aliasMap[activeParam] || activeParam;
     const exists = parametrosAMostrar.some(p => p.id === currentId);
     if (!exists && parametrosAMostrar.length > 0) {
       setActiveParam(parametrosAMostrar[0].id);
     }
-  }, [acuarioActual.tipo, parametrosAMostrar]);
+  }, [acuarioActual.tipo, rawTank?.reef_profile, parametrosAMostrar]);
 
   const triggerHaptic = (ms = 15) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -448,6 +450,9 @@ export default function DashboardTrends({
   PARAM_CONFIG.salinity = PARAM_CONFIG.salinidad;
   PARAM_CONFIG.phosphate = PARAM_CONFIG.fosfatos;
   PARAM_CONFIG.nitrate = PARAM_CONFIG.nitratos;
+  PARAM_CONFIG.temperature = PARAM_CONFIG.temperatura;
+  PARAM_CONFIG.ammonia = PARAM_CONFIG.amoniaco;
+  PARAM_CONFIG.nitrite = PARAM_CONFIG.nitritos;
   PARAM_CONFIG.k = PARAM_CONFIG.potasio;
   PARAM_CONFIG.fe = PARAM_CONFIG.hierro;
 
@@ -457,50 +462,66 @@ export default function DashboardTrends({
     const tipo = acuarioActual.tipo;
 
     // Si es acuario marino / arrecife, aplicar rangos del perfil especializado
-    if (esAguaSalada) {
-      const rKey = rawTank?.reef_profile || (tipo === 'peces_marinos' ? 'fowlr_soft' : 'lps_reef');
-      const profile = getMarineProfile(rKey);
-
-      if (profile && profile.targets) {
-        if (param.key === 'alkalinity_dkh' || activeParam === 'alcalinidad' || activeParam === 'dkh') {
-          param.safeMin = profile.targets.kh.min;
-          param.safeMax = profile.targets.kh.max;
-        } else if (param.key === 'calcium_ppm' || activeParam === 'calcio' || activeParam === 'ca') {
-          param.safeMin = profile.targets.calcium.min;
-          param.safeMax = profile.targets.calcium.max;
-        } else if (param.key === 'magnesium_ppm' || activeParam === 'magnesio' || activeParam === 'mg') {
-          param.safeMin = profile.targets.magnesium.min;
-          param.safeMax = profile.targets.magnesium.max;
-        } else if (param.key === 'salinity_ppt' || activeParam === 'salinidad' || activeParam === 'salinity') {
-          param.safeMin = profile.targets.salinity.min;
-          param.safeMax = profile.targets.salinity.max;
-        } else if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
-          param.safeMin = profile.targets.nitrate.min;
-          param.safeMax = profile.targets.nitrate.max;
-          param.suggestedMax = Math.max(profile.targets.nitrate.max * 1.5, 20.0);
-        } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
-          param.safeMin = profile.targets.phosphate.min;
-          param.safeMax = profile.targets.phosphate.max;
-          param.suggestedMax = Math.max(profile.targets.phosphate.max * 2.0, 0.20);
+    if (esAguaSalada && activeMarineProfile?.targets) {
+      const targets = activeMarineProfile.targets;
+      if (param.key === 'alkalinity_dkh' || activeParam === 'alcalinidad' || activeParam === 'dkh' || activeParam === 'kh') {
+        if (targets.kh) {
+          param.safeMin = targets.kh.min;
+          param.safeMax = targets.kh.max;
         }
-        return param;
+      } else if (param.key === 'calcium_ppm' || activeParam === 'calcio' || activeParam === 'ca') {
+        if (targets.calcium) {
+          param.safeMin = targets.calcium.min;
+          param.safeMax = targets.calcium.max;
+        }
+      } else if (param.key === 'magnesium_ppm' || activeParam === 'magnesio' || activeParam === 'mg') {
+        if (targets.magnesium) {
+          param.safeMin = targets.magnesium.min;
+          param.safeMax = targets.magnesium.max;
+        }
+      } else if (param.key === 'salinity_ppt' || activeParam === 'salinidad' || activeParam === 'salinity') {
+        if (targets.salinity) {
+          param.safeMin = targets.salinity.min;
+          param.safeMax = targets.salinity.max;
+        }
+      } else if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
+        if (targets.nitrate) {
+          param.safeMin = targets.nitrate.min;
+          param.safeMax = targets.nitrate.max;
+          param.suggestedMax = Math.max(targets.nitrate.max * 1.5, 20.0);
+        }
+      } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
+        if (targets.phosphate) {
+          param.safeMin = targets.phosphate.min;
+          param.safeMax = targets.phosphate.max;
+          param.suggestedMax = Math.max(targets.phosphate.max * 2.0, 0.20);
+        }
+      } else if (param.key === 'temperatura' || param.key === 'temperature' || activeParam === 'temperatura' || activeParam === 'temperature') {
+        if (targets.temperature) {
+          param.safeMin = targets.temperature.min;
+          param.safeMax = targets.temperature.max;
+        }
+      } else if (param.key === 'ph' || activeParam === 'ph') {
+        if (targets.ph) {
+          param.safeMin = targets.ph.min;
+          param.safeMax = targets.ph.max;
+        }
+      } else if (param.key === 'ammonia_ppm' || activeParam === 'amoniaco') {
+        if (targets.ammonia) {
+          param.safeMin = targets.ammonia.min;
+          param.safeMax = targets.ammonia.safeMax ?? targets.ammonia.max;
+        }
+      } else if (param.key === 'nitrite_ppm' || activeParam === 'nitritos') {
+        if (targets.nitrite) {
+          param.safeMin = targets.nitrite.min;
+          param.safeMax = targets.nitrite.safeMax ?? targets.nitrite.max;
+        }
       }
+      return param;
     }
 
     if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
-      if (tipo === 'mixto') {
-        param.safeMin = 2.0;
-        param.safeMax = 10.0;
-        param.suggestedMax = 20.0;
-      } else if (tipo === 'peces_marinos') {
-        param.safeMin = 0.0;
-        param.safeMax = 40.0;
-        param.suggestedMax = 55.0;
-      } else if (tipo === 'arrecife') {
-        param.safeMin = 2.0;
-        param.safeMax = 15.0;
-        param.suggestedMax = 25.0;
-      } else if (tipo === 'plantado') {
+      if (tipo === 'plantado') {
         param.safeMin = 10.0;
         param.safeMax = 25.0;
         param.suggestedMax = 35.0;
@@ -510,114 +531,172 @@ export default function DashboardTrends({
         param.suggestedMax = 55.0;
       }
     } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
-      if (tipo === 'mixto') {
-        param.safeMin = 0.03;
-        param.safeMax = 0.10;
-        param.suggestedMax = 0.25;
-      } else if (tipo === 'peces_marinos') {
-        param.safeMin = 0.0;
-        param.safeMax = 1.00;
-        param.suggestedMax = 1.50;
-      } else if (tipo === 'arrecife') {
-        param.safeMin = 0.02;
-        param.safeMax = 0.08;
-        param.suggestedMax = 0.25;
-      } else if (tipo === 'plantado') {
+      if (tipo === 'plantado') {
         param.safeMin = 0.5;
         param.safeMax = 2.0;
         param.suggestedMax = 3.0;
       }
     }
     return param;
-  }, [activeParam, parametrosAMostrar, acuarioActual.tipo, esAguaSalada, rawTank?.reef_profile]);
+  }, [activeParam, parametrosAMostrar, acuarioActual.tipo, esAguaSalada, activeMarineProfile]);
 
   // Alertas dinámicas especializadas (Oscilación KH 24h, Nutrientes en cero, Fotómetro ULR)
   const marineAlerts = useMemo(() => {
     if (!esAguaSalada || !measurements || measurements.length === 0) return [];
     const alerts = [];
-    const rProfile = rawTank?.reef_profile || (rawTank?.tank_type === 'marine_fish' ? 'fowlr_soft' : 'lps_reef');
+    const profile = activeMarineProfile;
+    const enabledRules = profile?.enabled_rules || {};
 
     const sorted = [...measurements].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     const latest = sorted[0];
 
     // 1. Oscilación KH 24h
-    const latestKh = latest?.kh ?? latest?.alkalinity_dkh;
-    const latestTime = latest?.timestamp ? new Date(latest.timestamp).getTime() : 0;
+    if (enabledRules.kh_delta_24h) {
+      const latestKh = latest?.kh ?? latest?.alkalinity_dkh;
+      const latestTime = latest?.timestamp ? new Date(latest.timestamp).getTime() : 0;
 
-    if (latestKh !== null && latestKh !== undefined && rProfile !== 'fowlr_soft') {
-      const oneDayAgo = latestTime - 24 * 3600 * 1000;
-      const prev24h = sorted.slice(1).find(m => {
-        const t = new Date(m.timestamp).getTime();
-        const khV = m.kh ?? m.alkalinity_dkh;
-        return t >= oneDayAgo && khV !== null && khV !== undefined;
-      });
+      if (latestKh !== null && latestKh !== undefined) {
+        const oneDayAgo = latestTime - 24 * 3600 * 1000;
+        const prev24h = sorted.slice(1).find(m => {
+          const t = new Date(m.timestamp).getTime();
+          const khV = m.kh ?? m.alkalinity_dkh;
+          return t >= oneDayAgo && khV !== null && khV !== undefined;
+        });
 
-      if (prev24h) {
-        const prevKh = prev24h.kh ?? prev24h.alkalinity_dkh;
-        const delta = Math.abs(Number(latestKh) - Number(prevKh));
-        if (rProfile === 'sps_reef') {
-          if (delta >= 0.5) {
-            alerts.push({
-              type: 'critical',
-              title: 'Alerta Crítica: Oscilación Brusca de KH',
-              message: `Variación de ${delta.toFixed(2)} dKH en las últimas 24h (de ${prevKh} a ${latestKh}). Alto riesgo de necrosis tisular rápida o lenta (RTN/STN) en corales SPS.`
-            });
-          } else if (delta >= 0.3) {
-            alerts.push({
-              type: 'warning',
-              title: 'Advertencia: Inestabilidad de KH en SPS',
-              message: `Variación de ${delta.toFixed(2)} dKH en 24h. La estabilidad diaria es vital para SPS; mantén la fluctuación menor a 0.3 dKH.`
-            });
-          }
-        } else if (rProfile === 'lps_reef') {
-          if (delta >= 0.6) {
-            alerts.push({
-              type: 'warning',
-              title: 'Advertencia: Oscilación de KH en LPS',
-              message: `Variación de ${delta.toFixed(2)} dKH en 24h. Se recomienda no exceder 0.6 dKH/día para proteger los pólipos carnosos.`
-            });
+        if (prev24h) {
+          const prevKh = prev24h.kh ?? prev24h.alkalinity_dkh;
+          const delta = Math.abs(Number(latestKh) - Number(prevKh));
+          if (profile.id === 'sps_reef') {
+            if (delta >= 0.5) {
+              alerts.push({
+                type: 'critical',
+                title: 'Alerta Crítica: Oscilación Brusca de KH en SPS',
+                message: `Variación de ${delta.toFixed(2)} dKH en las últimas 24h (de ${prevKh} a ${latestKh}). Alto riesgo de necrosis tisular rápida o lenta (RTN/STN) en corales SPS.`
+              });
+            } else if (delta >= 0.3) {
+              alerts.push({
+                type: 'warning',
+                title: 'Advertencia: Inestabilidad de KH en SPS',
+                message: `Variación de ${delta.toFixed(2)} dKH en 24h. La estabilidad diaria es vital para SPS; mantén la fluctuación menor a 0.3 dKH.`
+              });
+            }
+          } else if (profile.id === 'mixed_reef') {
+            if (delta >= 0.5) {
+              alerts.push({
+                type: 'critical',
+                title: 'Alerta Crítica: Oscilación de KH en Arrecife Mixto',
+                message: `Variación de ${delta.toFixed(2)} dKH en 24h (de ${prevKh} a ${latestKh}). Supera el límite de seguridad (0.5 dKH) para corales duros.`
+              });
+            } else if (delta >= 0.4) {
+              alerts.push({
+                type: 'warning',
+                title: 'Advertencia: Fluctuación de KH en Arrecife Mixto',
+                message: `Variación de ${delta.toFixed(2)} dKH en 24h. Límite sugerido de 0.4 dKH/día para balancear blandos, LPS y SPS.`
+              });
+            }
+          } else if (profile.id === 'lps_reef') {
+            if (delta >= 0.6) {
+              alerts.push({
+                type: 'warning',
+                title: 'Advertencia: Oscilación de KH en LPS',
+                message: `Variación de ${delta.toFixed(2)} dKH en 24h. Se recomienda no exceder 0.6 dKH/día para proteger los pólipos carnosos.`
+              });
+            }
+          } else if (profile.id === 'soft_reef') {
+            if (delta >= 1.0) {
+              alerts.push({
+                type: 'warning',
+                title: 'Advertencia: Variación diaria de KH en Corales Blandos',
+                message: `Variación de ${delta.toFixed(2)} dKH en 24h. Mantener por debajo de 1.0 dKH/día.`
+              });
+            }
           }
         }
       }
     }
 
     // 2. Nutrientes en cero (Piso mínimo)
-    if (['lps_reef', 'sps_reef'].includes(rProfile) && latest) {
+    if (enabledRules.zero_nutrient_floor && latest) {
       const no3 = latest?.nitrate ?? latest?.nitrate_ppm;
       const po4 = latest?.phosphate ?? latest?.phosphate_ppm;
       const zeroNo3 = no3 !== null && no3 !== undefined && Number(no3) === 0;
       const zeroPo4 = po4 !== null && po4 !== undefined && Number(po4) === 0;
 
       if (zeroNo3 || zeroPo4) {
-        alerts.push({
-          type: 'critical',
-          title: 'Alerta de Inanición: Nutrientes en Cero (0.00 ppm)',
-          message: `Se detectó ${zeroNo3 && zeroPo4 ? 'NO3 y PO4 en 0.00 ppm' : zeroNo3 ? 'NO3 en 0.00 ppm' : 'PO4 en 0.00 ppm'}. Riesgo inminente de encogimiento/inanición en corales LPS y proliferación de dinoflagelados en SPS. Dosificar nutrientes o reducir filtración química.`
-        });
+        if (profile.id === 'soft_reef') {
+          alerts.push({
+            type: 'warning',
+            title: 'Aviso: Nutrientes en 0.00 ppm',
+            message: `Nivel detectado en 0 ppm (${zeroNo3 && zeroPo4 ? 'NO3 y PO4' : zeroNo3 ? 'NO3' : 'PO4'}). Los corales blandos prosperan mejor con nutrientes detectables.`
+          });
+        } else if (profile.id === 'lps_reef') {
+          alerts.push({
+            type: 'critical',
+            title: 'Alerta de Inanición: Nutrientes en Cero (0.00 ppm)',
+            message: `Se detectó ${zeroNo3 && zeroPo4 ? 'NO3 y PO4 en 0.00 ppm' : zeroNo3 ? 'NO3 en 0.00 ppm' : 'PO4 en 0.00 ppm'}. Riesgo inminente de encogimiento y pérdida de tejido en corales LPS por inanición.`
+          });
+        } else {
+          alerts.push({
+            type: 'critical',
+            title: 'Alerta de Piso Nutricional: Nutrientes en Cero (0.00 ppm)',
+            message: `Se detectó ${zeroNo3 && zeroPo4 ? 'NO3 y PO4 en 0.00 ppm' : zeroNo3 ? 'NO3 en 0.00 ppm' : 'PO4 en 0.00 ppm'}. Riesgo inminente de blanqueamiento coralino y brote oportunista de dinoflagelados.`
+          });
+        }
       }
     }
 
     // 3. Resolución de Test PO4
-    if (['lps_reef', 'sps_reef'].includes(rProfile) && latest) {
+    if (enabledRules.test_resolution_po4 && latest) {
       const po4Method = latest?.test_methods?.po4;
       if (po4Method === 'drop_kit') {
         alerts.push({
           type: 'info',
           title: 'Recomendación de Resolución: Fotómetro ULR',
-          message: 'Has registrado fosfato con kit de gotas. En acuarios de arrecife (LPS/SPS), se recomienda fotómetro digital de rango ultra bajo (ej. Hanna ULR HI774/HI736) o test ICP debido a la baja resolución de las gotas por debajo de 0.05 ppm.'
+          message: 'Has registrado fosfato con kit de gotas. En acuarios de arrecife sensibles, se recomienda fotómetro digital de rango ultra bajo (ej. Hanna ULR HI774/HI736) o test ICP debido a la baja resolución de las gotas por debajo de 0.05 ppm.'
         });
       }
     }
 
+    // 4. Advertencia de flujo para tejido carnoso LPS
+    if (enabledRules.flow_tissue_warning && rawTank?.flow_profile === 'high_turbulent') {
+      alerts.push({
+        type: 'warning',
+        title: 'Precaución de Flujo: Tejido Carnoso LPS',
+        message: 'El flujo configurado es muy alto/turbulento. En acuarios con predominancia LPS, un chorro laminar directo puede rasgar o retraer permanentemente el tejido carnoso de Euphyllias y Torch.'
+      });
+    }
+
+    // 5. Sugerencia de dosificación automatizada
+    if (enabledRules.automated_dosing_suggestion && ['water_changes', 'manual_dosing'].includes(rawTank?.dosing_method)) {
+      alerts.push({
+        type: 'info',
+        title: 'Optimización de Estabilidad: Dosificación Automatizada',
+        message: 'Para acuarios de arrecife con alta demanda de calcificación, se sugiere migrar a bombas peristálticas (Balling) o reactor de calcio para evitar fluctuaciones bruscas de KH y Ca.'
+      });
+    }
+
     return alerts;
-  }, [measurements, rawTank, esAguaSalada]);
+  }, [measurements, rawTank, esAguaSalada, activeMarineProfile]);
 
   // Filtrar lecturas válidas para el parámetro activo
   const validReadings = useMemo(() => {
     return measurements
       .filter(m => {
         if (!currentParam?.key) return false;
-        const val = m[currentParam.key];
+        let val = m[currentParam.key];
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'temperatura') val = m.temperature;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'temperature') val = m.temperatura;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'salinity_ppt') val = m.salinity;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'salinity') val = m.salinity_ppt;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'alkalinity_dkh') val = m.kh;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'kh') val = m.alkalinity_dkh;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'calcium_ppm') val = m.calcium;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'magnesium_ppm') val = m.magnesium;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'nitrate_ppm') val = m.nitrate;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'phosphate_ppm') val = m.phosphate;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'ammonia_ppm') val = m.ammonia;
+        if ((val === null || val === undefined || val === '') && currentParam.key === 'nitrite_ppm') val = m.nitrite;
+
         return val !== null && val !== undefined && val !== '' && !isNaN(Number(val));
       })
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
