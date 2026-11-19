@@ -40,7 +40,16 @@ from backend.models import (
     AnalisisAcuarioResponse,
     AquariumDataRequest,
     AquariumAnalysisResponse,
-    PredictiveAnalysisJsonResponse
+    PredictiveAnalysisJsonResponse,
+    MaintenanceTask,
+    MaintenanceLog,
+    WaterChange,
+    MaintenanceTaskCreate,
+    MaintenanceTaskUpdate,
+    MaintenanceTaskResponse,
+    MaintenanceCompleteRequest,
+    WaterChangeCreate,
+    WaterChangeResponse
 )
 
 __all__ = [
@@ -77,5 +86,14 @@ __all__ = [
     "AnalisisAcuarioResponse",
     "AquariumDataRequest",
     "AquariumAnalysisResponse",
-    "PredictiveAnalysisJsonResponse"
+    "PredictiveAnalysisJsonResponse",
+    "MaintenanceTask",
+    "MaintenanceLog",
+    "WaterChange",
+    "MaintenanceTaskCreate",
+    "MaintenanceTaskUpdate",
+    "MaintenanceTaskResponse",
+    "MaintenanceCompleteRequest",
+    "WaterChangeCreate",
+    "WaterChangeResponse"
 ]

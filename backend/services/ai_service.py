@@ -107,7 +107,8 @@ def _generar_analisis_fallback(
     trace_elements: Optional[Dict[str, Any]] = None,
     test_methods: Optional[Dict[str, Any]] = None,
     delta_kh_24h: Optional[float] = None,
-    dynamic_alerts: Optional[List[Dict[str, Any]]] = None
+    dynamic_alerts: Optional[List[Dict[str, Any]]] = None,
+    maintenance_tasks: Optional[List[Dict[str, Any]]] = None
 ) -> AnalisisAcuarioResponse:
     """Genera un análisis clínico estructurado inteligente de respaldo respetando las reglas de biotipo y perfiles marinos."""
     risk = "Bajo"
@@ -119,6 +120,53 @@ def _generar_analisis_fallback(
 
     alert = f"Parámetros dentro de umbrales operativos estables para '{profile_info['name']}'. Mantener rutina regular de filtración."
     acciones: List[DosisRecomendada] = []
+
+    # 0. Correlación con Equipo y Mantenimiento Mecánico
+    if maintenance_tasks:
+        # A. Picos de NO3 o PO4 + filtración mecánica/skimmer vencida o > 7 días
+        mech_or_skimmer_overdue = [
+            t for t in maintenance_tasks
+            if t.get("task_key") in ["mechanical_filter", "skimmer_cup"]
+            and (t.get("status") == "overdue" or (t.get("days_since_last") is not None and t.get("days_since_last") > 7))
+        ]
+        has_high_nutrients = (
+            (nitrato is not None and nitrato > (profile_info["targets"]["nitrate"]["max"] if es_marino else 25.0)) or
+            (fosfato is not None and fosfato > (profile_info["targets"]["phosphate"]["max"] if es_marino else 0.10))
+        )
+        if mech_or_skimmer_overdue and has_high_nutrients:
+            task_names = ", ".join(t.get("title", "") for t in mech_or_skimmer_overdue)
+            acciones.append(
+                DosisRecomendada(
+                    parametro="Filtración Mecánica / Skimmer",
+                    producto=f"Limpieza prioritaria de filtración ({task_names})",
+                    cantidad_sugerida="La acumulación de detrito orgánico en calcetines/esponjas o copa de skimmer es la causa raíz primaria de NO3/PO4. Lavar o sustituir antes de añadir resinas o químicos."
+                )
+            )
+
+        # B. SPS / Mixto / LPS + bombas de recirculación vencidas
+        if es_marino and profile_id in ["sps_reef", "mixed_reef", "lps_reef"]:
+            pumps_overdue = [t for t in maintenance_tasks if t.get("task_key") == "pumps_cleaning" and t.get("status") == "overdue"]
+            if pumps_overdue:
+                acciones.append(
+                    DosisRecomendada(
+                        parametro="Flujo / Bombas de recirculación",
+                        producto="Limpieza profunda y descalcificación con ácido cítrico",
+                        cantidad_sugerida="Limpieza de bombas vencida. La precipitación de sarro reduce hasta 40% el flujo real, propiciando zonas muertas y acumulación de cianobacteria."
+                    )
+                )
+
+        # C. Oscilación de KH + dosificadoras/sondas vencidas
+        has_kh_issue = any("KH" in d.get("title", "") for d in (dynamic_alerts or [])) or (delta_kh_24h is not None and delta_kh_24h > 0.3)
+        if has_kh_issue:
+            doser_overdue = [t for t in maintenance_tasks if t.get("task_key") == "doser_probes" and t.get("status") == "overdue"]
+            if doser_overdue:
+                acciones.append(
+                    DosisRecomendada(
+                        parametro="Dosificadoras / Sondas",
+                        producto="Calibración volumétrica de cabezales y sondas",
+                        cantidad_sugerida="Inestabilidad de KH detectada con calibración de dosificadoras vencida. Verifica mangueras y calibra la dosificación antes de ajustar dosis diarias."
+                    )
+                )
 
     # 1. Integración de alertas dinámicas prioritarias
     if dynamic_alerts:
@@ -324,6 +372,7 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
     test_methods = datos_acuario.get("test_methods") or {}
     tendencia = datos_acuario.get("tendencia_reciente", "Estable")
     history_measurements = datos_acuario.get("history_measurements") or []
+    maintenance_tasks = datos_acuario.get("maintenance_tasks_summary") or datos_acuario.get("maintenance_tasks") or []
 
     # Evaluación de alertas dinámicas especializadas
     dynamic_alerts = evaluate_marine_alerts(
@@ -358,7 +407,8 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
             nitrite=nitrite,
             trace_elements=trace_elements,
             test_methods=test_methods,
-            dynamic_alerts=dynamic_alerts
+            dynamic_alerts=dynamic_alerts,
+            maintenance_tasks=maintenance_tasks
         )
 
     try:
@@ -375,6 +425,11 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
             "3. En 'lps_reef' (Arrecife LPS): Requieren nutrientes detectables (NO3 5-10, PO4 0.03-0.08 ppm, ideal 0.05). NUNCA exijas nutrientes ultra-bajos; nutrientes en cero causan inanición y encogimiento de tejido. Recomienda flujo moderado e indirecto.\n"
             "4. En 'mixed_reef' (Arrecife Mixto): Equilibrio entre estabilidad de KH (8.0-8.5, delta máx 0.4) y nutrientes detectables (NO3 3-8 ppm, PO4 0.03-0.06 ppm) para no matar de hambre los LPS ni blanquear SPS.\n"
             "5. En 'sps_reef' (Arrecife SPS): Altísima exigencia de estabilidad de KH (7.5-8.5, delta máx 0.3 dKH diario por riesgo crítico de RTN/STN) y nutrientes bajos controlados (NO3 1-5 ppm, PO4 0.01-0.04 ppm, advertencia de dinoflagelados si llegan a cero).\n"
+            "\n"
+            "CORRELACIÓN CON EQUIPO Y MANTENIMIENTO MECÁNICO:\n"
+            "1. Si hay picos de NO3 o PO4 y 'mechanical_filter' o 'skimmer_cup' llevan > 7 días sin completarse o están vencidos ('overdue'), señala la acumulación de detrito en la filtración mecánica como posible causa raíz prioritaria antes de recomendar químicos, resinas o cambios drásticos.\n"
+            "2. Si el perfil es 'sps_reef', 'mixed_reef' o 'lps_reef' y 'pumps_cleaning' está vencido, advierte sobre pérdida de flujo real por calcificación/sarro y riesgo de acumulación de detrito o cianobacteria.\n"
+            "3. Si hay oscilaciones de KH (delta > 0.3 dKH) y 'doser_probes' está vencido, sugiere revisar calibración de dosificadora, mangueras o sondas antes de ajustar dosificación.\n"
             "Genera un diagnóstico en JSON puro cumpliendo estrictamente con el esquema Pydantic."
         )
 
@@ -397,6 +452,7 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
         - Nitrito (NO2): {nitrite if nitrite is not None else '0.00'} ppm
         - Elementos Traza: {json.dumps(trace_elements) if trace_elements else 'No registrados'}
         - Métodos de Test: {json.dumps(test_methods) if test_methods else 'No especificados'}
+        - Tareas de Mantenimiento y Filtración Activas: {json.dumps(maintenance_tasks, ensure_ascii=False) if maintenance_tasks else 'No registradas'}
         - Historial / Tendencia: {tendencia}
         - Alertas Dinámicas Pre-evaluadas: {json.dumps(dynamic_alerts, ensure_ascii=False) if dynamic_alerts else 'Ninguna detectada'}
         """

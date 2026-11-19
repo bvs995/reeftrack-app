@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
@@ -17,10 +17,11 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
-  Pencil
+  Pencil,
+  Wrench
 } from 'lucide-react';
 import QuickEntryForm from './QuickEntryForm';
-import { updateAquariumVolume } from '../api';
+import { updateAquariumVolume, fetchMaintenanceTasks, completeMaintenanceTask } from '../api';
 
 export default function Dashboard({
   analytics,
@@ -35,10 +36,45 @@ export default function Dashboard({
 }) {
   const { t } = useTranslation();
   const [showInlineForm, setShowInlineForm] = useState(false);
+  const [overdueTasks, setOverdueTasks] = useState([]);
+  const [completingTaskId, setCompletingTaskId] = useState(null);
 
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
+    }
+  };
+
+  const tankId = activeTank?.id || analytics?.tank_id || analytics?.id;
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadOverdue = async () => {
+      if (!tankId) return;
+      try {
+        const data = await fetchMaintenanceTasks(tankId, false);
+        if (isMounted && Array.isArray(data)) {
+          setOverdueTasks(data.filter(t => t.is_enabled && t.status === 'overdue'));
+        }
+      } catch (err) {
+        // Silencioso
+      }
+    };
+    loadOverdue();
+    return () => { isMounted = false; };
+  }, [tankId]);
+
+  const handleQuickCompleteTask = async (taskId) => {
+    triggerHaptic(30);
+    setCompletingTaskId(taskId);
+    try {
+      await completeMaintenanceTask(taskId);
+      setOverdueTasks(prev => prev.filter(t => t.id !== taskId));
+      if (onMeasurementSaved) onMeasurementSaved();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCompletingTaskId(null);
     }
   };
 
@@ -96,6 +132,50 @@ export default function Dashboard({
 
   return (
     <div className="space-y-6 pb-28 max-w-7xl mx-auto px-3 sm:px-6 pt-4">
+      {/* Banner Discreto de Mantenimiento Vencido */}
+      {overdueTasks.length > 0 && (
+        <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-r from-coral-950/80 via-marine-900/90 to-marine-950/90 border border-coral-500/40 shadow-neon-coral flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-coral-500/20 text-coral-400 border border-coral-500/40 flex items-center justify-center shrink-0">
+              <Wrench className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-coral-400">
+                  Mantenimiento Vencido ({overdueTasks.length})
+                </span>
+                <span className="w-2 h-2 rounded-full bg-coral-400 animate-ping" />
+              </div>
+              <p className="text-xs text-slate-200 font-semibold mt-0.5">
+                {overdueTasks.map(t => t.title).join(' • ')}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+            {overdueTasks.length === 1 && (
+              <button
+                type="button"
+                disabled={completingTaskId === overdueTasks[0].id}
+                onClick={() => handleQuickCompleteTask(overdueTasks[0].id)}
+                className="px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                {completingTaskId === overdueTasks[0].id ? 'Guardando...' : '✓ Listo hoy'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                onOpenWaterChange();
+              }}
+              className="px-3.5 py-2 rounded-xl bg-coral-500/20 hover:bg-coral-500/30 text-coral-300 border border-coral-500/40 text-xs font-bold transition active:scale-95 whitespace-nowrap cursor-pointer"
+            >
+              Ir a Mantenimiento →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero Overview Card - Slate-900 con acentos cian y azul marino */}
       <div className="relative overflow-hidden rounded-3xl glass-panel p-5 sm:p-7 border border-marine-700/80 shadow-2xl">
         <div className="absolute -right-16 -top-16 w-60 h-60 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />

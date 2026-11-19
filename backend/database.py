@@ -110,61 +110,92 @@ def init_db():
         logger.info(f"Aviso durante create_all (posible creación concurrente por otro worker): {ddl_err}")
 
     # Ejecuta esto después de Base.metadata.create_all(bind=engine) para PostgreSQL
-    with engine.connect() as conn:
-        try:
-            # Columnas de perfiles marinos en tanks y acuarios
-            conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
-            conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
-            conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
-            conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS flow_profile VARCHAR(50);"))
-
-            conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
-            conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
-            conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
-            conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS flow_profile VARCHAR(50);"))
-
-            # Columnas en measurements y mediciones
-            meas_alter_statements = [
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS salinity FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS temperature FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS temperatura FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS ph FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS ammonia FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS nitrite FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS kh FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS calcium FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS magnesium FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS nitrate FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS phosphate FLOAT;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS trace_elements JSONB;",
-                "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS test_methods JSONB;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS salinity FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperature FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperatura FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ph FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ammonia FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS nitrite FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS kh FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS calcium FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS magnesium FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS nitrate FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS phosphate FLOAT;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS trace_elements JSONB;",
-                "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS test_methods JSONB;",
-            ]
-            for stmt in meas_alter_statements:
-                conn.execute(text(stmt))
-
-            # Vistas de compatibilidad
+    if engine.dialect.name != "sqlite":
+        with engine.connect() as conn:
             try:
-                conn.execute(text("CREATE OR REPLACE VIEW aquariums AS SELECT * FROM tanks;"))
-                conn.execute(text("CREATE OR REPLACE VIEW parameter_logs AS SELECT * FROM measurements;"))
-            except Exception:
-                pass
+                # Columnas de perfiles marinos en tanks y acuarios
+                conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
+                conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
+                conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
+                conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS flow_profile VARCHAR(50);"))
 
-            conn.commit()
-        except Exception as e:
-            logger.debug(f"Verificación de columnas directas: {e}")
+                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
+                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
+                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
+                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS flow_profile VARCHAR(50);"))
+
+                # Columnas en measurements y mediciones
+                meas_alter_statements = [
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS salinity FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS temperature FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS temperatura FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS ph FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS ammonia FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS nitrite FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS kh FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS calcium FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS magnesium FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS nitrate FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS phosphate FLOAT;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS trace_elements JSONB;",
+                    "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS test_methods JSONB;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS salinity FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperature FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperatura FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ph FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ammonia FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS nitrite FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS kh FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS calcium FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS magnesium FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS nitrate FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS phosphate FLOAT;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS trace_elements JSONB;",
+                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS test_methods JSONB;",
+                ]
+                for stmt in meas_alter_statements:
+                    conn.execute(text(stmt))
+
+                # Columnas para maintenance_tasks
+                maint_task_statements = [
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS task_key VARCHAR(50);",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS title VARCHAR(120);",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'mechanical';",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS frequency_days INTEGER DEFAULT 7;",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS last_completed_at TIMESTAMP WITH TIME ZONE;",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS next_due_at TIMESTAMP WITH TIME ZONE;",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT TRUE;",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS notes TEXT;",
+                    "ALTER TABLE maintenance_tasks ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();",
+                    "ALTER TABLE maintenance_logs ADD COLUMN IF NOT EXISTS task_id INTEGER;",
+                    "ALTER TABLE maintenance_logs ADD COLUMN IF NOT EXISTS aquarium_id INTEGER;",
+                    "ALTER TABLE maintenance_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();",
+                    "ALTER TABLE maintenance_logs ADD COLUMN IF NOT EXISTS linked_water_change_id INTEGER;",
+                    "ALTER TABLE maintenance_logs ADD COLUMN IF NOT EXISTS notes TEXT;",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS tank_id INTEGER;",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS user_id INTEGER;",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS volume_liters FLOAT;",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS percentage FLOAT;",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS performed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS notes TEXT;",
+                    "ALTER TABLE water_changes ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();"
+                ]
+                for stmt in maint_task_statements:
+                    try:
+                        conn.execute(text(stmt))
+                    except Exception:
+                        pass
+
+                # Vistas de compatibilidad
+                try:
+                    conn.execute(text("CREATE OR REPLACE VIEW aquariums AS SELECT * FROM tanks;"))
+                    conn.execute(text("CREATE OR REPLACE VIEW parameter_logs AS SELECT * FROM measurements;"))
+                except Exception:
+                    pass
+
+                conn.commit()
+            except Exception as e:
+                logger.debug(f"Verificación de columnas directas: {e}")
 
     try:
         inspector = inspect(engine)

@@ -1,6 +1,6 @@
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Body, status
 from fastapi.exceptions import RequestValidationError
@@ -42,7 +42,21 @@ from backend.models import (
     PredictiveAnalysisJsonResponse,
     MedicionAcuario,
     Acuario,
-    Aquarium
+    Aquarium,
+    MaintenanceTask,
+    MaintenanceLog,
+    WaterChange,
+    MaintenanceTaskCreate,
+    MaintenanceTaskUpdate,
+    MaintenanceTaskResponse,
+    MaintenanceCompleteRequest,
+    WaterChangeCreate,
+    WaterChangeResponse
+)
+from backend.maintenance_service import (
+    seed_default_maintenance_tasks,
+    calculate_task_status,
+    task_to_response_dict
 )
 from backend.services.ai_service import (
     analizar_parametros_acuario,
@@ -535,6 +549,14 @@ def create_user_tank(
     db.add(new_tank)
     db.commit()
     db.refresh(new_tank)
+    try:
+        seed_default_maintenance_tasks(db, new_tank)
+    except Exception as e:
+        logger.warning(f"Aviso al sembrar tareas de mantenimiento para tanque {new_tank.id}: {e}")
+    try:
+        seed_default_maintenance_tasks(db, new_tank)
+    except Exception as e:
+        logger.warning(f"Aviso al sembrar tareas de mantenimiento para tanque {new_tank.id}: {e}")
     return TankResponse.model_validate(new_tank)
 
 @app.post(
@@ -569,6 +591,10 @@ def create_aquarium_via_schema(
     db.add(new_tank)
     db.commit()
     db.refresh(new_tank)
+    try:
+        seed_default_maintenance_tasks(db, new_tank)
+    except Exception as e:
+        logger.warning(f"Aviso al sembrar tareas de mantenimiento para tanque {new_tank.id}: {e}")
 
     # Sincronización en tabla acuarios
     try:
@@ -969,6 +995,16 @@ def obtener_analisis_json(
                     for m in recent_meas
                 ]
 
+            # Extraer tareas de mantenimiento activas para correlación diagnóstica con IA
+            active_maint = db.query(MaintenanceTask).filter(
+                MaintenanceTask.aquarium_id == target_id,
+                MaintenanceTask.is_enabled == True
+            ).all()
+            if active_maint:
+                data_dict["maintenance_tasks_summary"] = [
+                    task_to_response_dict(t) for t in active_maint
+                ]
+
         resultado_estructurado = analizar_parametros_estructurado(data_dict)
         return {"status": "success", "data": resultado_estructurado}
     except Exception as e:
@@ -1084,7 +1120,13 @@ def endpoint_analisis_con_historial(
             "trace_elements": getattr(ultima_medicion, "trace_elements", None),
             "test_methods": getattr(ultima_medicion, "test_methods", None),
             "tendencia_reciente": tendencia,
-            "history_measurements": hist_list
+            "history_measurements": hist_list,
+            "maintenance_tasks_summary": [
+                task_to_response_dict(t) for t in db.query(MaintenanceTask).filter(
+                    MaintenanceTask.aquarium_id == target_id,
+                    MaintenanceTask.is_enabled == True
+                ).all()
+            ]
         }
 
         # 4. Llamar a tu función de Gemini estructurada
@@ -1305,6 +1347,353 @@ def get_tank_analytics(
             "reason": wc.message
         }
     }
+
+
+# ==============================================================================
+# 🛠️ MÓDULO DE MANTENIMIENTO MECÁNICO Y EQUIPO
+# ==============================================================================
+
+@app.get(
+    "/api/aquariums/{aquarium_id}/maintenance",
+    response_model=List[MaintenanceTaskResponse],
+    summary="Listar tareas de mantenimiento del acuario"
+)
+@app.get(
+    "/api/tanks/{aquarium_id}/maintenance",
+    response_model=List[MaintenanceTaskResponse],
+    include_in_schema=False
+)
+@app.get(
+    "/aquariums/{aquarium_id}/maintenance",
+    response_model=List[MaintenanceTaskResponse],
+    include_in_schema=False
+)
+@app.get(
+    "/tanks/{aquarium_id}/maintenance",
+    response_model=List[MaintenanceTaskResponse],
+    include_in_schema=False
+)
+def get_aquarium_maintenance_tasks(
+    aquarium_id: int,
+    include_disabled: bool = Query(True, description="Incluir tareas desactivadas"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Devuelve las tareas de mantenimiento activas y calculadas para el acuario."""
+    tank = db.query(Tank).filter(Tank.id == aquarium_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acuario no encontrado o no autorizado.")
+
+    # Auto-sembrado si el acuario aún no tiene tareas
+    tasks = db.query(MaintenanceTask).filter(MaintenanceTask.aquarium_id == aquarium_id).all()
+    if not tasks:
+        tasks = seed_default_maintenance_tasks(db, tank)
+
+    if not include_disabled:
+        tasks = [t for t in tasks if t.is_enabled]
+
+    now = datetime.now(timezone.utc)
+    res_list = [task_to_response_dict(t, now) for t in tasks]
+
+    def sort_key(item):
+        if not item["is_enabled"]:
+            return (4, item["days_until_due"] if item["days_until_due"] is not None else 999)
+        st = item["status"]
+        if st == "overdue":
+            return (0, item["days_until_due"] if item["days_until_due"] is not None else -999)
+        if st == "due_soon":
+            return (1, item["days_until_due"] if item["days_until_due"] is not None else 0)
+        if st == "pending":
+            return (2, item["frequency_days"])
+        return (3, item["days_until_due"] if item["days_until_due"] is not None else 999)
+
+    res_list.sort(key=sort_key)
+    return res_list
+
+
+@app.post(
+    "/api/aquariums/{aquarium_id}/maintenance",
+    response_model=MaintenanceTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear una tarea de mantenimiento personalizada"
+)
+@app.post(
+    "/api/tanks/{aquarium_id}/maintenance",
+    response_model=MaintenanceTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+@app.post(
+    "/aquariums/{aquarium_id}/maintenance",
+    response_model=MaintenanceTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+@app.post(
+    "/tanks/{aquarium_id}/maintenance",
+    response_model=MaintenanceTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+def create_maintenance_task(
+    aquarium_id: int,
+    payload: MaintenanceTaskCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Permite crear una tarea personalizada de mantenimiento para el acuario."""
+    tank = db.query(Tank).filter(Tank.id == aquarium_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acuario no encontrado o no autorizado.")
+
+    now = datetime.now(timezone.utc)
+    new_task = MaintenanceTask(
+        aquarium_id=aquarium_id,
+        user_id=current_user.id,
+        task_key=payload.task_key or "custom",
+        title=payload.title.strip(),
+        category=payload.category or "mechanical",
+        frequency_days=payload.frequency_days,
+        last_completed_at=None,
+        next_due_at=now + timedelta(days=payload.frequency_days),
+        is_enabled=payload.is_enabled,
+        notes=payload.notes,
+        created_at=now
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return task_to_response_dict(new_task, now)
+
+
+@app.patch(
+    "/api/maintenance/{task_id}",
+    response_model=MaintenanceTaskResponse,
+    summary="Editar una tarea de mantenimiento"
+)
+@app.patch(
+    "/maintenance/{task_id}",
+    response_model=MaintenanceTaskResponse,
+    include_in_schema=False
+)
+def update_maintenance_task(
+    task_id: int,
+    payload: MaintenanceTaskUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Edita frecuencia, título, estado habilitado o notas de una tarea."""
+    task = db.query(MaintenanceTask).filter(MaintenanceTask.id == task_id, MaintenanceTask.user_id == current_user.id).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea de mantenimiento no encontrada.")
+
+    now = datetime.now(timezone.utc)
+    if payload.title is not None:
+        task.title = payload.title.strip()
+    if payload.category is not None:
+        task.category = payload.category.strip()
+    if payload.is_enabled is not None:
+        task.is_enabled = payload.is_enabled
+    if payload.notes is not None:
+        task.notes = payload.notes
+
+    if payload.frequency_days is not None:
+        task.frequency_days = payload.frequency_days
+        base_time = task.last_completed_at or task.created_at or now
+        if base_time.tzinfo is None:
+            base_time = base_time.replace(tzinfo=timezone.utc)
+        task.next_due_at = base_time + timedelta(days=payload.frequency_days)
+
+    db.commit()
+    db.refresh(task)
+    return task_to_response_dict(task, now)
+
+
+@app.post(
+    "/api/maintenance/{task_id}/complete",
+    response_model=MaintenanceTaskResponse,
+    summary="Marcar tarea como completada hoy"
+)
+@app.post(
+    "/maintenance/{task_id}/complete",
+    response_model=MaintenanceTaskResponse,
+    include_in_schema=False
+)
+def complete_maintenance_task(
+    task_id: int,
+    payload: Optional[MaintenanceCompleteRequest] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Registra la finalización de una tarea y recalcula la próxima fecha de vencimiento."""
+    task = db.query(MaintenanceTask).filter(MaintenanceTask.id == task_id, MaintenanceTask.user_id == current_user.id).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada o no autorizada.")
+
+    now = (payload.completed_at if payload and payload.completed_at else None) or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    task.last_completed_at = now
+    task.next_due_at = now + timedelta(days=task.frequency_days)
+
+    log_entry = MaintenanceLog(
+        task_id=task.id,
+        aquarium_id=task.aquarium_id,
+        completed_at=now,
+        notes=payload.notes if payload else None
+    )
+    db.add(log_entry)
+    db.commit()
+    db.refresh(task)
+
+    return task_to_response_dict(task, now)
+
+
+@app.delete(
+    "/api/maintenance/{task_id}",
+    summary="Eliminar una tarea de mantenimiento"
+)
+@app.delete(
+    "/maintenance/{task_id}",
+    include_in_schema=False
+)
+def delete_maintenance_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Elimina una tarea de mantenimiento."""
+    task = db.query(MaintenanceTask).filter(MaintenanceTask.id == task_id, MaintenanceTask.user_id == current_user.id).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada o no autorizada.")
+
+    db.delete(task)
+    db.commit()
+    return {"status": "success", "message": "Tarea de mantenimiento eliminada exitosamente."}
+
+
+# ==============================================================================
+# 💧 REGISTRO Y GESTIÓN DE CAMBIOS DE AGUA
+# ==============================================================================
+
+@app.get(
+    "/api/tanks/{tank_id}/water-changes",
+    response_model=List[WaterChangeResponse],
+    summary="Listar historial de cambios de agua"
+)
+@app.get(
+    "/api/aquariums/{tank_id}/water-changes",
+    response_model=List[WaterChangeResponse],
+    include_in_schema=False
+)
+@app.get(
+    "/tanks/{tank_id}/water-changes",
+    response_model=List[WaterChangeResponse],
+    include_in_schema=False
+)
+@app.get(
+    "/aquariums/{tank_id}/water-changes",
+    response_model=List[WaterChangeResponse],
+    include_in_schema=False
+)
+def get_water_changes(
+    tank_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retorna los cambios de agua registrados para el acuario."""
+    tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acuario no encontrado o no autorizado.")
+
+    logs = (
+        db.query(WaterChange)
+        .filter(WaterChange.tank_id == tank_id)
+        .order_by(WaterChange.performed_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [WaterChangeResponse.model_validate(w) for w in logs]
+
+
+@app.post(
+    "/api/tanks/{tank_id}/water-changes",
+    response_model=WaterChangeResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar un cambio de agua con tareas vinculadas opcionales"
+)
+@app.post(
+    "/api/aquariums/{tank_id}/water-changes",
+    response_model=WaterChangeResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+@app.post(
+    "/tanks/{tank_id}/water-changes",
+    response_model=WaterChangeResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+@app.post(
+    "/aquariums/{tank_id}/water-changes",
+    response_model=WaterChangeResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+def record_water_change(
+    tank_id: int,
+    payload: WaterChangeCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Registra un cambio de agua y, opcionalmente, marca como completadas
+    las tareas de mantenimiento seleccionadas (vinculándolas en maintenance_logs).
+    """
+    tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acuario no encontrado o no autorizado.")
+
+    now = payload.performed_at or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    wc = WaterChange(
+        tank_id=tank_id,
+        user_id=current_user.id,
+        volume_liters=payload.volume_liters,
+        percentage=payload.percentage,
+        performed_at=now,
+        notes=payload.notes,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(wc)
+    db.commit()
+    db.refresh(wc)
+
+    # Si se completaron tareas durante el cambio de agua, marcarlas completadas
+    if payload.completed_task_ids:
+        for tid in payload.completed_task_ids:
+            task = db.query(MaintenanceTask).filter(
+                MaintenanceTask.id == tid,
+                MaintenanceTask.aquarium_id == tank_id,
+                MaintenanceTask.user_id == current_user.id
+            ).first()
+            if task:
+                task.last_completed_at = now
+                task.next_due_at = now + timedelta(days=task.frequency_days)
+                mlog = MaintenanceLog(
+                    task_id=task.id,
+                    aquarium_id=tank_id,
+                    completed_at=now,
+                    linked_water_change_id=wc.id,
+                    notes=f"Completada durante cambio de agua ({wc.volume_liters} L)"
+                )
+                db.add(mlog)
+        db.commit()
+
+    return WaterChangeResponse.model_validate(wc)
 
 
 # ==============================================================================

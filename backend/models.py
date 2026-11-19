@@ -44,6 +44,8 @@ class User(Base):
     # Relaciones estrictas por usuario
     tanks = relationship("Tank", back_populates="owner", cascade="all, delete-orphan")
     measurements = relationship("Measurement", back_populates="user", cascade="all, delete-orphan")
+    maintenance_tasks = relationship("MaintenanceTask", back_populates="user", cascade="all, delete-orphan")
+    water_changes = relationship("WaterChange", back_populates="user", cascade="all, delete-orphan")
 
 
 class Tank(Base):
@@ -68,6 +70,8 @@ class Tank(Base):
 
     owner = relationship("User", back_populates="tanks")
     measurements = relationship("Measurement", back_populates="tank", cascade="all, delete-orphan")
+    maintenance_tasks = relationship("MaintenanceTask", back_populates="tank", cascade="all, delete-orphan")
+    water_changes = relationship("WaterChange", back_populates="tank", cascade="all, delete-orphan")
 
 # Alias para compatibilidad
 Aquarium = Tank
@@ -116,6 +120,62 @@ class Measurement(Base):
 
 # Alias canónico de tabla
 ParameterLog = Measurement
+
+
+class MaintenanceTask(Base):
+    __tablename__ = "maintenance_tasks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    aquarium_id = Column(Integer, ForeignKey("tanks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    task_key = Column(String(50), nullable=True) # "glass_cleaning", "mechanical_filter", "skimmer_cup", "carbon_gfo", "pumps_cleaning", "skimmer_body", "doser_probes", "custom"
+    title = Column(String(120), nullable=False)
+    category = Column(String(50), default="mechanical", nullable=False) # "mechanical", "equipment", "chemical", "calibration"
+    frequency_days = Column(Integer, nullable=False, default=7)
+    last_completed_at = Column(DateTime(timezone=True), nullable=True)
+    next_due_at = Column(DateTime(timezone=True), nullable=True)
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+
+    # Sinónimos para interoperabilidad
+    tank_id = synonym("aquarium_id")
+
+    user = relationship("User", back_populates="maintenance_tasks")
+    tank = relationship("Tank", back_populates="maintenance_tasks")
+    logs = relationship("MaintenanceLog", back_populates="task", cascade="all, delete-orphan")
+
+
+class MaintenanceLog(Base):
+    __tablename__ = "maintenance_logs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    task_id = Column(Integer, ForeignKey("maintenance_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    aquarium_id = Column(Integer, nullable=False, index=True)
+    completed_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    linked_water_change_id = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    task = relationship("MaintenanceTask", back_populates="logs")
+
+
+class WaterChange(Base):
+    __tablename__ = "water_changes"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    volume_liters = Column(Float, nullable=False)
+    percentage = Column(Float, nullable=True)
+    performed_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+
+    aquarium_id = synonym("tank_id")
+
+    user = relationship("User", back_populates="water_changes")
+    tank = relationship("Tank", back_populates="water_changes")
+
 
 # ==============================================================================
 # MODELOS SQLALCHEMY ORM OFICIALES EN ESPAÑOL (acuarios y mediciones)
@@ -608,3 +668,68 @@ class AquariumAnalysisResponse(BaseModel):
 class PredictiveAnalysisJsonResponse(BaseModel):
     status: str = "success"
     data: AnalisisAcuarioResponse
+
+# ==============================================================================
+# ESQUEMAS PYDANTIC: MANTENIMIENTO MECÁNICO Y CAMBIOS DE AGUA
+# ==============================================================================
+
+class MaintenanceTaskBase(BaseModel):
+    title: str = Field(..., max_length=120)
+    task_key: Optional[str] = Field(None, max_length=50)
+    category: Optional[str] = Field("mechanical", max_length=50)
+    frequency_days: int = Field(7, gt=0)
+    is_enabled: bool = True
+    notes: Optional[str] = None
+
+class MaintenanceTaskCreate(MaintenanceTaskBase):
+    pass
+
+class MaintenanceTaskUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=120)
+    category: Optional[str] = Field(None, max_length=50)
+    frequency_days: Optional[int] = Field(None, gt=0)
+    is_enabled: Optional[bool] = None
+    notes: Optional[str] = None
+
+class MaintenanceTaskResponse(BaseModel):
+    id: int
+    aquarium_id: int
+    user_id: int
+    task_key: Optional[str] = None
+    title: str
+    category: str
+    frequency_days: int
+    last_completed_at: Optional[datetime] = None
+    next_due_at: Optional[datetime] = None
+    is_enabled: bool
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+    days_since_last: Optional[int] = None
+    days_until_due: Optional[int] = None
+    status: str = "pending" # "ok" | "due_soon" | "overdue" | "pending"
+
+    model_config = ConfigDict(from_attributes=True)
+
+class MaintenanceCompleteRequest(BaseModel):
+    notes: Optional[str] = None
+    completed_at: Optional[datetime] = None
+
+class WaterChangeCreate(BaseModel):
+    volume_liters: float = Field(..., gt=0)
+    percentage: Optional[float] = None
+    performed_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    completed_task_ids: Optional[List[int]] = Field(default_factory=list)
+
+class WaterChangeResponse(BaseModel):
+    id: int
+    tank_id: int
+    user_id: int
+    volume_liters: float
+    percentage: Optional[float] = None
+    performed_at: datetime
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+

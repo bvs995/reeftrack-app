@@ -25,6 +25,7 @@ import {
   LayoutDashboard,
   LineChart,
   Droplets,
+  Wrench,
   Settings,
   WifiOff,
   Sparkles,
@@ -309,7 +310,7 @@ function AppContent() {
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Droplets className="w-4 h-4" />
+            <Wrench className="w-4 h-4" />
             <span>{t('nav.waterTab')}</span>
           </button>
 

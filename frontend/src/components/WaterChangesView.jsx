@@ -8,16 +8,22 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
+  Wrench,
+  Check,
   X
 } from 'lucide-react';
-import { fetchWaterChanges, recordWaterChange } from '../api';
+import { fetchWaterChanges, recordWaterChange, fetchMaintenanceTasks } from '../api';
+import EquipmentMaintenanceView from './EquipmentMaintenanceView';
 
 export default function WaterChangesView({
   tank,
   analytics,
   onWaterChangeLogged
 }) {
+  const [activeSubTab, setActiveSubTab] = useState('water_changes'); // 'water_changes' | 'equipment'
   const [history, setHistory] = useState([]);
+  const [maintenanceTasks, setMaintenanceTasks] = useState([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showLogModal, setShowLogModal] = useState(false);
 
@@ -39,6 +45,7 @@ export default function WaterChangesView({
   useEffect(() => {
     if (tank) {
       loadHistory();
+      loadTasks();
       const no3 = analytics?.parameters?.find(p => p.parameter_code === 'no3');
       if (no3 && no3.latest_value) {
         setCurrentNO3(no3.latest_value);
@@ -59,6 +66,17 @@ export default function WaterChangesView({
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTasks = async () => {
+    try {
+      const data = await fetchMaintenanceTasks(tank.id, false);
+      if (Array.isArray(data)) {
+        setMaintenanceTasks(data.filter(t => t.is_enabled));
+      }
+    } catch (err) {
+      console.error('Error al cargar tareas de mantenimiento:', err);
     }
   };
 
@@ -84,6 +102,13 @@ export default function WaterChangesView({
     }
   };
 
+  const toggleTaskSelection = (taskId) => {
+    triggerHaptic();
+    setSelectedTaskIds(prev =>
+      prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!volumeLiters || parseFloat(volumeLiters) <= 0) return;
@@ -94,12 +119,15 @@ export default function WaterChangesView({
         volume_liters: parseFloat(volumeLiters),
         percentage: parseFloat(percentage),
         performed_at: performedAt ? new Date(performedAt).toISOString() : new Date().toISOString(),
-        notes: notes || undefined
+        notes: notes || undefined,
+        completed_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined
       });
       triggerHaptic();
       setShowLogModal(false);
       setNotes('');
+      setSelectedTaskIds([]);
       loadHistory();
+      loadTasks();
       if (onWaterChangeLogged) onWaterChangeLogged();
     } catch (err) {
       alert('Error al registrar cambio de agua');
@@ -112,8 +140,55 @@ export default function WaterChangesView({
 
   return (
     <div className="space-y-6 pb-28 max-w-7xl mx-auto px-3 sm:px-6 pt-4">
-      {/* Banner Principal con Acentos Neón */}
-      <div className="glass-panel rounded-3xl p-5 sm:p-7 border border-cyan-500/30 bg-gradient-to-r from-marine-950 via-marine-900 to-marine-950 shadow-2xl">
+      {/* Selector de Sub-pestañas: Cambios de Agua vs Equipo & Limpieza */}
+      <div className="flex items-center gap-2 p-1.5 bg-marine-950/80 border border-marine-800 rounded-2xl w-full sm:w-fit">
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic();
+            setActiveSubTab('water_changes');
+          }}
+          className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 cursor-pointer ${
+            activeSubTab === 'water_changes'
+              ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-neon-cyan'
+              : 'text-slate-400 hover:text-white hover:bg-marine-900/60'
+          }`}
+        >
+          <Droplets className="w-4 h-4" />
+          <span>Cambios de Agua</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic();
+            setActiveSubTab('equipment');
+          }}
+          className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 cursor-pointer ${
+            activeSubTab === 'equipment'
+              ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-neon-cyan'
+              : 'text-slate-400 hover:text-white hover:bg-marine-900/60'
+          }`}
+        >
+          <Wrench className="w-4 h-4" />
+          <span>Equipo & Limpieza</span>
+          {maintenanceTasks.some(t => t.status === 'overdue') && (
+            <span className="w-2 h-2 rounded-full bg-coral-500 animate-pulse" />
+          )}
+        </button>
+      </div>
+
+      {activeSubTab === 'equipment' ? (
+        <EquipmentMaintenanceView
+          tank={tank}
+          onTaskUpdated={() => {
+            loadTasks();
+            if (onWaterChangeLogged) onWaterChangeLogged();
+          }}
+        />
+      ) : (
+        <>
+          {/* Banner Principal con Acentos Neón */}
+          <div className="glass-panel rounded-3xl p-5 sm:p-7 border border-cyan-500/30 bg-gradient-to-r from-marine-950 via-marine-900 to-marine-950 shadow-2xl">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-wider text-cyan-400">
@@ -349,6 +424,8 @@ export default function WaterChangesView({
           </p>
         )}
       </div>
+      </>
+      )}
 
       {/* Modal Táctil Grande para Registrar Cambio de Agua */}
       {showLogModal && (
@@ -411,6 +488,47 @@ export default function WaterChangesView({
                   className="w-full min-h-[46px] bg-marine-950 border border-marine-700 rounded-xl px-3 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none font-medium"
                 />
               </div>
+
+              {/* Tareas de mantenimiento asociadas (Opcional) */}
+              {maintenanceTasks.length > 0 && (
+                <div className="p-3 bg-marine-950/90 border border-marine-800 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-cyan-300 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      ¿Aprovechaste para hacer algo más?
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold">Opcional</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+                    {maintenanceTasks.slice(0, 6).map((task) => {
+                      const isSelected = selectedTaskIds.includes(task.id);
+                      return (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => toggleTaskSelection(task.id)}
+                          className={`flex items-center gap-2 p-2 rounded-xl border text-left transition active:scale-95 cursor-pointer ${
+                            isSelected
+                              ? 'bg-cyan-500/20 border-cyan-500/60 text-white'
+                              : 'bg-marine-900/50 border-marine-800/80 text-slate-300 hover:border-marine-700'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'bg-cyan-400 border-cyan-400 text-marine-950'
+                                : 'border-slate-600 bg-marine-950'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <span className="text-xs font-semibold truncate">{task.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">

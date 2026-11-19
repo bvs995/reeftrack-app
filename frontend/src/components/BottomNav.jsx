@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, LineChart, Plus, Droplets, Settings } from 'lucide-react';
+import { LayoutDashboard, LineChart, Plus, Wrench, Settings } from 'lucide-react';
 
 export default function BottomNav({ activeTab, onSelectTab, onOpenQuickLog }) {
   const { t } = useTranslation();
@@ -17,7 +17,7 @@ export default function BottomNav({ activeTab, onSelectTab, onOpenQuickLog }) {
   ];
 
   const rightTabs = [
-    { id: 'water', label: t('nav.water'), icon: Droplets },
+    { id: 'water', label: t('nav.water'), icon: Wrench },
     { id: 'settings', label: t('nav.settings'), icon: Settings },
   ];
 

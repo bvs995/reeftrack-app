@@ -415,6 +415,67 @@ export async function recordWaterChange(tankId, data) {
   return res.json();
 }
 
+// ----------------- MANTENIMIENTO MECÁNICO Y EQUIPO -----------------
+
+export async function fetchMaintenanceTasks(tankId, includeDisabled = true) {
+  const res = await authFetch(`/tanks/${tankId}/maintenance?include_disabled=${includeDisabled}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener tareas de mantenimiento');
+  }
+  return res.json();
+}
+
+export async function createMaintenanceTask(tankId, data) {
+  const res = await authFetch(`/tanks/${tankId}/maintenance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al crear tarea de mantenimiento');
+  }
+  return res.json();
+}
+
+export async function updateMaintenanceTask(taskId, data) {
+  const res = await authFetch(`/maintenance/${taskId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al actualizar tarea de mantenimiento');
+  }
+  return res.json();
+}
+
+export async function completeMaintenanceTask(taskId, notes = null) {
+  const res = await authFetch(`/maintenance/${taskId}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al marcar tarea como completada');
+  }
+  return res.json();
+}
+
+export async function deleteMaintenanceTask(taskId) {
+  const res = await authFetch(`/maintenance/${taskId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al eliminar tarea de mantenimiento');
+  }
+  return true;
+}
+
 // ----------------- PANEL DE CONTROL DE ADMINISTRADOR -----------------
 
 export async function fetchAdminUsers() {
