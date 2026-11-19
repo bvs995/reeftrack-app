@@ -29,7 +29,7 @@ import {
   Camera
 } from 'lucide-react';
 import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis } from '../api';
-import { getProfileConfig, getMarineProfile } from '../utils/marineProfiles';
+import { getProfileConfig, getMarineProfile, AQUARIUM_TYPES } from '../utils/marineProfiles';
 
 // Registrar plugins requeridos de Chart.js incluyendo annotationPlugin oficial
 ChartJS.register(
@@ -64,12 +64,21 @@ export default function DashboardTrends({
 
   // Normalización del ecosistema del acuario según perfil unificado
   const rawTank = propAcuarioActual || activeTank || {};
-  const profileConfig = getProfileConfig(rawTank);
+  const effectiveTank = userSelectedEcosystem
+    ? {
+        ...rawTank,
+        tank_type: userSelectedEcosystem,
+        reef_profile: ['fish_only', 'mixed_reef', 'lps_reef', 'sps_reef'].includes(userSelectedEcosystem)
+          ? userSelectedEcosystem
+          : null
+      }
+    : rawTank;
+  const profileConfig = getProfileConfig(effectiveTank);
   const esAguaSalada = profileConfig.isMarine;
   const activeMarineProfile = profileConfig;
   const visibleFields = profileConfig.visibleFields || {};
 
-  const currentTipo = userSelectedEcosystem || profileConfig.id;
+  const currentTipo = profileConfig.id;
   const acuarioActual = {
     ...rawTank,
     tipo: currentTipo,
@@ -505,17 +514,17 @@ export default function DashboardTrends({
     }
 
     if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
-      if (tipo === 'plantado') {
+      if (profileConfig.id === 'planted') {
         param.safeMin = 10.0;
         param.safeMax = 25.0;
         param.suggestedMax = 35.0;
-      } else if (tipo === 'dulce_peces') {
+      } else if (profileConfig.id === 'freshwater') {
         param.safeMin = 0.0;
         param.safeMax = 40.0;
         param.suggestedMax = 55.0;
       }
     } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
-      if (tipo === 'plantado') {
+      if (profileConfig.id === 'planted') {
         param.safeMin = 0.5;
         param.safeMax = 2.0;
         param.suggestedMax = 3.0;
@@ -1128,83 +1137,38 @@ export default function DashboardTrends({
           ))}
         </div>
 
-        {/* Conmutador de Ecosistema con los 5 Biotipos */}
-        <div className="flex items-center gap-1 bg-marine-950 p-1 rounded-2xl border border-marine-800 self-start sm:self-auto shrink-0 flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setUserSelectedEcosystem('arrecife');
-              setParametroActivo('fosfatos');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipo === 'arrecife'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🪸 Arrecife
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setUserSelectedEcosystem('mixto');
-              setParametroActivo('nitratos');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipo === 'mixto'
-                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-neon-cyan'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🌊 Mixto
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setUserSelectedEcosystem('peces_marinos');
-              setParametroActivo('nitratos');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipo === 'peces_marinos'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-neon-amber'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🐠 Peces Marinos
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setUserSelectedEcosystem('plantado');
-              setParametroActivo('potasio');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipo === 'plantado'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-neon-emerald'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🌿 Plantado
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setUserSelectedEcosystem('dulce_peces');
-              setParametroActivo('ph');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              acuarioActual.tipo === 'dulce_peces'
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-neon-cyan'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🐟 Dulce Peces
-          </button>
+        {/* Selector de Ecosistema con las 6 Opciones Canónicas */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 w-full bg-marine-950/90 p-1.5 rounded-2xl border border-marine-800">
+          {AQUARIUM_TYPES.map((tipoItem) => {
+            const isSelected = profileConfig.id === tipoItem.id;
+            return (
+              <button
+                key={tipoItem.id}
+                type="button"
+                onClick={() => {
+                  triggerHaptic();
+                  setUserSelectedEcosystem(tipoItem.id);
+                  if (tipoItem.id === 'planted') {
+                    setParametroActivo('potasio');
+                  } else if (tipoItem.id === 'freshwater') {
+                    setParametroActivo('ph');
+                  } else if (tipoItem.id === 'fish_only') {
+                    setParametroActivo('nitratos');
+                  } else {
+                    setParametroActivo('alcalinidad');
+                  }
+                }}
+                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all text-center ${
+                  isSelected
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-neon-cyan'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-marine-900/60 border border-transparent'
+                }`}
+              >
+                <span>{tipoItem.icon}</span>
+                <span className="truncate">{i18n.language === 'en' ? tipoItem.labelEn : tipoItem.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

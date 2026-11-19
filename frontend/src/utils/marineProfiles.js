@@ -9,6 +9,93 @@
  * 6. sps_reef: Arrecife SPS (Corales de Pólipo Corto)
  */
 
+export const AQUARIUM_TYPES = [
+  {
+    id: 'freshwater',
+    key: 'freshwater',
+    label: 'Agua Dulce',
+    labelEn: 'Freshwater',
+    name: 'Agua Dulce',
+    nameEn: 'Freshwater',
+    icon: '🐟',
+    badge: 'Agua Dulce',
+    badgeEn: 'Freshwater',
+    isMarine: false,
+    description: 'Comunitario / Peces',
+    descriptionEn: 'Community / Freshwater'
+  },
+  {
+    id: 'planted',
+    key: 'planted',
+    label: 'Plantado',
+    labelEn: 'Planted',
+    name: 'Plantado',
+    nameEn: 'Planted',
+    icon: '🌿',
+    badge: 'Plantado',
+    badgeEn: 'Planted',
+    isMarine: false,
+    description: 'Aquascaping & CO2',
+    descriptionEn: 'Aquascaping & CO2'
+  },
+  {
+    id: 'fish_only',
+    key: 'fish_only',
+    label: 'Solo Peces',
+    labelEn: 'Fish Only (FOWLR)',
+    name: 'Solo Peces',
+    nameEn: 'Fish Only (FOWLR)',
+    icon: '🐠',
+    badge: 'Solo Peces',
+    badgeEn: 'Fish Only',
+    isMarine: true,
+    description: 'Marino Peces FOWLR',
+    descriptionEn: 'Marine Fish Only (FOWLR)'
+  },
+  {
+    id: 'mixed_reef',
+    key: 'mixed_reef',
+    label: 'Arrecife Mixto',
+    labelEn: 'Mixed Reef',
+    name: 'Arrecife Mixto',
+    nameEn: 'Mixed Reef',
+    icon: '🌊',
+    badge: 'Arrecife Mixto',
+    badgeEn: 'Mixed Reef',
+    isMarine: true,
+    description: 'Blandos + LPS + SPS',
+    descriptionEn: 'Soft + LPS + SPS'
+  },
+  {
+    id: 'lps_reef',
+    key: 'lps_reef',
+    label: 'Arrecife LPS',
+    labelEn: 'LPS Reef',
+    name: 'Arrecife LPS',
+    nameEn: 'LPS Reef',
+    icon: '🪸',
+    badge: 'Arrecife LPS',
+    badgeEn: 'LPS Reef',
+    isMarine: true,
+    description: 'Pólipo Largo (LPS)',
+    descriptionEn: 'Large Polyp Stony'
+  },
+  {
+    id: 'sps_reef',
+    key: 'sps_reef',
+    label: 'Arrecife SPS',
+    labelEn: 'SPS Reef',
+    name: 'Arrecife SPS',
+    nameEn: 'SPS Reef',
+    icon: '🪨',
+    badge: 'Arrecife SPS',
+    badgeEn: 'SPS Reef',
+    isMarine: true,
+    description: 'Pólipo Corto (SPS)',
+    descriptionEn: 'Small Polyp Stony'
+  }
+];
+
 export const TANK_PROFILES = {
   // 1. AGUA DULCE ESTÁNDAR
   freshwater: {

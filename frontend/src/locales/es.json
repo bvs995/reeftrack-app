@@ -83,9 +83,17 @@
     "registerBtn": "Crear Cuenta Free",
     "demoBtn": "Probar Demo (1 Click)"
   },
+  "tankTypes": {
+    "freshwater": "Agua Dulce",
+    "planted": "Plantado",
+    "fish_only": "Solo Peces (FOWLR)",
+    "mixed_reef": "Arrecife Mixto",
+    "lps_reef": "Arrecife LPS",
+    "sps_reef": "Arrecife SPS"
+  },
   "dashboard": {
     "analyzing": "Analizando telemetría y proyecciones del acuario...",
-    "reefType": "🪸 Arrecife SPS/LPS",
+    "reefType": "🪸 Arrecife LPS",
     "plantedType": "🌿 Aquascaping Plantado",
     "communityType": "🐟 Dulce Comunitario",
     "netVolume": "Volumen Neto:",

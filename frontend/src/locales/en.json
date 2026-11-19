@@ -83,9 +83,17 @@
     "registerBtn": "Create Free Account",
     "demoBtn": "Try Demo (1 Click)"
   },
+  "tankTypes": {
+    "freshwater": "Freshwater",
+    "planted": "Planted",
+    "fish_only": "Fish Only (FOWLR)",
+    "mixed_reef": "Mixed Reef",
+    "lps_reef": "LPS Reef",
+    "sps_reef": "SPS Reef"
+  },
   "dashboard": {
     "analyzing": "Analyzing tank telemetry and projections...",
-    "reefType": "🪸 SPS/LPS Mixed Reef",
+    "reefType": "🪸 LPS Reef",
     "plantedType": "🌿 Planted Aquascape",
     "communityType": "🐟 Freshwater Community",
     "netVolume": "Net Volume:",

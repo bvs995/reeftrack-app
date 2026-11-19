@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Check, Waves } from 'lucide-react';
 import { createTank, updateTank } from '../api';
-import { normalizeProfileKey } from '../utils/marineProfiles';
+import { normalizeProfileKey, AQUARIUM_TYPES } from '../utils/marineProfiles';
 
 export default function TankManagementModal({
   isOpen,
@@ -10,6 +11,7 @@ export default function TankManagementModal({
   existingTank = null, // Prop: Si le pasas un acuario, el modal cambia a modo "Edición"
   onTankUpdated = null
 }) {
+  const { t, i18n } = useTranslation();
   const [name, setName] = useState('');
   const [tankType, setTankType] = useState('lps_reef');
   const [volumeLiters, setVolumeLiters] = useState('');
@@ -155,9 +157,49 @@ export default function TankManagementModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
               Tipo de Acuario / Biotipo (6 Ecosistemas)
             </label>
+
+            {/* Cuadrícula de 6 botones / tarjetas interactivas */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2.5">
+              {AQUARIUM_TYPES.map((tipoItem) => {
+                const isSelected = tankType === tipoItem.id;
+                return (
+                  <button
+                    key={tipoItem.id}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      setTankType(tipoItem.id);
+                      if (tipoItem.id === 'sps_reef' && flowProfile === 'moderate_indirect') {
+                        setFlowProfile('high_turbulent');
+                      } else if (tipoItem.id === 'lps_reef' && flowProfile === 'high_turbulent') {
+                        setFlowProfile('moderate_indirect');
+                      }
+                    }}
+                    className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      isSelected
+                        ? 'bg-gradient-to-tr from-cyan-950/60 to-marine-900 border-cyan-400 text-white shadow-neon-cyan/20 ring-1 ring-cyan-400'
+                        : 'bg-marine-950/70 border-marine-800 text-slate-300 hover:border-marine-700 hover:bg-marine-900/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-xl leading-none">{tipoItem.icon}</span>
+                      {isSelected && <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></span>}
+                    </div>
+                    <span className="text-xs font-black tracking-tight leading-tight line-clamp-1">
+                      {i18n?.language === 'en' ? tipoItem.labelEn : tipoItem.label}
+                    </span>
+                    <span className="text-[10px] text-slate-400 leading-tight mt-0.5 line-clamp-1">
+                      {i18n?.language === 'en' ? tipoItem.descriptionEn : tipoItem.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selector desplegable sincronizado */}
             <select
               value={tankType}
               onChange={(e) => {
@@ -169,14 +211,13 @@ export default function TankManagementModal({
                   setFlowProfile('moderate_indirect');
                 }
               }}
-              className="w-full min-h-[48px] bg-marine-950 border border-marine-700 focus:border-cyan-400 rounded-xl px-3.5 text-sm text-white focus:outline-none font-semibold shadow-inner cursor-pointer"
+              className="w-full min-h-[44px] bg-marine-950 border border-marine-800 focus:border-cyan-400 rounded-xl px-3.5 text-xs text-slate-300 focus:outline-none font-semibold shadow-inner cursor-pointer"
             >
-              <option value="freshwater">1. Agua Dulce</option>
-              <option value="planted">2. Plantado</option>
-              <option value="fish_only">3. Solo Peces (Marino FOWLR)</option>
-              <option value="mixed_reef">4. Arrecife Mixto (Blandos + LPS + SPS)</option>
-              <option value="lps_reef">5. Arrecife LPS (Corales de Pólipo Largo)</option>
-              <option value="sps_reef">6. Arrecife SPS (Corales de Pólipo Corto)</option>
+              {AQUARIUM_TYPES.map((item, idx) => (
+                <option key={item.id} value={item.id}>
+                  {idx + 1}. {i18n?.language === 'en' ? item.labelEn : item.label} ({i18n?.language === 'en' ? item.descriptionEn : item.description})
+                </option>
+              ))}
             </select>
           </div>
 

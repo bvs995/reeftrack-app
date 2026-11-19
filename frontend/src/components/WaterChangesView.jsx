@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { fetchWaterChanges, recordWaterChange, fetchMaintenanceTasks } from '../api';
 import EquipmentMaintenanceView from './EquipmentMaintenanceView';
+import { getProfileConfig } from '../utils/marineProfiles';
 
 export default function WaterChangesView({
   tank,
@@ -82,7 +83,7 @@ export default function WaterChangesView({
 
   const expectedNO3AfterChange = (currentNO3 * (1 - simPct / 100)).toFixed(1);
   const simLiters = ((tank?.volume_liters || 100) * (simPct / 100)).toFixed(1);
-  const isMarine = ['reef', 'arrecife', 'mixed', 'mixto', 'marine_fish', 'peces_marinos'].includes(tank?.tank_type?.toLowerCase());
+  const isMarine = getProfileConfig(tank).isMarine;
   const isReef = isMarine;
   const saltNeededKg = isMarine ? ((simLiters * 38.5) / 1000).toFixed(2) : null;
 

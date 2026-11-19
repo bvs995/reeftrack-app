@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aquapulse-cache-v2';
+const CACHE_NAME = 'aquapulse-cache-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

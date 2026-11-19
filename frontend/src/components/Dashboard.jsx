@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import QuickEntryForm from './QuickEntryForm';
 import { updateAquariumVolume, fetchMaintenanceTasks, completeMaintenanceTask } from '../api';
-import { getProfileConfig } from '../utils/marineProfiles';
+import { getProfileConfig, AQUARIUM_TYPES } from '../utils/marineProfiles';
 
 export default function Dashboard({
   analytics,
@@ -113,6 +113,10 @@ export default function Dashboard({
   };
 
   const getTankTypeLabel = () => {
+    const match = AQUARIUM_TYPES.find(t => t.id === profileConfig.id);
+    if (match) {
+      return i18n?.language === 'en' ? `${match.icon} ${match.labelEn}` : `${match.icon} ${match.label}`;
+    }
     return profileConfig.badge || profileConfig.name;
   };
 
