@@ -115,7 +115,7 @@ def _generar_analisis_fallback(
     tipo_normalizado = (tipo or "mixto").strip().lower()
     es_marino = tipo_normalizado in ["arrecife", "reef", "mixed", "mixto", "marine_fish", "peces_marinos", "fowlr", "fish_only", "soft_reef", "mixed_reef", "sps_reef", "lps_reef"]
     
-    profile_info = get_marine_profile(reef_profile or ("fish_only" if tipo_normalizado in ["marine_fish", "peces_marinos", "fowlr", "fish_only"] else "lps_reef"))
+    profile_info = get_marine_profile(reef_profile or tipo_normalizado)
     profile_id = profile_info["id"]
 
     alert = f"Parámetros dentro de umbrales operativos estables para '{profile_info['name']}'. Mantener rutina regular de filtración."
@@ -382,7 +382,7 @@ def analizar_parametros_estructurado(datos_acuario: dict, allow_fallback: bool =
         dosing_method=dosing_method
     )
 
-    profile_info = get_marine_profile(reef_profile)
+    profile_info = get_marine_profile(reef_profile or tipo)
 
     if is_dummy_key:
         logger.warning("⚠️ GEMINI_API_KEY no detectada. Generando diagnóstico estructurado inteligente con reglas marinas locales.")

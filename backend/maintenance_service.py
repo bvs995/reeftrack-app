@@ -16,23 +16,28 @@ def is_marine_tank(tank: Tank) -> bool:
     r_prof = (getattr(tank, "reef_profile", None) or "").lower()
     if r_prof in ["fish_only", "soft_reef", "lps_reef", "mixed_reef", "sps_reef", "fowlr_soft"]:
         return True
-    return any(m in t_type for m in ["reef", "arrecife", "marine", "marino", "mixed", "mixto"])
+    if t_type in ["fish_only", "soft_reef", "lps_reef", "mixed_reef", "sps_reef"]:
+        return True
+    return any(m in t_type for m in ["reef", "arrecife", "marine", "marino", "mixed", "mixto", "peces_marinos", "fowlr"])
 
 
 def normalize_reef_profile(tank: Tank) -> str:
     """Devuelve el perfil marino normalizado o 'mixed_reef' por defecto."""
     prof = (getattr(tank, "reef_profile", None) or "").lower()
     t_type = (getattr(tank, "tank_type", None) or "").lower()
-    if prof in ["fish_only", "soft_reef", "lps_reef", "mixed_reef", "sps_reef"]:
-        return prof
-    if prof in ["fowlr_soft", "fowlr", "solo_peces"] or t_type in ["marine_fish", "peces_marinos"]:
+    target = prof or t_type
+    if target in ["fish_only", "soft_reef", "lps_reef", "mixed_reef", "sps_reef"]:
+        return target
+    if target in ["fowlr_soft", "fowlr", "solo_peces", "peces_marinos", "marine_fish", "peces"]:
         return "fish_only"
-    if prof == "soft":
+    if target in ["soft", "corales_blandos", "blandos"]:
         return "soft_reef"
-    if prof == "lps":
+    if target in ["lps", "arrecife", "reef"]:
         return "lps_reef"
-    if prof == "sps":
+    if target in ["sps", "acropora", "acroporas"]:
         return "sps_reef"
+    if target in ["mixto", "mixed", "arrecife_mixto"]:
+        return "mixed_reef"
     return "mixed_reef" if is_marine_tank(tank) else "freshwater"
 
 

@@ -255,9 +255,13 @@ MARINE_PROFILES: Dict[str, Dict[str, Any]] = {
         },
         "enabled_rules": {
             "kh_delta_24h": True,
+            "warn_daily_delta_kh": 0.3,
+            "critical_daily_delta_kh": 0.5,
             "zero_nutrient_floor": True,
             "test_resolution_po4": True,
             "automated_dosing_suggestion": True,
+            "recommend_photometer_icp": True,
+            "split_daily_dosing": True,
             "flow_tissue_warning": False
         },
         "targets": {
@@ -270,7 +274,7 @@ MARINE_PROFILES: Dict[str, Dict[str, Any]] = {
             "calcium": {"min": 420.0, "max": 450.0, "unit": "ppm", "step": 1.0, "name": "Calcio (Ca)"},
             "magnesium": {"min": 1300.0, "max": 1400.0, "unit": "ppm", "step": 1.0, "name": "Magnesio (Mg)"},
             "nitrate": {"min": 1.0, "max": 5.0, "unit": "ppm", "step": 0.1, "alert_on_zero": True, "name": "Nitrato (NO3)"},
-            "phosphate": {"min": 0.01, "max": 0.04, "unit": "ppm", "step": 0.001, "alert_on_zero": True, "recommend_photometer": True, "name": "Fosfato (PO4)"}
+            "phosphate": {"min": 0.01, "max": 0.04, "ideal": 0.025, "unit": "ppm", "step": 0.001, "alert_on_zero": True, "recommend_photometer": True, "name": "Fosfato (PO4)"}
         },
         "trace_elements": {
             "k": {"min": 390.0, "max": 410.0, "unit": "ppm", "step": 1.0, "name": "Potasio (K)"},
@@ -278,6 +282,94 @@ MARINE_PROFILES: Dict[str, Dict[str, Any]] = {
             "i": {"min": 0.03, "max": 0.06, "unit": "ppm", "step": 0.01, "name": "Yodo (I)"},
             "fe": {"min": 0.001, "max": 0.005, "unit": "ppm", "step": 0.001, "name": "Hierro (Fe)"}
         }
+    },
+
+    # 6. AGUA DULCE ESTÁNDAR
+    "freshwater": {
+        "id": "freshwater",
+        "name": "Agua Dulce Estándar",
+        "short_name": "Agua Dulce",
+        "is_marine": False,
+        "description": "Acuarios comunitarios de agua dulce o peces de agua fría/tropicales.",
+        "visible_fields": {
+            "salinity": False,
+            "temperature": True,
+            "ph": True,
+            "ammonia": True,
+            "nitrite": True,
+            "nitrate": True,
+            "kh": False,
+            "phosphate": False,
+            "calcium": False,
+            "magnesium": False,
+            "gh_dgh": True,
+            "trace_elements": False,
+            "test_methods": False,
+            "lighting_par": False,
+            "flow_profile": False,
+            "dosing_method": False
+        },
+        "enabled_rules": {
+            "kh_delta_24h": False,
+            "zero_nutrient_floor": False,
+            "test_resolution_po4": False,
+            "automated_dosing_suggestion": False,
+            "flow_tissue_warning": False
+        },
+        "targets": {
+            "temperature": {"min": 23.0, "max": 27.0, "target": 25.0, "unit": "°C", "step": 0.1, "name": "Temperatura"},
+            "ph": {"min": 6.5, "max": 7.8, "target": 7.2, "unit": "pH", "step": 0.01, "name": "pH"},
+            "ammonia": {"min": 0.0, "max": 0.02, "safe_max": 0.02, "unit": "ppm", "step": 0.01, "name": "Amoníaco (NH3)"},
+            "nitrite": {"min": 0.0, "max": 0.05, "safe_max": 0.05, "unit": "ppm", "step": 0.01, "name": "Nitrito (NO2)"},
+            "nitrate": {"min": 0.0, "max": 30.0, "target": 10.0, "unit": "ppm", "step": 0.5, "alert_on_zero": False, "name": "Nitrato (NO3)"},
+            "gh_dgh": {"min": 4.0, "max": 10.0, "target": 6.0, "unit": "dGH", "step": 0.5, "name": "Dureza General (GH)"}
+        },
+        "trace_elements": {}
+    },
+
+    # 7. AGUA DULCE PLANTADO
+    "planted": {
+        "id": "planted",
+        "name": "Agua Dulce Plantado",
+        "short_name": "Plantado",
+        "is_marine": False,
+        "description": "Acuarios plantados de alta densidad y aquascaping.",
+        "visible_fields": {
+            "salinity": False,
+            "temperature": True,
+            "ph": True,
+            "ammonia": True,
+            "nitrite": True,
+            "nitrate": True,
+            "kh": True,
+            "phosphate": True,
+            "calcium": False,
+            "magnesium": False,
+            "gh_dgh": True,
+            "trace_elements": False,
+            "test_methods": False,
+            "lighting_par": True,
+            "flow_profile": False,
+            "dosing_method": True
+        },
+        "enabled_rules": {
+            "kh_delta_24h": False,
+            "zero_nutrient_floor": False,
+            "test_resolution_po4": False,
+            "automated_dosing_suggestion": False,
+            "flow_tissue_warning": False
+        },
+        "targets": {
+            "temperature": {"min": 22.0, "max": 26.5, "target": 24.5, "unit": "°C", "step": 0.1, "name": "Temperatura"},
+            "ph": {"min": 6.0, "max": 7.2, "target": 6.6, "unit": "pH", "step": 0.01, "name": "pH"},
+            "ammonia": {"min": 0.0, "max": 0.02, "safe_max": 0.02, "unit": "ppm", "step": 0.01, "name": "Amoníaco (NH3)"},
+            "nitrite": {"min": 0.0, "max": 0.05, "safe_max": 0.05, "unit": "ppm", "step": 0.01, "name": "Nitrito (NO2)"},
+            "nitrate": {"min": 5.0, "max": 25.0, "target": 15.0, "unit": "ppm", "step": 0.5, "alert_on_zero": False, "name": "Nitrato (NO3)"},
+            "phosphate": {"min": 0.5, "max": 2.5, "target": 1.2, "unit": "ppm", "step": 0.01, "alert_on_zero": False, "name": "Fosfato (PO4)"},
+            "kh": {"min": 3.0, "max": 8.0, "target": 5.0, "unit": "dKH", "step": 0.1, "name": "Alcalinidad (KH)"},
+            "gh_dgh": {"min": 4.0, "max": 9.0, "target": 6.0, "unit": "dGH", "step": 0.5, "name": "Dureza General (GH)"}
+        },
+        "trace_elements": {}
     }
 }
 
@@ -297,7 +389,7 @@ FLOW_PROFILE_LABELS = {
 
 
 def get_marine_profile(profile_key: Optional[str]) -> Dict[str, Any]:
-    """Retorna la configuración del perfil marino. Fallback seguro a lps_reef."""
+    """Retorna la configuración del perfil marino o de agua dulce. Fallback seguro a lps_reef."""
     if not profile_key:
         return MARINE_PROFILES["lps_reef"]
     norm = str(profile_key).strip().lower()
@@ -305,18 +397,22 @@ def get_marine_profile(profile_key: Optional[str]) -> Dict[str, Any]:
         return MARINE_PROFILES[norm]
 
     # Mapeo de sinónimos y compatibilidad con versiones previas
-    if norm in ["fish_only", "fowlr", "fowlr_soft", "solo_peces", "peces_marinos", "marine_fish"]:
+    if norm in ["freshwater", "dulce", "freshwater_community", "dulce_peces"] or "dulce" in norm:
+        return MARINE_PROFILES["freshwater"]
+    if norm in ["planted", "plantado", "freshwater_planted"] or "plant" in norm:
+        return MARINE_PROFILES["planted"]
+    if norm in ["fish_only", "fowlr", "fowlr_soft", "solo_peces", "peces_marinos", "marine_fish", "peces"] or "pece" in norm:
         return MARINE_PROFILES["fish_only"]
-    if norm in ["soft_reef", "soft", "blandos", "corales_blandos", "soft_corals"]:
-        return MARINE_PROFILES["soft_reef"]
-    if norm in ["mixed_reef", "mixed", "mixto", "arrecife_mixto"]:
+    if norm in ["mixed_reef", "mixed", "mixto", "arrecife_mixto"] or "mixt" in norm:
         return MARINE_PROFILES["mixed_reef"]
-    if norm in ["sps_reef", "sps", "acropora", "acroporas"]:
+    if norm in ["sps_reef", "sps", "acropora", "acroporas"] or "sps" in norm:
         return MARINE_PROFILES["sps_reef"]
-    if norm in ["lps_reef", "lps", "arrecife", "reef"]:
+    if norm in ["lps_reef", "lps", "arrecife", "reef", "soft_reef", "soft", "blandos"] or "reef" in norm or "arrecif" in norm:
         return MARINE_PROFILES["lps_reef"]
 
     return MARINE_PROFILES["lps_reef"]
+
+get_profile_config = get_marine_profile
 
 
 def _parse_dt(val: Any) -> Optional[datetime]:

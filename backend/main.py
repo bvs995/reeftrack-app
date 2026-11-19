@@ -1174,82 +1174,43 @@ def get_tank_parameters(
     db: Session = Depends(get_db)
 ):
     tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
-    t_type = (tank.tank_type or "reef").lower() if tank else "reef"
-    if t_type in ["freshwater_planted", "plantado"]:
-        return [
-            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 6.6, "min_safe": 6.0, "max_safe": 7.2, "is_critical": True},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 15.0, "min_safe": 5.0, "max_safe": 25.0, "is_critical": True},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 1.2, "min_safe": 0.5, "max_safe": 2.5, "is_critical": True},
-            {"code": "gh", "name": "Dureza General (GH)", "unit": "dGH", "optimal_target": 6.0, "min_safe": 4.0, "max_safe": 9.0, "is_critical": False},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 24.5, "min_safe": 22.0, "max_safe": 26.5, "is_critical": False}
-        ]
-    elif t_type in ["freshwater", "dulce", "freshwater_community"]:
-        return [
-            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 7.2, "min_safe": 6.5, "max_safe": 7.8, "is_critical": True},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 0.0, "max_safe": 30.0, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 23.0, "max_safe": 27.0, "is_critical": False}
-        ]
-    
-    # Manejo específico por perfil marino (fish_only, soft_reef, lps_reef, mixed_reef, sps_reef)
     from backend.marine_profiles import get_marine_profile
-    r_profile = getattr(tank, "reef_profile", None) if tank else None
-    profile = get_marine_profile(r_profile or ("fish_only" if t_type in ["marine_fish", "peces_marinos", "fowlr"] else "lps_reef"))
-    pid = profile["id"]
+    r_profile = getattr(tank, "reef_profile", None) or getattr(tank, "tank_type", None)
+    profile = get_marine_profile(r_profile)
+    visible_f = profile.get("visible_fields", {})
+    targets = profile.get("targets", {})
 
-    if pid == "fish_only":
-        return [
-            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.023, "min_safe": 1.020, "max_safe": 1.025, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.0, "max_safe": 26.0, "is_critical": False},
-            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.15, "min_safe": 8.0, "max_safe": 8.3, "is_critical": True},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 15.0, "min_safe": 0.0, "max_safe": 30.0, "is_critical": True},
-            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 7.0, "max_safe": 11.0, "is_critical": False},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.10, "min_safe": 0.0, "max_safe": 0.25, "is_critical": False}
-        ]
-    elif pid == "soft_reef":
-        return [
-            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.024, "min_safe": 1.023, "max_safe": 1.025, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.0, "max_safe": 26.0, "is_critical": False},
-            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.15, "min_safe": 8.0, "max_safe": 8.3, "is_critical": True},
-            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.2, "min_safe": 7.5, "max_safe": 9.5, "is_critical": True},
-            {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 400.0, "min_safe": 380.0, "max_safe": 420.0, "is_critical": False},
-            {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1300.0, "min_safe": 1250.0, "max_safe": 1350.0, "is_critical": False},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 10.0, "min_safe": 5.0, "max_safe": 15.0, "is_critical": True},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.08, "min_safe": 0.05, "max_safe": 0.15, "is_critical": True}
-        ]
-    elif pid == "mixed_reef":
-        return [
-            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": True},
-            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.2, "min_safe": 8.1, "max_safe": 8.3, "is_critical": True},
-            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.25, "min_safe": 8.0, "max_safe": 8.5, "is_critical": True},
-            {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 430.0, "min_safe": 420.0, "max_safe": 440.0, "is_critical": True},
-            {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1325.0, "min_safe": 1300.0, "max_safe": 1350.0, "is_critical": True},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 5.0, "min_safe": 3.0, "max_safe": 8.0, "is_critical": True},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.045, "min_safe": 0.03, "max_safe": 0.06, "is_critical": True}
-        ]
-    elif pid == "sps_reef":
-        return [
-            {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
-            {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": True},
-            {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.25, "min_safe": 8.2, "max_safe": 8.3, "is_critical": True},
-            {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.0, "min_safe": 7.5, "max_safe": 8.5, "is_critical": True},
-            {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 435.0, "min_safe": 420.0, "max_safe": 450.0, "is_critical": True},
-            {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1350.0, "min_safe": 1300.0, "max_safe": 1400.0, "is_critical": True},
-            {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 3.0, "min_safe": 1.0, "max_safe": 5.0, "is_critical": True},
-            {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.025, "min_safe": 0.01, "max_safe": 0.04, "is_critical": True}
-        ]
-
-    # lps_reef por defecto
-    return [
-        {"code": "salinity", "name": "Salinidad", "unit": "SG", "optimal_target": 1.0255, "min_safe": 1.025, "max_safe": 1.026, "is_critical": True},
-        {"code": "temp", "name": "Temperatura", "unit": "°C", "optimal_target": 25.0, "min_safe": 24.5, "max_safe": 25.5, "is_critical": False},
-        {"code": "ph", "name": "pH", "unit": "pH", "optimal_target": 8.2, "min_safe": 8.1, "max_safe": 8.3, "is_critical": True},
-        {"code": "dkh", "name": "Alcalinidad / KH", "unit": "dKH", "optimal_target": 8.5, "min_safe": 8.0, "max_safe": 9.0, "is_critical": True},
-        {"code": "ca", "name": "Calcio (Ca)", "unit": "ppm", "optimal_target": 420.0, "min_safe": 400.0, "max_safe": 440.0, "is_critical": True},
-        {"code": "mg", "name": "Magnesio (Mg)", "unit": "ppm", "optimal_target": 1325.0, "min_safe": 1300.0, "max_safe": 1350.0, "is_critical": False},
-        {"code": "no3", "name": "Nitrato (NO3)", "unit": "ppm", "optimal_target": 7.5, "min_safe": 5.0, "max_safe": 10.0, "is_critical": True},
-        {"code": "po4", "name": "Fosfato (PO4)", "unit": "ppm", "optimal_target": 0.05, "min_safe": 0.03, "max_safe": 0.08, "is_critical": True}
+    master_params = [
+        ("salinity", "Salinidad", "SG", "salinity", True),
+        ("temp", "Temperatura", "°C", "temperature", False),
+        ("ph", "pH", "pH", "ph", True),
+        ("dkh", "Alcalinidad / KH", "dKH", "kh", True),
+        ("ca", "Calcio (Ca)", "ppm", "calcium", True),
+        ("mg", "Magnesio (Mg)", "ppm", "magnesium", False),
+        ("no3", "Nitrato (NO3)", "ppm", "nitrate", True),
+        ("po4", "Fosfato (PO4)", "ppm", "phosphate", True),
+        ("ammonia", "Amoníaco (NH3)", "ppm", "ammonia", True),
+        ("nitrite", "Nitrito (NO2)", "ppm", "nitrite", True),
+        ("gh", "Dureza General (GH)", "dGH", "gh_dgh", False),
     ]
+
+    res = []
+    for code, name, unit, f_key, is_crit in master_params:
+        if visible_f.get(f_key, False):
+            t_info = targets.get(f_key, {})
+            min_s = float(t_info.get("min", 0.0))
+            max_s = float(t_info.get("max", 100.0))
+            t_val = float(t_info.get("target", (min_s + max_s) / 2.0))
+            res.append({
+                "code": code,
+                "name": name,
+                "unit": unit,
+                "optimal_target": t_val,
+                "min_safe": min_s,
+                "max_safe": max_s,
+                "is_critical": is_crit
+            })
+    return res
 
 @app.get("/api/tanks/{tank_id}/analytics")
 def get_tank_analytics(
@@ -1277,50 +1238,60 @@ def get_tank_analytics(
     ca = predictions.calcium
     wc = predictions.water_change_prediction
 
-    params_list = [
-        {
-            "parameter_code": "dkh",
-            "parameter_name": "Alcalinidad / KH",
-            "unit": "dKH",
-            "latest_value": alk.latest_value,
-            "status": "optimal" if alk.status == "safe" else "danger_low" if "below" in alk.status else "danger_high" if "above" in alk.status else "normal",
-            "target": 8.3,
-            "min_safe": 7.5,
-            "max_safe": 9.0,
-            "daily_rate": alk.daily_slope,
-            "days_to_threshold": alk.days_remaining_safe,
-            "prediction_message": alk.alert_message,
-            "is_critical": True
-        },
-        {
-            "parameter_code": "ca",
-            "parameter_name": "Calcio (Ca)",
-            "unit": "ppm",
-            "latest_value": ca.latest_value,
-            "status": "optimal" if ca.status == "safe" else "normal",
-            "target": 420.0,
-            "min_safe": 400.0,
-            "max_safe": 450.0,
-            "daily_rate": ca.daily_slope,
-            "days_to_threshold": ca.days_remaining_safe,
-            "prediction_message": ca.alert_message,
-            "is_critical": True
-        },
-        {
-            "parameter_code": "no3",
-            "parameter_name": "Nitrato (NO3)",
-            "unit": "ppm",
-            "latest_value": wc.current_nitrate_ppm,
-            "status": "optimal" if (wc.current_nitrate_ppm or 0) < 15 else "danger_high",
-            "target": 5.0,
-            "min_safe": 2.0,
-            "max_safe": 20.0,
-            "daily_rate": wc.daily_accumulation_rate,
-            "days_to_threshold": wc.days_until_threshold,
-            "prediction_message": wc.message,
-            "is_critical": True
-        }
+    from backend.marine_profiles import get_marine_profile
+    r_prof = getattr(tank, "reef_profile", None) or getattr(tank, "tank_type", None)
+    profile = get_marine_profile(r_prof)
+    visible_f = profile.get("visible_fields", {})
+    targets = profile.get("targets", {})
+
+    latest_m = measurements[-1] if measurements else None
+
+    # Mapeo de parámetros para el dashboard calibrado por perfil
+    param_meta = [
+        ("salinity", "salinity", "Salinidad", "SG", (getattr(latest_m, "salinity_ppt", None) if latest_m else None) or (getattr(latest_m, "salinity", None) if latest_m else None), True, None, None, None),
+        ("temp", "temperature", "Temperatura", "°C", (getattr(latest_m, "temperature", None) if latest_m else None) or (getattr(latest_m, "temperatura", None) if latest_m else None), False, None, None, None),
+        ("ph", "ph", "pH", "pH", getattr(latest_m, "ph", None) if latest_m else None, True, None, None, None),
+        ("dkh", "kh", "Alcalinidad / KH", "dKH", alk.latest_value, True, alk.daily_slope, alk.days_remaining_safe, alk.alert_message),
+        ("ca", "calcium", "Calcio (Ca)", "ppm", ca.latest_value, True, ca.daily_slope, ca.days_remaining_safe, ca.alert_message),
+        ("mg", "magnesium", "Magnesio (Mg)", "ppm", (getattr(latest_m, "magnesium_ppm", None) if latest_m else None) or (getattr(latest_m, "magnesium", None) if latest_m else None), False, None, None, None),
+        ("no3", "nitrate", "Nitrato (NO3)", "ppm", wc.current_nitrate_ppm or (getattr(latest_m, "nitrate_ppm", None) if latest_m else None) or (getattr(latest_m, "nitrate", None) if latest_m else None), True, wc.daily_accumulation_rate, wc.days_until_threshold, wc.message),
+        ("po4", "phosphate", "Fosfato (PO4)", "ppm", (getattr(latest_m, "phosphate_ppm", None) if latest_m else None) or (getattr(latest_m, "phosphate", None) if latest_m else None), True, None, None, None),
+        ("ammonia", "ammonia", "Amoníaco (NH3)", "ppm", (getattr(latest_m, "ammonia_ppm", None) if latest_m else None) or (getattr(latest_m, "ammonia", None) if latest_m else None), True, None, None, None),
+        ("nitrite", "nitrite", "Nitrito (NO2)", "ppm", (getattr(latest_m, "nitrite_ppm", None) if latest_m else None) or (getattr(latest_m, "nitrite", None) if latest_m else None), True, None, None, None),
+        ("gh", "gh_dgh", "Dureza General (GH)", "dGH", getattr(latest_m, "gh_dgh", None) if latest_m else None, False, None, None, None),
     ]
+
+    params_list = []
+    for p_code, f_key, p_name, p_unit, p_val, is_crit, d_rate, d_thresh, p_msg in param_meta:
+        if visible_f.get(f_key, False):
+            t_info = targets.get(f_key, {})
+            min_s = float(t_info.get("min", 0.0))
+            max_s = float(t_info.get("max", 100.0))
+            t_val = float(t_info.get("target", (min_s + max_s) / 2.0))
+
+            if p_val is None:
+                st = "normal"
+            elif p_val < min_s:
+                st = "danger_low"
+            elif p_val > max_s:
+                st = "danger_high"
+            else:
+                st = "optimal"
+
+            params_list.append({
+                "parameter_code": p_code,
+                "parameter_name": p_name,
+                "unit": p_unit,
+                "latest_value": p_val,
+                "status": st,
+                "target": t_val,
+                "min_safe": min_s,
+                "max_safe": max_s,
+                "daily_rate": d_rate,
+                "days_to_threshold": d_thresh,
+                "prediction_message": p_msg,
+                "is_critical": is_crit
+            })
 
     return {
         "tank_id": tank.id,

@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { saveMeasurement, fetchMeasurements } from '../api';
 import CameraScannerModal from './CameraScannerModal';
-import { getMarineProfile } from '../utils/marineProfiles';
+import { getProfileConfig } from '../utils/marineProfiles';
 
 export default function QuickEntryForm({
   tank = null,
@@ -88,13 +88,13 @@ export default function QuickEntryForm({
   const [activeScanParam, setActiveScanParam] = useState(null);
   const [scannedHighlight, setScannedHighlight] = useState(null);
 
-  // Detección del tipo de agua y perfil marino
-  const tankTypeNormalized = (tank?.tank_type || tank?.tipoAgua || tank?.type || '').toLowerCase();
-  const isDulce = ['dulce', 'plantado', 'freshwater'].some(t => tankTypeNormalized.includes(t));
-  const isMarine = !isDulce;
-  const reefProfileKey = tank?.reef_profile || (tankTypeNormalized === 'marine_fish' ? 'fish_only' : 'lps_reef');
-  const profileInfo = getMarineProfile(reefProfileKey);
-  const visibleFields = profileInfo?.visible_fields || {};
+  // Detección unificada del perfil de acuario y visibilidad de campos
+  const profileConfig = getProfileConfig(tank);
+  const isMarine = profileConfig.isMarine;
+  const isDulce = !isMarine;
+  const visibleFields = profileConfig.visibleFields || {};
+  const ranges = profileConfig.ranges || {};
+  const profileInfo = profileConfig;
 
   // Feedback háptico táctil en dispositivos móviles
   const triggerHaptic = (pattern = 25) => {
@@ -247,10 +247,7 @@ export default function QuickEntryForm({
       if (feVal !== null) tracePayload.fe = feVal;
     }
 
-    const isVisible = (fKey) => {
-      if (isDulce) return true;
-      return visibleFields[fKey] !== false;
-    };
+    const isVisible = (fKey) => visibleFields[fKey] === true;
 
     const fieldsToSubmit = {
       ph: isVisible('ph') ? phVal : null,
@@ -272,7 +269,7 @@ export default function QuickEntryForm({
       nitrate_ppm: isVisible('nitrate') ? no3Val : null,
       phosphate: isVisible('phosphate') ? po4Val : null,
       phosphate_ppm: isVisible('phosphate') ? po4Val : null,
-      gh_dgh: isDulce ? ghVal : null,
+      gh_dgh: isVisible('gh_dgh') ? ghVal : null,
       test_methods: (isMarine && visibleFields.test_methods) ? {
         po4: testMethods.po4 || 'drop_kit',
         kh: testMethods.kh || 'drop_kit'

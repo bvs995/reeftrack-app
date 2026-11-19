@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import QuickEntryForm from './QuickEntryForm';
 import { updateAquariumVolume, fetchMaintenanceTasks, completeMaintenanceTask } from '../api';
+import { getProfileConfig } from '../utils/marineProfiles';
 
 export default function Dashboard({
   analytics,
@@ -101,23 +102,69 @@ export default function Dashboard({
     water_change_prediction
   } = analytics;
 
+  const profileConfig = getProfileConfig(activeTank || analytics);
+  const visibleFields = profileConfig.visibleFields || {};
+  const ranges = profileConfig.ranges || {};
+
   const getScoreColor = (score) => {
     if (score >= 85) return 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10 shadow-neon-emerald';
     if (score >= 70) return 'text-amber-400 border-amber-500/50 bg-amber-500/10';
     return 'text-coral-400 border-coral-500/50 bg-coral-500/10 shadow-neon-coral';
   };
 
-  const getTankTypeLabel = (type) => {
-    if (type === 'arrecife' || type === 'reef') return 'Arrecife (Solo Corales)';
-    if (type === 'mixto' || type === 'mixed') return 'Arrecife Mixto (Corales y Peces)';
-    if (type === 'peces_marinos' || type === 'marine_fish') return 'Solo Peces Marinos';
-    if (type === 'plantado' || type === 'freshwater_planted') return 'Agua Dulce Plantado';
-    if (type === 'dulce' || type === 'freshwater_community') return 'Agua Dulce Estándar';
-    return type ? type.replace(/_/g, ' ') : t('dashboard.reefType');
+  const getTankTypeLabel = () => {
+    return profileConfig.badge || profileConfig.name;
   };
 
-  const criticalParams = parameters.filter(p => p.is_critical);
-  const secondaryParams = parameters.filter(p => !p.is_critical);
+  const codeToField = {
+    salinity: 'salinity',
+    temp: 'temperature',
+    temperature: 'temperature',
+    ph: 'ph',
+    dkh: 'kh',
+    kh: 'kh',
+    ca: 'calcium',
+    calcium: 'calcium',
+    mg: 'magnesium',
+    magnesium: 'magnesium',
+    no3: 'nitrate',
+    nitrate: 'nitrate',
+    po4: 'phosphate',
+    phosphate: 'phosphate',
+    ammonia: 'ammonia',
+    nitrite: 'nitrite',
+    gh: 'gh_dgh',
+    gh_dgh: 'gh_dgh'
+  };
+
+  const filteredParameters = (parameters || [])
+    .filter(p => {
+      const fKey = codeToField[p.parameter_code] || p.parameter_code;
+      return visibleFields[fKey] !== false;
+    })
+    .map(p => {
+      const fKey = codeToField[p.parameter_code] || p.parameter_code;
+      const pRange = ranges[fKey];
+      if (!pRange || p.latest_value === null || p.latest_value === undefined) return p;
+
+      const val = Number(p.latest_value);
+      let status = 'optimal';
+      if (val < pRange.min) {
+        status = 'danger_low';
+      } else if (val > pRange.max) {
+        status = 'danger_high';
+      }
+      return {
+        ...p,
+        status: p.status === 'optimal' || p.status?.startsWith('danger') ? status : p.status,
+        min_safe: pRange.min,
+        max_safe: pRange.max,
+        target: pRange.target || p.target
+      };
+    });
+
+  const criticalParams = filteredParameters.filter(p => p.is_critical);
+  const secondaryParams = filteredParameters.filter(p => !p.is_critical);
 
   const handleUpdateVolume = async (newVolume) => {
     try {
@@ -301,6 +348,12 @@ export default function Dashboard({
           </div>
 
           <QuickEntryForm
+            tank={activeTank || (analytics ? {
+              id: analytics.tank_id || analytics.id,
+              tank_type: analytics.tank_type,
+              reef_profile: analytics.reef_profile,
+              name: analytics.tank_name
+            } : null)}
             onSuccess={() => {
               if (onMeasurementSaved) onMeasurementSaved();
               setShowInlineForm(false);

@@ -1,19 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Waves } from 'lucide-react';
-// Asegúrate de tener updateTank exportado en tu archivo api.js
 import { createTank, updateTank } from '../api';
+import { normalizeProfileKey } from '../utils/marineProfiles';
 
 export default function TankManagementModal({
   isOpen,
   onClose,
   onTankCreated,
-  existingTank = null, // Prop nueva: Si le pasas un acuario, el modal cambia a modo "Edición"
+  existingTank = null, // Prop: Si le pasas un acuario, el modal cambia a modo "Edición"
   onTankUpdated = null
 }) {
   const [name, setName] = useState('');
-  const [tankType, setTankType] = useState('arrecife');
+  const [tankType, setTankType] = useState('lps_reef');
   const [volumeLiters, setVolumeLiters] = useState('');
-  const [reefProfile, setReefProfile] = useState('lps_reef');
   const [dosingMethod, setDosingMethod] = useState('water_changes');
   const [lightingPar, setLightingPar] = useState('');
   const [flowProfile, setFlowProfile] = useState('moderate_indirect');
@@ -21,38 +20,27 @@ export default function TankManagementModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const normalizeTankType = (type) => {
-    if (!type) return 'arrecife';
-    const t = String(type).toLowerCase();
-    if (t === 'reef') return 'arrecife';
-    if (t === 'mixto') return 'mixed';
-    if (t === 'peces_marinos') return 'marine_fish';
-    if (t === 'freshwater_planted') return 'plantado';
-    if (t === 'freshwater_community') return 'dulce';
-    return t;
-  };
-
-  const isMarine = ['arrecife', 'mixed', 'marine_fish', 'reef'].includes(tankType);
+  const isMarine = ['fish_only', 'mixed_reef', 'lps_reef', 'sps_reef'].includes(tankType);
+  const hasCoralEquipment = ['mixed_reef', 'lps_reef', 'sps_reef'].includes(tankType);
 
   // Cargar datos automáticamente si estamos editando un acuario existente
   useEffect(() => {
     if (existingTank && isOpen) {
       setName(existingTank.name || '');
-      const nType = normalizeTankType(existingTank.tank_type || existingTank.type);
+      const rawKey = existingTank.reef_profile || existingTank.tank_type || existingTank.type;
+      const nType = normalizeProfileKey(rawKey);
       setTankType(nType);
       setVolumeLiters(existingTank.volume_liters || '');
       setNotes(existingTank.notes || '');
-      setReefProfile(existingTank.reef_profile || (nType === 'marine_fish' ? 'fish_only' : 'lps_reef'));
       setDosingMethod(existingTank.dosing_method || 'water_changes');
       setLightingPar(existingTank.lighting_par !== null && existingTank.lighting_par !== undefined ? String(existingTank.lighting_par) : '');
-      setFlowProfile(existingTank.flow_profile || 'moderate_indirect');
+      setFlowProfile(existingTank.flow_profile || (nType === 'sps_reef' ? 'high_turbulent' : 'moderate_indirect'));
     } else if (!existingTank && isOpen) {
       // Limpiar formulario si es creación nueva
       setName('');
-      setTankType('arrecife');
+      setTankType('lps_reef');
       setVolumeLiters('');
       setNotes('');
-      setReefProfile('lps_reef');
       setDosingMethod('water_changes');
       setLightingPar('');
       setFlowProfile('moderate_indirect');
@@ -77,20 +65,20 @@ export default function TankManagementModal({
     setLoading(true);
     setError(null);
     try {
-      const hasCoralEquipment = isMarine && reefProfile !== 'fish_only';
+      const payload = {
+        name: name.trim(),
+        tank_type: tankType,
+        type: tankType,
+        volume_liters: parseFloat(volumeLiters),
+        reef_profile: isMarine ? tankType : null,
+        dosing_method: hasCoralEquipment ? (dosingMethod || 'water_changes') : null,
+        lighting_par: hasCoralEquipment && lightingPar !== '' ? parseInt(lightingPar, 10) : null,
+        flow_profile: hasCoralEquipment ? (flowProfile || 'moderate_indirect') : null,
+        notes: notes.trim() || undefined
+      };
+
       if (existingTank) {
         // MODO EDICIÓN
-        const payload = {
-          name: name.trim(),
-          tank_type: tankType,
-          type: tankType,
-          volume_liters: parseFloat(volumeLiters),
-          reef_profile: isMarine ? (reefProfile || 'lps_reef') : null,
-          dosing_method: hasCoralEquipment ? (dosingMethod || 'water_changes') : null,
-          lighting_par: hasCoralEquipment && lightingPar !== '' ? parseInt(lightingPar, 10) : null,
-          flow_profile: hasCoralEquipment ? (flowProfile || 'moderate_indirect') : null,
-          notes: notes.trim() || undefined
-        };
         const res = await updateTank(existingTank.id, payload);
         const mergedTank = {
           ...existingTank,
@@ -110,16 +98,7 @@ export default function TankManagementModal({
         if (onTankUpdated) onTankUpdated(mergedTank);
       } else {
         // MODO CREACIÓN
-        const newTank = await createTank({
-          name: name.trim(),
-          tank_type: tankType,
-          volume_liters: parseFloat(volumeLiters),
-          reef_profile: isMarine ? (reefProfile || 'lps_reef') : null,
-          dosing_method: hasCoralEquipment ? (dosingMethod || 'water_changes') : null,
-          lighting_par: hasCoralEquipment && lightingPar !== '' ? parseInt(lightingPar, 10) : null,
-          flow_profile: hasCoralEquipment ? (flowProfile || 'moderate_indirect') : null,
-          notes: notes.trim() || undefined
-        });
+        const newTank = await createTank(payload);
         triggerHaptic();
         if (onTankCreated) onTankCreated(newTank);
       }
@@ -177,108 +156,86 @@ export default function TankManagementModal({
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Biotipo / Ecosistema
+              Tipo de Acuario / Biotipo (6 Ecosistemas)
             </label>
             <select
               value={tankType}
               onChange={(e) => {
                 const newT = e.target.value;
                 setTankType(newT);
-                if (newT === 'marine_fish') {
-                  setReefProfile('fish_only');
-                } else if (newT === 'mixed') {
-                  setReefProfile('mixed_reef');
-                } else if (newT === 'arrecife' && reefProfile === 'fish_only') {
-                  setReefProfile('lps_reef');
+                if (newT === 'sps_reef' && flowProfile === 'moderate_indirect') {
+                  setFlowProfile('high_turbulent');
+                } else if (newT === 'lps_reef' && flowProfile === 'high_turbulent') {
+                  setFlowProfile('moderate_indirect');
                 }
               }}
               className="w-full min-h-[48px] bg-marine-950 border border-marine-700 focus:border-cyan-400 rounded-xl px-3.5 text-sm text-white focus:outline-none font-semibold shadow-inner cursor-pointer"
             >
-              <option value="arrecife">Arrecife (Solo Corales)</option>
-              <option value="mixed">Arrecife Mixto (Corales y Peces)</option>
-              <option value="marine_fish">Solo Peces Marinos</option>
-              <option value="plantado">Agua Dulce Plantado</option>
-              <option value="dulce">Agua Dulce Estándar</option>
+              <option value="freshwater">1. Agua Dulce</option>
+              <option value="planted">2. Plantado</option>
+              <option value="fish_only">3. Solo Peces (Marino FOWLR)</option>
+              <option value="mixed_reef">4. Arrecife Mixto (Blandos + LPS + SPS)</option>
+              <option value="lps_reef">5. Arrecife LPS (Corales de Pólipo Largo)</option>
+              <option value="sps_reef">6. Arrecife SPS (Corales de Pólipo Corto)</option>
             </select>
           </div>
 
-          {/* Configuración avanzada de perfil marino si aplica */}
-          {isMarine && (
+          {/* Configuración de equipamiento coralino si aplica */}
+          {hasCoralEquipment && (
             <div className="p-3.5 rounded-2xl bg-cyan-950/30 border border-cyan-500/20 space-y-3">
               <div className="text-[11px] font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                Perfil Marino Especializado
+                Parámetros de Equipamiento y Flujo
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Método de Dosificación
+                  </label>
+                  <select
+                    value={dosingMethod}
+                    onChange={(e) => setDosingMethod(e.target.value)}
+                    className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
+                  >
+                    <option value="water_changes">Cambios de Agua</option>
+                    <option value="manual_dosing">Dosificación Manual</option>
+                    <option value="peristaltic_balling">Balling / Peristálticas</option>
+                    <option value="kalkwasser">Kalkwasser (Agua de Cal)</option>
+                    <option value="calcium_reactor">Reactor de Calcio (CaRx)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Iluminación PAR (estimado)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000"
+                    placeholder="Ej. 180"
+                    value={lightingPar}
+                    onChange={(e) => setLightingPar(e.target.value)}
+                    className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none placeholder-slate-500 font-semibold"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                  Perfil Específico
+                  Perfil de Flujo / Circulación
                 </label>
                 <select
-                  value={reefProfile}
-                  onChange={(e) => setReefProfile(e.target.value)}
+                  value={flowProfile}
+                  onChange={(e) => setFlowProfile(e.target.value)}
                   className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
                 >
-                  <option value="fish_only">1. Solo Peces / FOWLR</option>
-                  <option value="soft_reef">2. Corales Blandos (Soft)</option>
-                  <option value="lps_reef">3. Arrecife LPS (Pólipo Largo)</option>
-                  <option value="mixed_reef">4. Arrecife Mixto (Blandos + LPS + SPS)</option>
-                  <option value="sps_reef">5. Arrecife SPS (Pólipo Corto - Máxima Exigencia)</option>
+                  <option value="low_moderate">Bajo a Moderado</option>
+                  <option value="moderate_indirect">Moderado e Indirecto (Recomendado LPS)</option>
+                  <option value="high_turbulent">Alto, Turbulento y Variable (Recomendado SPS)</option>
                 </select>
               </div>
-
-              {reefProfile !== 'fish_only' && (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                        Método de Dosificación
-                      </label>
-                      <select
-                        value={dosingMethod}
-                        onChange={(e) => setDosingMethod(e.target.value)}
-                        className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
-                      >
-                        <option value="water_changes">Cambios de Agua</option>
-                        <option value="manual_dosing">Dosificación Manual</option>
-                        <option value="peristaltic_balling">Balling / Peristálticas</option>
-                        <option value="kalkwasser">Kalkwasser (Agua de Cal)</option>
-                        <option value="calcium_reactor">Reactor de Calcio (CaRx)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                        Iluminación PAR (estimado)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="1000"
-                        placeholder="Ej. 180"
-                        value={lightingPar}
-                        onChange={(e) => setLightingPar(e.target.value)}
-                        className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none placeholder-slate-500 font-semibold"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                      Perfil de Flujo / Circulación
-                    </label>
-                    <select
-                      value={flowProfile}
-                      onChange={(e) => setFlowProfile(e.target.value)}
-                      className="w-full min-h-[42px] bg-slate-900/90 border border-cyan-500/30 focus:border-cyan-400 rounded-xl px-3 text-xs text-white focus:outline-none font-semibold"
-                    >
-                      <option value="low_moderate">Bajo a Moderado (Soft / Peces)</option>
-                      <option value="moderate_indirect">Moderado e Indirecto (LPS)</option>
-                      <option value="high_turbulent">Alto, Turbulento y Variable (SPS / Mixto)</option>
-                    </select>
-                  </div>
-                </>
-              )}
             </div>
           )}
 

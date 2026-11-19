@@ -29,7 +29,7 @@ import {
   Camera
 } from 'lucide-react';
 import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis } from '../api';
-import { getMarineProfile } from '../utils/marineProfiles';
+import { getProfileConfig, getMarineProfile } from '../utils/marineProfiles';
 
 // Registrar plugins requeridos de Chart.js incluyendo annotationPlugin oficial
 ChartJS.register(
@@ -62,35 +62,19 @@ export default function DashboardTrends({
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [userSelectedEcosystem, setUserSelectedEcosystem] = useState(null);
 
-  // Normalización del ecosistema del acuario (arrecife, plantado, dulce_peces)
+  // Normalización del ecosistema del acuario según perfil unificado
   const rawTank = propAcuarioActual || activeTank || {};
-  const rawTipo = (rawTank.tipo || rawTank.tank_type || rawTank.tipoAgua || '').toLowerCase();
+  const profileConfig = getProfileConfig(rawTank);
+  const esAguaSalada = profileConfig.isMarine;
+  const activeMarineProfile = profileConfig;
+  const visibleFields = profileConfig.visibleFields || {};
 
-  let defaultTipo = 'arrecife';
-  if (rawTipo.includes('plant')) {
-    defaultTipo = 'plantado';
-  } else if (rawTipo === 'peces_marinos' || rawTipo === 'marine_fish') {
-    defaultTipo = 'peces_marinos';
-  } else if (rawTipo === 'mixto' || rawTipo === 'mixed') {
-    defaultTipo = 'mixto';
-  } else if (rawTipo.includes('pece') || rawTipo.includes('community') || rawTipo.includes('comunitario') || rawTipo === 'dulce') {
-    defaultTipo = 'dulce_peces';
-  } else if (rawTipo.includes('reef') || rawTipo.includes('arrecife') || rawTipo.includes('salada')) {
-    defaultTipo = 'arrecife';
-  }
-
-  const currentTipo = userSelectedEcosystem || defaultTipo;
-  const esAguaSalada = currentTipo === 'arrecife' || currentTipo === 'mixto' || currentTipo === 'peces_marinos';
-
+  const currentTipo = userSelectedEcosystem || profileConfig.id;
   const acuarioActual = {
     ...rawTank,
     tipo: currentTipo,
     tipoAgua: esAguaSalada ? 'salada' : 'dulce'
   };
-
-  // Detección del perfil marino activo
-  const marineProfileKey = rawTank?.reef_profile || (rawTank?.tank_type === 'marine_fish' || rawTipo === 'peces_marinos' ? 'fish_only' : 'lps_reef');
-  const activeMarineProfile = getMarineProfile(marineProfileKey);
 
   // Listas maestras de parámetros según el ecosistema y perfil seleccionado
   const parametrosMarinosPool = [
@@ -108,41 +92,41 @@ export default function DashboardTrends({
 
   const parametrosDulcePeces = [
     { id: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' },
     { id: 'amoniaco', nombre: 'Amoníaco', unidad: '(NH3)' },
     { id: 'nitritos', nombre: 'Nitritos', unidad: '(NO2)' },
     { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
-    { id: 'gh', nombre: 'Dureza General', unidad: '(GH)' },
-    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' }
+    { id: 'gh', nombre: 'Dureza General', unidad: '(GH)' }
   ];
 
   const parametrosPlantado = [
     { id: 'ph', nombre: 'pH', unidad: '' },
-    { id: 'kh', nombre: 'Dureza (KH)', unidad: '(dKH)' },
+    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' },
+    { id: 'alcalinidad', key: 'kh', nombre: 'Alcalinidad', unidad: '(dKH)' },
+    { id: 'nitratos', key: 'nitrate', nombre: 'Nitrógeno', unidad: '(NO3 ppm)' },
+    { id: 'fosfatos', key: 'phosphate', nombre: 'Fósforo', unidad: '(PO4 ppm)' },
     { id: 'gh', nombre: 'Dureza (GH)', unidad: '(dGH)' },
-    { id: 'nitratos', nombre: 'Nitrógeno', unidad: '(NO3 ppm)' },
-    { id: 'fosfatos', nombre: 'Fósforo', unidad: '(PO4 ppm)' },
     { id: 'potasio', nombre: 'Potasio', unidad: '(K ppm)' },
     { id: 'hierro', nombre: 'Hierro', unidad: '(Fe ppm)' },
     { id: 'co2', nombre: 'CO2 disuelto', unidad: '(ppm)' }
   ];
 
-  // Lógica de ruteo según el perfil del acuario guardado en la base de datos o estado
+  // Lógica de ruteo estricta según visibleFields del perfil activo
   let parametrosAMostrar = [];
-  if (esAguaSalada) {
-    const vFields = activeMarineProfile?.visible_fields || {};
-    parametrosAMostrar = parametrosMarinosPool
-      .filter(p => vFields[p.key] !== false)
-      .map(({ id, nombre, unidad }) => ({ id, nombre, unidad }));
-  } else if (acuarioActual.tipo === 'plantado') {
+  if (profileConfig.id === 'planted') {
     parametrosAMostrar = parametrosPlantado;
-  } else {
+  } else if (profileConfig.id === 'freshwater') {
     parametrosAMostrar = parametrosDulcePeces;
+  } else {
+    parametrosAMostrar = parametrosMarinosPool
+      .filter(p => visibleFields[p.key] === true)
+      .map(({ id, nombre, unidad }) => ({ id, nombre, unidad }));
   }
 
   const [activeParam, setActiveParam] = useState(() => {
-    if (acuarioActual.tipo === 'plantado') return 'potasio';
+    if (profileConfig.id === 'planted') return 'potasio';
     if (esAguaSalada) {
-      if (marineProfileKey === 'fish_only') return 'nitratos';
+      if (profileConfig.id === 'fish_only') return 'nitratos';
       return 'alcalinidad';
     }
     return 'ph';

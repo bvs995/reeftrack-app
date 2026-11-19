@@ -352,13 +352,45 @@ class TokenResponse(BaseModel):
 # ESQUEMAS PYDANTIC v2 - ACUARIOS (TANKS)
 # ==============================================================================
 
+def normalize_tank_type_value(raw: Any) -> str:
+    """Normaliza cualquier biotipo o sinónimo a una de las 6 opciones maestras."""
+    if not raw:
+        return "lps_reef"
+    k = str(raw).lower().strip()
+    mapping = {
+        "freshwater": "freshwater",
+        "dulce": "freshwater",
+        "freshwater_community": "freshwater",
+        "planted": "planted",
+        "plantado": "planted",
+        "freshwater_planted": "planted",
+        "fish_only": "fish_only",
+        "marine_fish": "fish_only",
+        "peces_marinos": "fish_only",
+        "peces": "fish_only",
+        "fowlr": "fish_only",
+        "fowlr_soft": "fish_only",
+        "mixed_reef": "mixed_reef",
+        "mixed": "mixed_reef",
+        "mixto": "mixed_reef",
+        "sps_reef": "sps_reef",
+        "sps": "sps_reef",
+        "lps_reef": "lps_reef",
+        "lps": "lps_reef",
+        "arrecife": "lps_reef",
+        "reef": "lps_reef",
+        "soft_reef": "lps_reef",
+        "soft": "lps_reef"
+    }
+    return mapping.get(k, "lps_reef")
+
 class AquariumCreate(BaseModel):
     name: str = Field(..., description="Nombre del acuario")
     volume_liters: float = Field(..., gt=0, description="Volumen en litros")
-    tank_type: Literal["arrecife", "mixed", "marine_fish", "plantado", "dulce"] = Field(
-        default="mixed", description="Biotipo del acuario"
+    tank_type: str = Field(
+        default="lps_reef", description="Biotipo del acuario: freshwater, planted, fish_only, mixed_reef, lps_reef, sps_reef"
     )
-    reef_profile: Optional[str] = Field(None, description="Perfil marino: fish_only, soft_reef, lps_reef, mixed_reef, sps_reef")
+    reef_profile: Optional[str] = Field(None, description="Perfil marino: fish_only, mixed_reef, lps_reef, sps_reef")
     dosing_method: Optional[str] = Field(None, description="Método de dosificación: water_changes, manual_dosing, peristaltic_balling, kalkwasser, calcium_reactor")
     lighting_par: Optional[int] = Field(None, description="Intensidad lumínica estimada o medida en PAR")
     flow_profile: Optional[str] = Field(None, description="Perfil de flujo: low_moderate, moderate_indirect, high_turbulent")
@@ -368,17 +400,13 @@ class AquariumCreate(BaseModel):
     @classmethod
     def handle_type_alias(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            if "tank_type" not in data and "type" in data:
-                data["tank_type"] = data["type"]
-            if "tank_type" in data:
-                mapping = {
-                    "reef": "arrecife",
-                    "mixto": "mixed",
-                    "peces_marinos": "marine_fish",
-                    "freshwater_planted": "plantado",
-                    "freshwater_community": "dulce"
-                }
-                data["tank_type"] = mapping.get(data["tank_type"], data["tank_type"])
+            raw_type = data.get("tank_type") or data.get("type")
+            norm_type = normalize_tank_type_value(raw_type)
+            data["tank_type"] = norm_type
+            if norm_type in ["fish_only", "mixed_reef", "lps_reef", "sps_reef"]:
+                data["reef_profile"] = norm_type
+            else:
+                data["reef_profile"] = None
         return data
 
     @property
@@ -387,11 +415,11 @@ class AquariumCreate(BaseModel):
 
 class TankCreate(BaseModel):
     name: str = Field(..., example="Arrecife Mixto SPS/LPS")
-    tank_type: Literal["arrecife", "mixed", "marine_fish", "plantado", "dulce"] = Field(
-        default="mixed", description="Biotipo del acuario"
+    tank_type: str = Field(
+        default="lps_reef", description="Biotipo del acuario: freshwater, planted, fish_only, mixed_reef, lps_reef, sps_reef"
     )
     volume_liters: float = Field(280.0, gt=0, example=280.0)
-    reef_profile: Optional[str] = Field(None, description="Perfil marino: fish_only, soft_reef, lps_reef, mixed_reef, sps_reef")
+    reef_profile: Optional[str] = Field(None, description="Perfil marino: fish_only, mixed_reef, lps_reef, sps_reef")
     dosing_method: Optional[str] = Field(None, description="Método de dosificación")
     lighting_par: Optional[int] = Field(None, description="Intensidad lumínica PAR")
     flow_profile: Optional[str] = Field(None, description="Perfil de flujo")
@@ -401,17 +429,13 @@ class TankCreate(BaseModel):
     @classmethod
     def handle_type_alias(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            if "tank_type" not in data and "type" in data:
-                data["tank_type"] = data["type"]
-            if "tank_type" in data:
-                mapping = {
-                    "reef": "arrecife",
-                    "mixto": "mixed",
-                    "peces_marinos": "marine_fish",
-                    "freshwater_planted": "plantado",
-                    "freshwater_community": "dulce"
-                }
-                data["tank_type"] = mapping.get(data["tank_type"], data["tank_type"])
+            raw_type = data.get("tank_type") or data.get("type")
+            norm_type = normalize_tank_type_value(raw_type)
+            data["tank_type"] = norm_type
+            if norm_type in ["fish_only", "mixed_reef", "lps_reef", "sps_reef"]:
+                data["reef_profile"] = norm_type
+            else:
+                data["reef_profile"] = None
         return data
 
 class TankUpdate(BaseModel):
