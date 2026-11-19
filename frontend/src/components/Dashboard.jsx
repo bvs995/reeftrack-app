@@ -35,7 +35,7 @@ export default function Dashboard({
   onSelectParameterForChart,
   onMeasurementSaved
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [showInlineForm, setShowInlineForm] = useState(false);
   const [overdueTasks, setOverdueTasks] = useState([]);
   const [completingTaskId, setCompletingTaskId] = useState(null);
@@ -115,7 +115,8 @@ export default function Dashboard({
   const getTankTypeLabel = () => {
     const match = AQUARIUM_TYPES.find(t => t.id === profileConfig.id);
     if (match) {
-      return i18n?.language === 'en' ? `${match.icon} ${match.labelEn}` : `${match.icon} ${match.label}`;
+      const isEn = (i18n?.language || '').toLowerCase().startsWith('en');
+      return isEn ? `${match.icon} ${match.labelEn}` : `${match.icon} ${match.label}`;
     }
     return profileConfig.badge || profileConfig.name;
   };
