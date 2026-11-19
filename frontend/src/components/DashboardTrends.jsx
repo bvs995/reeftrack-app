@@ -61,6 +61,17 @@ export default function DashboardTrends({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [userSelectedEcosystem, setUserSelectedEcosystem] = useState(null);
+  const [showTraceElements, setShowTraceElements] = useState(false);
+
+  // 6 Opciones Canónicas de Perfiles para la Barra de Tendencias
+  const TRENDS_PROFILES = [
+    { id: 'sps_reef', label: '🪸 Arrecife SPS', key: 'sps_reef' },
+    { id: 'lps_reef', label: '🪸 Arrecife LPS', key: 'lps_reef' },
+    { id: 'mixed_reef', label: '🌊 Mixto', key: 'mixed_reef' },
+    { id: 'fish_only', label: '🐠 Peces Marinos', key: 'fish_only' },
+    { id: 'planted', label: '🌿 Plantado', key: 'planted' },
+    { id: 'freshwater', label: '🐟 Dulce Peces', key: 'freshwater' }
+  ];
 
   // Normalización del ecosistema del acuario según perfil unificado
   const rawTank = propAcuarioActual || activeTank || {};
@@ -85,59 +96,78 @@ export default function DashboardTrends({
     tipoAgua: esAguaSalada ? 'salada' : 'dulce'
   };
 
-  // Listas maestras de parámetros según el ecosistema y perfil seleccionado
-  const parametrosMarinosPool = [
+  // Listas maestras de parámetros especializadas por perfil
+  const parametrosFishOnly = [
+    { id: 'salinidad', key: 'salinity', nombre: 'Salinidad', unidad: '(SG / ppt)' },
+    { id: 'temperatura', key: 'temperature', nombre: 'Temperatura', unidad: '(°C)' },
+    { id: 'ph', key: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'nitratos', key: 'nitrate', nombre: 'Nitratos', unidad: '(NO3 ppm)' },
+    { id: 'fosfatos', key: 'phosphate', nombre: 'Fosfatos', unidad: '(PO4 ppm)' },
+    { id: 'amoniaco', key: 'ammonia', nombre: 'Amoníaco', unidad: '(NH3)' },
+    { id: 'nitritos', key: 'nitrite', nombre: 'Nitritos', unidad: '(NO2)' },
+    { id: 'alcalinidad', key: 'kh', nombre: 'Alcalinidad', unidad: '(dKH - opcional)' }
+  ];
+
+  const parametrosReefBasicos = [
     { id: 'salinidad', key: 'salinity', nombre: 'Salinidad', unidad: '(SG / ppt)' },
     { id: 'temperatura', key: 'temperature', nombre: 'Temperatura', unidad: '(°C)' },
     { id: 'ph', key: 'ph', nombre: 'pH', unidad: '' },
     { id: 'alcalinidad', key: 'kh', nombre: 'Alcalinidad', unidad: '(dKH)' },
-    { id: 'calcio', key: 'calcium', nombre: 'Calcio', unidad: '(ppm)' },
-    { id: 'magnesio', key: 'magnesium', nombre: 'Magnesio', unidad: '(ppm)' },
-    { id: 'nitratos', key: 'nitrate', nombre: 'Nitratos', unidad: '(ppm)' },
-    { id: 'fosfatos', key: 'phosphate', nombre: 'Fosfatos', unidad: '(ppm)' },
+    { id: 'calcio', key: 'calcium', nombre: 'Calcio', unidad: '(Ca ppm)' },
+    { id: 'magnesio', key: 'magnesium', nombre: 'Magnesio', unidad: '(Mg ppm)' },
+    { id: 'nitratos', key: 'nitrate', nombre: 'Nitratos', unidad: '(NO3 ppm)' },
+    { id: 'fosfatos', key: 'phosphate', nombre: 'Fosfatos', unidad: '(PO4 ppm)' },
     { id: 'amoniaco', key: 'ammonia', nombre: 'Amoníaco', unidad: '(NH3)' },
     { id: 'nitritos', key: 'nitrite', nombre: 'Nitritos', unidad: '(NO2)' }
   ];
 
+  const parametrosTraza = [
+    { id: 'potasio', key: 'potassium', nombre: 'Potasio', unidad: '(K ppm)' },
+    { id: 'estroncio', key: 'strontium', nombre: 'Estroncio', unidad: '(Sr ppm)' },
+    { id: 'yodo', key: 'iodine', nombre: 'Yodo', unidad: '(I ppm)' },
+    { id: 'hierro', key: 'iron', nombre: 'Hierro', unidad: '(Fe ppm)' }
+  ];
+
   const parametrosDulcePeces = [
-    { id: 'ph', nombre: 'pH', unidad: '' },
-    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' },
-    { id: 'amoniaco', nombre: 'Amoníaco', unidad: '(NH3)' },
-    { id: 'nitritos', nombre: 'Nitritos', unidad: '(NO2)' },
-    { id: 'nitratos', nombre: 'Nitratos', unidad: '(ppm)' },
-    { id: 'gh', nombre: 'Dureza General', unidad: '(GH)' }
+    { id: 'ph', key: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'temperatura', key: 'temperature', nombre: 'Temperatura', unidad: '(°C)' },
+    { id: 'amoniaco', key: 'ammonia', nombre: 'Amoníaco', unidad: '(NH3)' },
+    { id: 'nitritos', key: 'nitrite', nombre: 'Nitritos', unidad: '(NO2)' },
+    { id: 'nitratos', key: 'nitrate', nombre: 'Nitratos', unidad: '(NO3 ppm)' },
+    { id: 'gh', key: 'gh_dgh', nombre: 'Dureza General', unidad: '(GH)' }
   ];
 
   const parametrosPlantado = [
-    { id: 'ph', nombre: 'pH', unidad: '' },
-    { id: 'temperatura', nombre: 'Temperatura', unidad: '(°C)' },
+    { id: 'ph', key: 'ph', nombre: 'pH', unidad: '' },
+    { id: 'temperatura', key: 'temperature', nombre: 'Temperatura', unidad: '(°C)' },
     { id: 'alcalinidad', key: 'kh', nombre: 'Alcalinidad', unidad: '(dKH)' },
     { id: 'nitratos', key: 'nitrate', nombre: 'Nitrógeno', unidad: '(NO3 ppm)' },
     { id: 'fosfatos', key: 'phosphate', nombre: 'Fósforo', unidad: '(PO4 ppm)' },
-    { id: 'gh', nombre: 'Dureza (GH)', unidad: '(dGH)' },
-    { id: 'potasio', nombre: 'Potasio', unidad: '(K ppm)' },
-    { id: 'hierro', nombre: 'Hierro', unidad: '(Fe ppm)' },
-    { id: 'co2', nombre: 'CO2 disuelto', unidad: '(ppm)' }
+    { id: 'gh', key: 'gh_dgh', nombre: 'Dureza (GH)', unidad: '(dGH)' },
+    { id: 'potasio', key: 'potassium', nombre: 'Potasio', unidad: '(K ppm)' },
+    { id: 'hierro', key: 'iron', nombre: 'Hierro', unidad: '(Fe ppm)' },
+    { id: 'co2', key: 'co2', nombre: 'CO2 disuelto', unidad: '(ppm)' }
   ];
 
-  // Lógica de ruteo estricta según visibleFields del perfil activo
+  // Lógica de ruteo estricta según el perfil activo
   let parametrosAMostrar = [];
-  if (profileConfig.id === 'planted') {
+  if (profileConfig.id === 'fish_only') {
+    parametrosAMostrar = parametrosFishOnly;
+  } else if (profileConfig.id === 'planted') {
     parametrosAMostrar = parametrosPlantado;
   } else if (profileConfig.id === 'freshwater') {
     parametrosAMostrar = parametrosDulcePeces;
   } else {
-    parametrosAMostrar = parametrosMarinosPool
-      .filter(p => visibleFields[p.key] === true)
-      .map(({ id, nombre, unidad }) => ({ id, nombre, unidad }));
+    // mixed_reef, lps_reef, sps_reef
+    parametrosAMostrar = showTraceElements
+      ? [...parametrosReefBasicos, ...parametrosTraza]
+      : parametrosReefBasicos;
   }
 
   const [activeParam, setActiveParam] = useState(() => {
     if (profileConfig.id === 'planted') return 'potasio';
-    if (esAguaSalada) {
-      if (profileConfig.id === 'fish_only') return 'nitratos';
-      return 'alcalinidad';
-    }
+    if (profileConfig.id === 'fish_only') return 'salinidad';
+    if (esAguaSalada) return 'alcalinidad';
     return 'ph';
   });
 
@@ -147,33 +177,39 @@ export default function DashboardTrends({
     setActiveParam(id);
   };
 
-  // Asegurar que el parámetro seleccionado sea coherente con el ecosistema y perfil
+  const handleSelectEcosystem = (newEcosystemId) => {
+    triggerHaptic(20);
+    setUserSelectedEcosystem(newEcosystemId);
+    setAiAnalysis(null);
+
+    // Ajustar parámetro activo inteligentemente según el nuevo perfil
+    if (newEcosystemId === 'fish_only') {
+      if (['calcio', 'magnesio', 'potasio', 'estroncio', 'yodo', 'hierro', 'gh', 'co2'].includes(activeParam)) {
+        setActiveParam('salinidad');
+      }
+    } else if (newEcosystemId === 'planted') {
+      if (['salinidad', 'calcio', 'magnesio', 'estroncio', 'yodo'].includes(activeParam)) {
+        setActiveParam('potasio');
+      }
+    } else if (newEcosystemId === 'freshwater') {
+      if (['salinidad', 'alcalinidad', 'calcio', 'magnesio', 'fosfatos', 'potasio', 'estroncio', 'yodo', 'hierro', 'co2'].includes(activeParam)) {
+        setActiveParam('ph');
+      }
+    } else {
+      // mixed_reef, lps_reef, sps_reef
+      if (['gh', 'co2'].includes(activeParam)) {
+        setActiveParam('alcalinidad');
+      }
+    }
+  };
+
+  // Asegurar que el parámetro seleccionado sea coherente con parametrosAMostrar
   useEffect(() => {
-    const aliasMap = {
-      dkh: 'alcalinidad',
-      kh: 'alcalinidad',
-      calcium: 'calcio',
-      ca: 'calcio',
-      magnesium: 'magnesio',
-      mg: 'magnesio',
-      salinity: 'salinidad',
-      phosphate: 'fosfatos',
-      po4: 'fosfatos',
-      nitrate: 'nitratos',
-      no3: 'nitratos',
-      temperature: 'temperatura',
-      temp: 'temperatura',
-      ammonia: 'amoniaco',
-      nh3: 'amoniaco',
-      nitrite: 'nitritos',
-      no2: 'nitritos'
-    };
-    const currentId = aliasMap[activeParam] || activeParam;
-    const exists = parametrosAMostrar.some(p => p.id === currentId);
-    if (!exists && parametrosAMostrar.length > 0) {
+    const isCurrentValid = parametrosAMostrar.some(p => p.id === activeParam);
+    if (!isCurrentValid && parametrosAMostrar.length > 0) {
       setActiveParam(parametrosAMostrar[0].id);
     }
-  }, [acuarioActual.tipo, rawTank?.reef_profile, parametrosAMostrar]);
+  }, [profileConfig.id, parametrosAMostrar, activeParam]);
 
   const triggerHaptic = (ms = 15) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -183,36 +219,45 @@ export default function DashboardTrends({
 
   const handleAnalizarConIA = async () => {
     triggerHaptic(25);
-    setMostrarDiagnosticoIA(prev => !prev);
+    setMostrarDiagnosticoIA(true);
 
-    // Si aún no hemos cargado el análisis de IA, consultar a FastAPI / Gemini
-    if (!aiAnalysis && !aiLoading) {
-      setAiLoading(true);
-      try {
-        const alk = predictions?.alkalinity;
-        const cal = predictions?.calcium;
-        const wc = predictions?.water_change;
-        const payload = {
-          nombre_acuario: 'Mi Acuario Principal',
-          volumen_litros: 280,
-          ph: 8.2,
-          kh: alk?.latest_value ?? 8.3,
-          calcio: cal?.latest_value ?? 420,
-          magnesio: 1350,
-          nitrato: wc?.current_nitrate_ppm ?? 5.0,
-          fosfato: 0.04,
-          temperatura: 25.5,
-          tendencia_reciente: `Consumo KH: ${alk?.daily_consumption_rate ? alk.daily_consumption_rate.toFixed(2) + ' dKH/d' : 'Estable'}. Acumulación NO3: ${wc?.daily_accumulation_rate ? wc.daily_accumulation_rate.toFixed(2) + ' ppm/d' : 'Estable'}.`
-        };
-        const res = await fetchPredictiveAnalysis(payload);
-        if (res?.data) {
-          setAiAnalysis(res.data);
-        }
-      } catch (err) {
-        console.error('Error al consultar diagnóstico IA:', err);
-      } finally {
-        setAiLoading(false);
+    if (aiLoading) return;
+    setAiLoading(true);
+    try {
+      const alk = predictions?.alkalinity;
+      const cal = predictions?.calcium;
+      const wc = predictions?.water_change;
+      const pRanges = profileConfig.ranges || {};
+
+      const payload = {
+        nombre_acuario: effectiveTank.name || 'Mi Acuario Principal',
+        volumen_litros: Number(effectiveTank.volume_liters) || 280,
+        tipo: profileConfig.id,
+        tank_type: profileConfig.id,
+        reef_profile: profileConfig.isMarine ? profileConfig.id : null,
+        dosing_method: effectiveTank.dosing_method || (profileConfig.isMarine ? 'water_changes' : null),
+        lighting_par: effectiveTank.lighting_par,
+        flow_profile: effectiveTank.flow_profile,
+        ph: pRanges.ph?.target ?? 8.2,
+        kh: alk?.latest_value ?? pRanges.kh?.target ?? 8.2,
+        calcio: profileConfig.id === 'fish_only' || !profileConfig.isMarine ? null : (cal?.latest_value ?? pRanges.calcium?.target ?? 420),
+        magnesio: profileConfig.id === 'fish_only' || !profileConfig.isMarine ? null : (pRanges.magnesium?.target ?? 1320),
+        nitrato: wc?.current_nitrate_ppm ?? pRanges.nitrate?.target ?? 5.0,
+        fosfato: pRanges.phosphate?.target ?? 0.04,
+        temperatura: pRanges.temperature?.target ?? 25.0,
+        salinity: profileConfig.isMarine ? (pRanges.salinity?.target ?? 1.025) : null,
+        ammonia: pRanges.ammonia?.target ?? 0.0,
+        nitrite: pRanges.nitrite?.target ?? 0.0,
+        tendencia_reciente: `Biotipo activo: ${profileConfig.name}. Consumo KH: ${alk?.daily_consumption_rate ? alk.daily_consumption_rate.toFixed(2) + ' dKH/d' : 'Estable'}. Acumulación NO3: ${wc?.daily_accumulation_rate ? wc.daily_accumulation_rate.toFixed(2) + ' ppm/d' : 'Estable'}.`
+      };
+      const res = await fetchPredictiveAnalysis(payload);
+      if (res?.data) {
+        setAiAnalysis(res.data);
       }
+    } catch (err) {
+      console.error('Error al consultar diagnóstico IA:', err);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -244,9 +289,10 @@ export default function DashboardTrends({
 
   // Parámetros disponibles y sus configuraciones maestras para ambos ecosistemas
   const PARAM_CONFIG = {
-    // ---- Parámetros Agua Salada ----
+    // ---- Parámetros Agua Salada / Arrecife ----
     alcalinidad: {
       key: 'alkalinity_dkh',
+      code: 'kh',
       name: 'Alcalinidad (dKH)',
       shortName: 'Alcalinidad',
       unit: 'dKH',
@@ -258,6 +304,7 @@ export default function DashboardTrends({
     },
     calcio: {
       key: 'calcium_ppm',
+      code: 'calcium',
       name: 'Calcio (Ca)',
       shortName: 'Calcio',
       unit: 'ppm',
@@ -269,6 +316,7 @@ export default function DashboardTrends({
     },
     magnesio: {
       key: 'magnesium_ppm',
+      code: 'magnesium',
       name: 'Magnesio (Mg)',
       shortName: 'Magnesio',
       unit: 'ppm',
@@ -280,6 +328,7 @@ export default function DashboardTrends({
     },
     salinidad: {
       key: 'salinity_ppt',
+      code: 'salinity',
       name: 'Salinidad (SG / ppt)',
       shortName: 'Salinidad',
       unit: 'SG / ppt',
@@ -291,6 +340,7 @@ export default function DashboardTrends({
     },
     fosfatos: {
       key: 'phosphate_ppm',
+      code: 'phosphate',
       name: 'Fosfatos (PO4)',
       shortName: 'Fosfatos',
       unit: 'ppm',
@@ -304,6 +354,7 @@ export default function DashboardTrends({
     },
     nitratos: {
       key: 'nitrate_ppm',
+      code: 'nitrate',
       name: 'Nitratos (NO3)',
       shortName: 'Nitratos',
       unit: 'ppm',
@@ -313,23 +364,23 @@ export default function DashboardTrends({
       color: '#f59e0b',
       predictionData: predictions?.water_change
     },
-
-    // ---- Parámetros Agua Dulce ----
     ph: {
       key: 'ph',
+      code: 'ph',
       name: 'pH',
       shortName: 'pH',
-      unit: 'pH',
-      safeMin: 6.5,
-      safeMax: 7.5,
+      unit: '',
+      safeMin: 8.0,
+      safeMax: 8.3,
       min: 5.5,
-      suggestedMax: 8.5,
-      step: 0.1,
+      suggestedMax: 8.8,
+      step: 0.01,
       color: '#06b6d4',
       predictionData: null
     },
     amoniaco: {
       key: 'ammonia_ppm',
+      code: 'ammonia',
       name: 'Amoníaco (NH3)',
       shortName: 'Amoníaco',
       unit: 'ppm',
@@ -343,6 +394,7 @@ export default function DashboardTrends({
     },
     nitritos: {
       key: 'nitrite_ppm',
+      code: 'nitrite',
       name: 'Nitritos (NO2)',
       shortName: 'Nitritos',
       unit: 'ppm',
@@ -354,8 +406,83 @@ export default function DashboardTrends({
       color: '#f97316',
       predictionData: null
     },
+    temperatura: {
+      key: 'temperatura',
+      code: 'temperature',
+      name: 'Temperatura (°C)',
+      shortName: 'Temperatura',
+      unit: '°C',
+      safeMin: 24.0,
+      safeMax: 26.0,
+      min: 18.0,
+      suggestedMax: 32.0,
+      step: 0.1,
+      color: '#ec4899',
+      predictionData: null
+    },
+
+    // ---- Elementos Traza (Arrecife & Plantado) ----
+    potasio: {
+      key: 'potassium_ppm',
+      code: 'k',
+      name: 'Potasio (K ppm)',
+      shortName: 'Potasio',
+      unit: 'ppm',
+      safeMin: 380.0,
+      safeMax: 420.0,
+      min: 0,
+      suggestedMax: 450.0,
+      step: 1.0,
+      color: '#10b981',
+      predictionData: null
+    },
+    estroncio: {
+      key: 'strontium_ppm',
+      code: 'sr',
+      name: 'Estroncio (Sr ppm)',
+      shortName: 'Estroncio',
+      unit: 'ppm',
+      safeMin: 8.0,
+      safeMax: 10.0,
+      min: 0,
+      suggestedMax: 15.0,
+      step: 0.1,
+      color: '#a855f7',
+      predictionData: null
+    },
+    yodo: {
+      key: 'iodine_ppm',
+      code: 'i',
+      name: 'Yodo (I ppm)',
+      shortName: 'Yodo',
+      unit: 'ppm',
+      safeMin: 0.03,
+      safeMax: 0.06,
+      min: 0,
+      suggestedMax: 0.10,
+      step: 0.01,
+      color: '#eab308',
+      predictionData: null
+    },
+    hierro: {
+      key: 'iron_ppm',
+      code: 'fe',
+      name: 'Hierro (Fe ppm)',
+      shortName: 'Hierro',
+      unit: 'ppm',
+      safeMin: 0.001,
+      safeMax: 0.005,
+      min: 0,
+      suggestedMax: 0.02,
+      step: 0.001,
+      color: '#f43f5e',
+      predictionData: null
+    },
+
+    // ---- Parámetros Agua Dulce / Plantado ----
     gh: {
       key: 'gh_dgh',
+      code: 'gh_dgh',
       name: 'Dureza General (GH)',
       shortName: 'Dureza General',
       unit: 'dGH',
@@ -367,66 +494,27 @@ export default function DashboardTrends({
       color: '#8b5cf6',
       predictionData: null
     },
-    temperatura: {
-      key: 'temperatura',
-      name: 'Temperatura (°C)',
-      shortName: 'Temperatura',
-      unit: '°C',
-      safeMin: 22.0,
-      safeMax: 26.0,
-      min: 18.0,
-      suggestedMax: 32.0,
-      step: 0.1,
-      color: '#ec4899',
-      predictionData: null
-    },
-
-    // ---- Parámetros Específicos Acuario Plantado ----
     kh: {
       key: 'kh',
+      code: 'kh',
       name: 'Dureza (KH)',
       shortName: 'KH',
       unit: 'dKH',
-      safeMin: 1.0,
-      safeMax: 5.0,
+      safeMin: 3.0,
+      safeMax: 8.0,
       min: 0,
-      suggestedMax: 8.0,
+      suggestedMax: 12.0,
       step: 0.5,
       color: '#00f2fe',
       predictionData: null
     },
-    potasio: {
-      key: 'potassium_ppm',
-      name: 'Potasio (K ppm)',
-      shortName: 'Potasio',
-      unit: 'ppm',
-      safeMin: 10.0,
-      safeMax: 25.0,
-      min: 0,
-      suggestedMax: 35.0,
-      step: 1.0,
-      color: '#10b981',
-      predictionData: null
-    },
-    hierro: {
-      key: 'iron_ppm',
-      name: 'Hierro (Fe ppm)',
-      shortName: 'Hierro',
-      unit: 'ppm',
-      safeMin: 0.05,
-      safeMax: 0.20,
-      min: 0,
-      suggestedMax: 0.50,
-      step: 0.01,
-      color: '#f43f5e',
-      predictionData: null
-    },
     co2: {
       key: 'co2_ppm',
+      code: 'co2',
       name: 'CO2 disuelto (ppm)',
       shortName: 'CO2',
       unit: 'ppm',
-      safeMin: 20.0,
+      safeMin: 15.0,
       safeMax: 35.0,
       min: 0,
       suggestedMax: 50.0,
@@ -436,102 +524,103 @@ export default function DashboardTrends({
     }
   };
 
-  // Sinónimos para mantener compatibilidad con claves en inglés
+  // Sinónimos para mantener compatibilidad con claves en inglés y abreviaturas
   PARAM_CONFIG.dkh = PARAM_CONFIG.alcalinidad;
   PARAM_CONFIG.calcium = PARAM_CONFIG.calcio;
+  PARAM_CONFIG.ca = PARAM_CONFIG.calcio;
   PARAM_CONFIG.magnesium = PARAM_CONFIG.magnesio;
+  PARAM_CONFIG.mg = PARAM_CONFIG.magnesio;
   PARAM_CONFIG.salinity = PARAM_CONFIG.salinidad;
   PARAM_CONFIG.phosphate = PARAM_CONFIG.fosfatos;
+  PARAM_CONFIG.po4 = PARAM_CONFIG.fosfatos;
   PARAM_CONFIG.nitrate = PARAM_CONFIG.nitratos;
+  PARAM_CONFIG.no3 = PARAM_CONFIG.nitratos;
   PARAM_CONFIG.temperature = PARAM_CONFIG.temperatura;
+  PARAM_CONFIG.temp = PARAM_CONFIG.temperatura;
   PARAM_CONFIG.ammonia = PARAM_CONFIG.amoniaco;
+  PARAM_CONFIG.nh3 = PARAM_CONFIG.amoniaco;
   PARAM_CONFIG.nitrite = PARAM_CONFIG.nitritos;
+  PARAM_CONFIG.no2 = PARAM_CONFIG.nitritos;
   PARAM_CONFIG.k = PARAM_CONFIG.potasio;
+  PARAM_CONFIG.potassium = PARAM_CONFIG.potasio;
+  PARAM_CONFIG.sr = PARAM_CONFIG.estroncio;
+  PARAM_CONFIG.strontium = PARAM_CONFIG.estroncio;
+  PARAM_CONFIG.i = PARAM_CONFIG.yodo;
+  PARAM_CONFIG.iodine = PARAM_CONFIG.yodo;
   PARAM_CONFIG.fe = PARAM_CONFIG.hierro;
+  PARAM_CONFIG.iron = PARAM_CONFIG.hierro;
 
   const currentParam = useMemo(() => {
     const base = PARAM_CONFIG[activeParam] || PARAM_CONFIG[parametrosAMostrar[0]?.id] || PARAM_CONFIG.fosfatos;
     const param = { ...base };
-    const tipo = acuarioActual.tipo;
 
-    // Si es acuario marino / arrecife, aplicar rangos del perfil especializado
-    if (esAguaSalada && activeMarineProfile?.targets) {
-      const targets = activeMarineProfile.targets;
-      if (param.key === 'alkalinity_dkh' || activeParam === 'alcalinidad' || activeParam === 'dkh' || activeParam === 'kh') {
-        if (targets.kh) {
-          param.safeMin = targets.kh.min;
-          param.safeMax = targets.kh.max;
-        }
-      } else if (param.key === 'calcium_ppm' || activeParam === 'calcio' || activeParam === 'ca') {
-        if (targets.calcium) {
-          param.safeMin = targets.calcium.min;
-          param.safeMax = targets.calcium.max;
-        }
-      } else if (param.key === 'magnesium_ppm' || activeParam === 'magnesio' || activeParam === 'mg') {
-        if (targets.magnesium) {
-          param.safeMin = targets.magnesium.min;
-          param.safeMax = targets.magnesium.max;
-        }
-      } else if (param.key === 'salinity_ppt' || activeParam === 'salinidad' || activeParam === 'salinity') {
-        if (targets.salinity) {
-          param.safeMin = targets.salinity.min;
-          param.safeMax = targets.salinity.max;
-        }
-      } else if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
-        if (targets.nitrate) {
-          param.safeMin = targets.nitrate.min;
-          param.safeMax = targets.nitrate.max;
-          param.suggestedMax = Math.max(targets.nitrate.max * 1.5, 20.0);
-        }
-      } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
-        if (targets.phosphate) {
-          param.safeMin = targets.phosphate.min;
-          param.safeMax = targets.phosphate.max;
-          param.suggestedMax = Math.max(targets.phosphate.max * 2.0, 0.20);
-        }
-      } else if (param.key === 'temperatura' || param.key === 'temperature' || activeParam === 'temperatura' || activeParam === 'temperature') {
-        if (targets.temperature) {
-          param.safeMin = targets.temperature.min;
-          param.safeMax = targets.temperature.max;
-        }
-      } else if (param.key === 'ph' || activeParam === 'ph') {
-        if (targets.ph) {
-          param.safeMin = targets.ph.min;
-          param.safeMax = targets.ph.max;
-        }
-      } else if (param.key === 'ammonia_ppm' || activeParam === 'amoniaco') {
-        if (targets.ammonia) {
-          param.safeMin = targets.ammonia.min;
-          param.safeMax = targets.ammonia.safeMax ?? targets.ammonia.max;
-        }
-      } else if (param.key === 'nitrite_ppm' || activeParam === 'nitritos') {
-        if (targets.nitrite) {
-          param.safeMin = targets.nitrite.min;
-          param.safeMax = targets.nitrite.safeMax ?? targets.nitrite.max;
-        }
-      }
-      return param;
+    // Buscar el rango correspondiente en profileConfig
+    const ranges = profileConfig.ranges || {};
+    const traceRanges = profileConfig.traceElements || {};
+
+    let targetRange = null;
+
+    if (['potasio', 'k', 'potassium'].includes(activeParam)) {
+      targetRange = traceRanges.k || ranges.potassium;
+    } else if (['estroncio', 'sr', 'strontium'].includes(activeParam)) {
+      targetRange = traceRanges.sr;
+    } else if (['yodo', 'i', 'iodine'].includes(activeParam)) {
+      targetRange = traceRanges.i;
+    } else if (['hierro', 'fe', 'iron'].includes(activeParam)) {
+      targetRange = traceRanges.fe || ranges.iron;
+    } else if (['alcalinidad', 'kh', 'dkh'].includes(activeParam)) {
+      targetRange = ranges.kh;
+    } else if (['calcio', 'calcium', 'ca'].includes(activeParam)) {
+      targetRange = ranges.calcium;
+    } else if (['magnesio', 'magnesium', 'mg'].includes(activeParam)) {
+      targetRange = ranges.magnesium;
+    } else if (['salinidad', 'salinity'].includes(activeParam)) {
+      targetRange = ranges.salinity;
+    } else if (['nitratos', 'nitrate', 'no3'].includes(activeParam)) {
+      targetRange = ranges.nitrate;
+    } else if (['fosfatos', 'phosphate', 'po4'].includes(activeParam)) {
+      targetRange = ranges.phosphate;
+    } else if (['temperatura', 'temperature', 'temp'].includes(activeParam)) {
+      targetRange = ranges.temperature;
+    } else if (activeParam === 'ph') {
+      targetRange = ranges.ph;
+    } else if (['amoniaco', 'ammonia', 'nh3'].includes(activeParam)) {
+      targetRange = ranges.ammonia;
+    } else if (['nitritos', 'nitrite', 'no2'].includes(activeParam)) {
+      targetRange = ranges.nitrite;
+    } else if (['gh', 'gh_dgh'].includes(activeParam)) {
+      targetRange = ranges.gh_dgh;
+    } else if (['co2', 'co2_ppm'].includes(activeParam)) {
+      targetRange = ranges.co2;
     }
 
-    if (param.key === 'nitrate_ppm' || activeParam === 'nitratos' || activeParam === 'nitrate') {
-      if (profileConfig.id === 'planted') {
-        param.safeMin = 10.0;
-        param.safeMax = 25.0;
-        param.suggestedMax = 35.0;
-      } else if (profileConfig.id === 'freshwater') {
-        param.safeMin = 0.0;
-        param.safeMax = 40.0;
-        param.suggestedMax = 55.0;
+    if (targetRange) {
+      if (targetRange.min !== undefined && targetRange.min !== null) {
+        param.safeMin = targetRange.min;
       }
-    } else if (param.key === 'phosphate_ppm' || activeParam === 'fosfatos' || activeParam === 'phosphate') {
-      if (profileConfig.id === 'planted') {
-        param.safeMin = 0.5;
-        param.safeMax = 2.0;
-        param.suggestedMax = 3.0;
+      if (targetRange.max !== undefined && targetRange.max !== null) {
+        param.safeMax = targetRange.max;
+      }
+      if (targetRange.safeMax !== undefined && targetRange.safeMax !== null) {
+        param.safeMax = targetRange.safeMax;
+      }
+      if (targetRange.step) {
+        param.step = Number(targetRange.step);
+      }
+      if (targetRange.unit !== undefined && targetRange.unit !== '') {
+        param.unit = targetRange.unit;
+      }
+      // Ajustar escala visual suggestedMax
+      if (param.safeMax !== undefined) {
+        param.suggestedMax = Math.max(
+          param.safeMax * 1.25,
+          param.suggestedMax || (param.safeMax * 1.15)
+        );
       }
     }
+
     return param;
-  }, [activeParam, parametrosAMostrar, acuarioActual.tipo, esAguaSalada, activeMarineProfile]);
+  }, [activeParam, parametrosAMostrar, profileConfig]);
 
   // Alertas dinámicas especializadas (Oscilación KH 24h, Nutrientes en cero, Fotómetro ULR)
   const marineAlerts = useMemo(() => {
@@ -671,29 +760,146 @@ export default function DashboardTrends({
     return alerts;
   }, [measurements, rawTank, esAguaSalada, activeMarineProfile]);
 
+  // Extractor omnicanal de valores de medición para compatibilidad total
+  const getReadingValue = (m, key) => {
+    if (!m) return null;
+    const isValid = (v) => v !== null && v !== undefined && v !== '' && !isNaN(Number(v));
+    if (isValid(m[key])) return Number(m[key]);
+
+    const traces = m.trace_elements || {};
+
+    switch (key) {
+      case 'temperatura':
+      case 'temperature':
+      case 'temp':
+        if (isValid(m.temperatura)) return Number(m.temperatura);
+        if (isValid(m.temperature)) return Number(m.temperature);
+        if (isValid(m.temperature_c)) return Number(m.temperature_c);
+        break;
+      case 'salinidad':
+      case 'salinity':
+      case 'salinity_ppt':
+        if (isValid(m.salinity_ppt)) return Number(m.salinity_ppt);
+        if (isValid(m.salinity)) return Number(m.salinity);
+        break;
+      case 'alcalinidad':
+      case 'alkalinity_dkh':
+      case 'kh':
+      case 'dkh':
+        if (isValid(m.alkalinity_dkh)) return Number(m.alkalinity_dkh);
+        if (isValid(m.kh)) return Number(m.kh);
+        break;
+      case 'calcio':
+      case 'calcium_ppm':
+      case 'calcium':
+      case 'ca':
+        if (isValid(m.calcium_ppm)) return Number(m.calcium_ppm);
+        if (isValid(m.calcium)) return Number(m.calcium);
+        if (isValid(m.calcio)) return Number(m.calcio);
+        break;
+      case 'magnesio':
+      case 'magnesium_ppm':
+      case 'magnesium':
+      case 'mg':
+        if (isValid(m.magnesium_ppm)) return Number(m.magnesium_ppm);
+        if (isValid(m.magnesium)) return Number(m.magnesium);
+        if (isValid(m.magnesio)) return Number(m.magnesio);
+        break;
+      case 'nitratos':
+      case 'nitrate_ppm':
+      case 'nitrate':
+      case 'no3':
+        if (isValid(m.nitrate_ppm)) return Number(m.nitrate_ppm);
+        if (isValid(m.nitrate)) return Number(m.nitrate);
+        if (isValid(m.nitrato)) return Number(m.nitrato);
+        break;
+      case 'fosfatos':
+      case 'phosphate_ppm':
+      case 'phosphate':
+      case 'po4':
+        if (isValid(m.phosphate_ppm)) return Number(m.phosphate_ppm);
+        if (isValid(m.phosphate)) return Number(m.phosphate);
+        if (isValid(m.fosfato)) return Number(m.fosfato);
+        break;
+      case 'amoniaco':
+      case 'ammonia_ppm':
+      case 'ammonia':
+      case 'nh3':
+        if (isValid(m.ammonia_ppm)) return Number(m.ammonia_ppm);
+        if (isValid(m.ammonia)) return Number(m.ammonia);
+        break;
+      case 'nitritos':
+      case 'nitrite_ppm':
+      case 'nitrite':
+      case 'no2':
+        if (isValid(m.nitrite_ppm)) return Number(m.nitrite_ppm);
+        if (isValid(m.nitrite)) return Number(m.nitrite);
+        break;
+      case 'potasio':
+      case 'potassium_ppm':
+      case 'potassium':
+      case 'k':
+        if (isValid(m.potassium_ppm)) return Number(m.potassium_ppm);
+        if (isValid(m.potassium)) return Number(m.potassium);
+        if (isValid(m.potasio)) return Number(m.potasio);
+        if (isValid(traces.k)) return Number(traces.k);
+        if (isValid(traces.potassium)) return Number(traces.potassium);
+        break;
+      case 'estroncio':
+      case 'strontium_ppm':
+      case 'strontium':
+      case 'sr':
+        if (isValid(m.strontium_ppm)) return Number(m.strontium_ppm);
+        if (isValid(m.strontium)) return Number(m.strontium);
+        if (isValid(m.estroncio)) return Number(m.estroncio);
+        if (isValid(traces.sr)) return Number(traces.sr);
+        if (isValid(traces.strontium)) return Number(traces.strontium);
+        break;
+      case 'yodo':
+      case 'iodine_ppm':
+      case 'iodine':
+      case 'i':
+        if (isValid(m.iodine_ppm)) return Number(m.iodine_ppm);
+        if (isValid(m.iodine)) return Number(m.iodine);
+        if (isValid(m.yodo)) return Number(m.yodo);
+        if (isValid(traces.i)) return Number(traces.i);
+        if (isValid(traces.iodine)) return Number(traces.iodine);
+        break;
+      case 'hierro':
+      case 'iron_ppm':
+      case 'iron':
+      case 'fe':
+        if (isValid(m.iron_ppm)) return Number(m.iron_ppm);
+        if (isValid(m.iron)) return Number(m.iron);
+        if (isValid(m.hierro)) return Number(m.hierro);
+        if (isValid(traces.fe)) return Number(traces.fe);
+        if (isValid(traces.iron)) return Number(traces.iron);
+        break;
+      case 'gh':
+      case 'gh_dgh':
+        if (isValid(m.gh_dgh)) return Number(m.gh_dgh);
+        if (isValid(m.gh)) return Number(m.gh);
+        break;
+      case 'co2':
+      case 'co2_ppm':
+        if (isValid(m.co2_ppm)) return Number(m.co2_ppm);
+        if (isValid(m.co2)) return Number(m.co2);
+        break;
+      default:
+        break;
+    }
+    return null;
+  };
+
   // Filtrar lecturas válidas para el parámetro activo
   const validReadings = useMemo(() => {
     return measurements
       .filter(m => {
-        if (!currentParam?.key) return false;
-        let val = m[currentParam.key];
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'temperatura') val = m.temperature;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'temperature') val = m.temperatura;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'salinity_ppt') val = m.salinity;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'salinity') val = m.salinity_ppt;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'alkalinity_dkh') val = m.kh;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'kh') val = m.alkalinity_dkh;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'calcium_ppm') val = m.calcium;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'magnesium_ppm') val = m.magnesium;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'nitrate_ppm') val = m.nitrate;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'phosphate_ppm') val = m.phosphate;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'ammonia_ppm') val = m.ammonia;
-        if ((val === null || val === undefined || val === '') && currentParam.key === 'nitrite_ppm') val = m.nitrite;
-
-        return val !== null && val !== undefined && val !== '' && !isNaN(Number(val));
+        const val = getReadingValue(m, currentParam.key) ?? getReadingValue(m, activeParam);
+        return val !== null && !isNaN(val);
       })
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  }, [measurements, currentParam]);
+  }, [measurements, currentParam.key, activeParam]);
 
   // Calcular la pendiente local para proyección de 3 días si no viene precalculada
   const localSlope = useMemo(() => {
@@ -709,7 +915,7 @@ export default function DashboardTrends({
 
     const points = recent.map(r => [
       (new Date(r.timestamp).getTime() / 86400000) - t0,
-      Number(r[currentParam.key])
+      getReadingValue(r, currentParam.key) ?? getReadingValue(r, activeParam) ?? 0
     ]);
     const n = points.length;
     const sumX = points.reduce((acc, p) => acc + p[0], 0);
@@ -731,11 +937,16 @@ export default function DashboardTrends({
       ammonia_ppm: 0.2,
       nitrite_ppm: 0.2,
       gh_dgh: 2.0,
+      potassium_ppm: 30.0,
+      strontium_ppm: 2.0,
+      iodine_ppm: 0.02,
+      iron_ppm: 0.01,
+      temperature: 3.0,
       temperatura: 3.0
     };
     const maxLimit = maxDailyChange[currentParam.key] || 5.0;
     return Math.max(-maxLimit, Math.min(maxLimit, rawSlope));
-  }, [validReadings, currentParam.key]);
+  }, [validReadings, currentParam.key, activeParam]);
 
   // Configurar datasets de Chart.js con la zona segura sombreada y línea punteada de 3 días
   const chartData = useMemo(() => {
@@ -746,7 +957,7 @@ export default function DashboardTrends({
       const d = new Date(r.timestamp);
       return `${d.getDate()}/${d.getMonth() + 1}`;
     });
-    const realValues = validReadings.map(r => Number(r[currentParam.key]));
+    const realValues = validReadings.map(r => getReadingValue(r, currentParam.key) ?? getReadingValue(r, activeParam) ?? 0);
 
     // 2. Fechas de proyección para los próximos 3 días
     const lastDate = new Date(validReadings[validReadings.length - 1].timestamp);
@@ -805,22 +1016,23 @@ export default function DashboardTrends({
         }
       ]
     };
-  }, [validReadings, currentParam, localSlope]);
+  }, [validReadings, currentParam, localSlope, activeParam]);
 
   const isPhosphate = currentParam.key === 'phosphate_ppm' || activeParam === 'phosphate';
+  const isSalinity = currentParam.key === 'salinity_ppt' || currentParam.key === 'salinity' || activeParam === 'salinidad';
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
       y: {
-        min: 0, // CRÍTICO: Bloquea el eje Y para que nunca sea negativo
+        min: isSalinity ? 1.018 : 0, // Bloquea el eje Y apropiadamente
         suggestedMax: currentParam.suggestedMax || (currentParam.safeMax ? currentParam.safeMax * 1.25 : 1.0),
         grid: {
           color: 'rgba(255, 255, 255, 0.05)',
         },
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        suggestedMin: currentParam.safeMin && currentParam.safeMin > 0 ? currentParam.safeMin * 0.8 : 0
+        suggestedMin: isSalinity ? 1.018 : (currentParam.safeMin && currentParam.safeMin > 0 ? currentParam.safeMin * 0.8 : 0)
       },
       x: {
         grid: {
@@ -958,59 +1170,85 @@ export default function DashboardTrends({
         <div className="glass-panel rounded-3xl p-5 border border-cyan-500/40 bg-gradient-to-br from-marine-900/95 via-marine-850 to-marine-900 shadow-neon-cyan relative overflow-hidden flex flex-col justify-between">
           <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
 
-          <div className="space-y-3 relative z-10">
-            {/* Header con tasa de consumo */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
-                  <Activity className="w-4 h-4" />
+          {profileConfig.id === 'fish_only' ? (
+            <div className="space-y-3 relative z-10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                    {t('trends.alkConsumption')}
+                  </span>
                 </div>
-                <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
-                  {t('trends.alkConsumption')}
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-bold">
+                  No Aplicable
                 </span>
               </div>
-
-              {/* Tasa calculada en formato destacado */}
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80">
-                {alk?.daily_slope !== null && alk?.daily_slope !== undefined && alk.daily_slope < 0 ? (
-                  <TrendingDown className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <TrendingUp className="w-4 h-4 text-cyan-400" />
-                )}
-                <span className="text-xs sm:text-sm font-black text-white">
-                  {alk?.daily_consumption_rate !== null && alk?.daily_consumption_rate !== undefined
-                    ? `${t('trends.consumption')} -${alk.daily_consumption_rate} dKH ${t('common.perDay')}`
-                    : `${t('trends.consumption')} ${t('trends.noSufficientData')}`}
-                </span>
+              <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1">
+                <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+                  En acuarios de <strong>Solo Peces (FOWLR)</strong> no hay consumo de carbonatos por corales duros.
+                </p>
+                <p className="text-xs text-slate-400">
+                  La alcalinidad actúa únicamente como colchón buffer para estabilizar el pH entre 8.0 y 8.3. No se requiere dosificación calculada de KH.
+                </p>
               </div>
             </div>
+          ) : (
+            <div className="space-y-3 relative z-10">
+              {/* Header con tasa de consumo */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
+                    {t('trends.alkConsumption')}
+                  </span>
+                </div>
 
-            {/* Mensaje Predictivo Dinámico */}
-            <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1.5">
-              <p className="text-xs sm:text-sm text-slate-200 font-semibold leading-relaxed">
-                {alk?.latest_value === null || alk?.latest_value === undefined ? (
-                  t('trends.noMeasurementsYet')
-                ) : alk?.days_remaining_safe !== null && alk?.days_remaining_safe !== undefined ? (
-                  <>
-                    {t('trends.alkSafeMessage', {
-                      limit: '7.5 dKH',
-                      days: alk.days_remaining_safe,
-                      unit: alk.days_remaining_safe === 1 ? t('common.day') : t('common.days')
-                    })}
-                  </>
-                ) : alk?.status === 'insufficient_data' ? (
-                  t('trends.alkNeedConsecutive')
-                ) : (
-                  t('trends.alkNormal')
-                )}
-              </p>
+                {/* Tasa calculada en formato destacado */}
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-marine-950 border border-marine-700/80">
+                  {alk?.daily_slope !== null && alk?.daily_slope !== undefined && alk.daily_slope < 0 ? (
+                    <TrendingDown className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <TrendingUp className="w-4 h-4 text-cyan-400" />
+                  )}
+                  <span className="text-xs sm:text-sm font-black text-white">
+                    {alk?.daily_consumption_rate !== null && alk?.daily_consumption_rate !== undefined
+                      ? `${t('trends.consumption')} -${alk.daily_consumption_rate} dKH ${t('common.perDay')}`
+                      : `${t('trends.consumption')} ${t('trends.noSufficientData')}`}
+                  </span>
+                </div>
+              </div>
 
-              <div className="pt-1 flex items-center gap-1.5 text-xs font-extrabold text-cyan-400">
-                <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span>{t('trends.recommendation')} {formatNextTestRecommendation()}</span>
+              {/* Mensaje Predictivo Dinámico */}
+              <div className="bg-marine-950/80 p-3.5 rounded-2xl border border-marine-800 space-y-1.5">
+                <p className="text-xs sm:text-sm text-slate-200 font-semibold leading-relaxed">
+                  {alk?.latest_value === null || alk?.latest_value === undefined ? (
+                    t('trends.noMeasurementsYet')
+                  ) : alk?.days_remaining_safe !== null && alk?.days_remaining_safe !== undefined ? (
+                    <>
+                      {t('trends.alkSafeMessage', {
+                        limit: `${profileConfig.ranges?.kh?.min || 7.5} dKH`,
+                        days: alk.days_remaining_safe,
+                        unit: alk.days_remaining_safe === 1 ? t('common.day') : t('common.days')
+                      })}
+                    </>
+                  ) : alk?.status === 'insufficient_data' ? (
+                    t('trends.alkNeedConsecutive')
+                  ) : (
+                    t('trends.alkNormal')
+                  )}
+                </p>
+
+                <div className="pt-1 flex items-center gap-1.5 text-xs font-extrabold text-cyan-400">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t('trends.recommendation')} {formatNextTestRecommendation()}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="mt-4 pt-3 border-t border-marine-800 flex items-center justify-between text-xs">
             <span className="text-slate-400 font-medium">
@@ -1022,7 +1260,7 @@ export default function DashboardTrends({
             <button
               onClick={() => {
                 triggerHaptic();
-                setActiveParam('dkh');
+                setActiveParam('alcalinidad');
               }}
               className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
             >
@@ -1108,7 +1346,7 @@ export default function DashboardTrends({
             <button
               onClick={() => {
                 triggerHaptic();
-                setActiveParam('nitrate');
+                setActiveParam('nitratos');
               }}
               className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
             >
@@ -1118,57 +1356,70 @@ export default function DashboardTrends({
         </div>
       </div>
 
-      {/* ---------------- 2. SELECTOR DE PARÁMETROS DINÁMICO ---------------- */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        {/* Selector de Parámetros Dinámico */}
-        <div className="flex flex-wrap gap-3">
-          {parametrosAMostrar.map((parametro) => (
-            <button
-              key={parametro.id}
-              onClick={() => setParametroActivo(parametro.id)}
-              className={`px-4 py-2 rounded-full border text-sm font-bold transition-colors ${
-                parametroActivo === parametro.id 
-                  ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' 
-                  : 'bg-slate-800 border-slate-700 text-gray-400 hover:bg-slate-700'
-              }`}
-            >
-              {parametro.nombre} <span className="text-xs font-normal opacity-70">{parametro.unidad}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Selector de Ecosistema con las 6 Opciones Canónicas */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 w-full bg-marine-950/90 p-1.5 rounded-2xl border border-marine-800">
-          {AQUARIUM_TYPES.map((tipoItem) => {
+      {/* ---------------- 2. SELECTOR DE ECOSISTEMA (6 OPCIONES) Y PARÁMETROS DINÁMICOS ---------------- */}
+      <div className="space-y-4 mb-6">
+        {/* Barra Superior con los 6 Perfiles Canónicos */}
+        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-marine-950/90 border border-marine-800 overflow-x-auto scrollbar-none flex-nowrap sm:flex-wrap">
+          {TRENDS_PROFILES.map((tipoItem) => {
             const isSelected = profileConfig.id === tipoItem.id;
             return (
               <button
                 key={tipoItem.id}
                 type="button"
-                onClick={() => {
-                  triggerHaptic();
-                  setUserSelectedEcosystem(tipoItem.id);
-                  if (tipoItem.id === 'planted') {
-                    setParametroActivo('potasio');
-                  } else if (tipoItem.id === 'freshwater') {
-                    setParametroActivo('ph');
-                  } else if (tipoItem.id === 'fish_only') {
-                    setParametroActivo('nitratos');
-                  } else {
-                    setParametroActivo('alcalinidad');
-                  }
-                }}
-                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all text-center ${
+                onClick={() => handleSelectEcosystem(tipoItem.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shrink-0 active:scale-95 ${
                   isSelected
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-neon-cyan'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-marine-900/60 border border-transparent'
                 }`}
               >
-                <span>{tipoItem.icon}</span>
-                <span className="truncate">{i18n.language === 'en' ? tipoItem.labelEn : tipoItem.label}</span>
+                <span>{tipoItem.label}</span>
               </button>
             );
           })}
+        </div>
+
+        {/* Chips de Parámetros Dinámicos filtrados por el perfil activo + Toggle de Elementos Traza */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {parametrosAMostrar.map((parametro) => {
+            const isSelected = activeParam === parametro.id;
+            return (
+              <button
+                key={parametro.id}
+                type="button"
+                onClick={() => setParametroActivo(parametro.id)}
+                className={`px-3 sm:px-4 py-2 rounded-xl border text-xs sm:text-sm font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-neon-cyan'
+                    : 'bg-marine-900/80 border-marine-800 text-slate-300 hover:bg-marine-850 hover:text-white'
+                }`}
+              >
+                <span>{parametro.nombre}</span>
+                {parametro.unidad && (
+                  <span className="text-[11px] font-normal opacity-70">{parametro.unidad}</span>
+                )}
+              </button>
+            );
+          })}
+
+          {/* Botón especial para alternar Elementos Traza (K, Sr, I, Fe) en perfiles de arrecife */}
+          {['sps_reef', 'lps_reef', 'mixed_reef'].includes(profileConfig.id) && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(15);
+                setShowTraceElements(prev => !prev);
+              }}
+              className={`px-3 sm:px-4 py-2 rounded-xl border text-xs sm:text-sm font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
+                showTraceElements
+                  ? 'bg-purple-500/25 border-purple-400 text-purple-300 shadow-lg shadow-purple-950/40'
+                  : 'bg-purple-950/30 border-purple-500/30 text-purple-300/80 hover:bg-purple-900/40 hover:text-purple-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>{showTraceElements ? 'Ocultar Traza' : '✨ Elementos Traza (K, Sr, I, Fe)'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1181,7 +1432,7 @@ export default function DashboardTrends({
               {currentParam.name}{' '}
               <span className="ml-3 text-xs bg-emerald-900/50 text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-800 font-semibold">
                 Zona Segura:{' '}
-                {currentParam.safeMin !== undefined && currentParam.safeMin > 0
+                {currentParam.safeMin !== undefined && currentParam.safeMin !== null
                   ? `${currentParam.safeMin} - ${currentParam.safeMax}`
                   : `< ${currentParam.safeMax}`}{' '}
                 {currentParam.unit}
@@ -1196,7 +1447,7 @@ export default function DashboardTrends({
               type="button"
               onClick={() => {
                 triggerHaptic(25);
-                if (onOpenQuickLog) onOpenQuickLog();
+                if (onOpenQuickLog) onOpenQuickLog(currentParam?.code || currentParam?.key || activeParam, effectiveTank);
               }}
               className="bg-emerald-400 hover:bg-emerald-300 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center transition-colors active:scale-95"
             >
@@ -1227,7 +1478,7 @@ export default function DashboardTrends({
               <span className="block text-[10px] font-black uppercase text-slate-400">Proyección +3 Días</span>
               <span className="text-sm font-black text-white">
                 {validReadings.length > 0
-                  ? `${Math.max(0, Number(validReadings[validReadings.length - 1][currentParam.key]) + localSlope * 3).toFixed(2)} ${currentParam.unit}`
+                  ? `${Math.max(0, (getReadingValue(validReadings[validReadings.length - 1], currentParam.key) ?? getReadingValue(validReadings[validReadings.length - 1], activeParam) ?? 0) + localSlope * 3).toFixed(2)} ${currentParam.unit}`
                   : '--'}
               </span>
             </div>

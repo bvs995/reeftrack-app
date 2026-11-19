@@ -99,6 +99,7 @@ function AppContent() {
   }, [openAuthModal]);
 
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
+  const [quickLogTank, setQuickLogTank] = useState(null);
   const [preselectedCode, setPreselectedCode] = useState(null);
   const [isNewTankOpen, setIsNewTankOpen] = useState(false);
   const [editingTank, setEditingTank] = useState(null);
@@ -199,13 +200,14 @@ function AppContent() {
     }
   };
 
-  const handleOpenQuickLog = (code = null) => {
+  const handleOpenQuickLog = (code = null, customTank = null) => {
     triggerHaptic();
     if (!isAuthenticated) {
       openAuthModal('login');
       return;
     }
     setPreselectedCode(code);
+    setQuickLogTank(customTank || null);
     setIsQuickLogOpen(true);
   };
 
@@ -450,8 +452,11 @@ function AppContent() {
       {/* Quick Log Modal */}
       <QuickLogModal
         isOpen={isQuickLogOpen}
-        onClose={() => setIsQuickLogOpen(false)}
-        tank={activeTank}
+        onClose={() => {
+          setIsQuickLogOpen(false);
+          setQuickLogTank(null);
+        }}
+        tank={quickLogTank || activeTank}
         parameters={parameters}
         preselectedCode={preselectedCode}
         onSuccess={handleDataUpdated}
