@@ -510,3 +510,63 @@ export async function deleteAdminUser(userId) {
   }
   return res.json();
 }
+
+// ----------------- NOTIFICACIONES PUSH (VAPID) -----------------
+
+export async function fetchVapidPublicKey() {
+  const res = await fetch(`${API_BASE}/push/vapid-public-key`);
+  if (!res.ok) {
+    throw new Error('Error al obtener la clave pública VAPID');
+  }
+  return res.json();
+}
+
+export async function registerPushSubscription(data) {
+  const res = await authFetch('/push/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al registrar suscripción push');
+  }
+  return res.json();
+}
+
+export async function unregisterPushSubscription(endpoint) {
+  const res = await authFetch('/push/unsubscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al desuscribir notificaciones push');
+  }
+  return res.json();
+}
+
+export async function updatePushPreferences(preferences) {
+  const res = await authFetch('/push/preferences', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(preferences),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al actualizar preferencias push');
+  }
+  return res.json();
+}
+
+export async function sendTestPush() {
+  const res = await authFetch('/push/test', {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al enviar notificación de prueba');
+  }
+  return res.json();
+}

@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Body, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Body, status, BackgroundTasks, Header
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -51,7 +51,19 @@ from backend.models import (
     MaintenanceTaskResponse,
     MaintenanceCompleteRequest,
     WaterChangeCreate,
-    WaterChangeResponse
+    WaterChangeResponse,
+    PushSubscription,
+    PushSubscriptionCreate,
+    PushUnsubscribeRequest,
+    PushPreferencesUpdate,
+    PushSubscriptionResponse
+)
+from backend.push_service import (
+    get_vapid_public_key,
+    get_cron_secret,
+    send_push_to_user,
+    check_and_notify_measurement_alert,
+    process_daily_maintenance_reminders
 )
 from backend.maintenance_service import (
     seed_default_maintenance_tasks,
@@ -740,14 +752,22 @@ def delete_user_tank(
     status_code=status.HTTP_201_CREATED,
     summary="Guardar una nueva medición vinculada al usuario activo"
 )
+@app.post(
+    "/api/parameter_logs",
+    response_model=MeasurementResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Guardar una nueva medición vinculada al usuario activo (alias parameter_logs)"
+)
 def create_measurement(
     payload: MeasurementCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Guarda una medición vinculada estrictamente al user_id del usuario autenticado.
     Si se especifica tank_id, verifica que pertenezca al usuario.
+    Si el motor de reglas detecta alerta crítica o advertencia grave, dispara notificación push vía BackgroundTasks.
     """
     measurement_time = payload.timestamp or datetime.utcnow()
     target_tank_id = payload.tank_id
@@ -812,6 +832,18 @@ def create_measurement(
     db.add(db_measurement)
     db.commit()
     db.refresh(db_measurement)
+
+    # Disparo asíncrono no bloqueante de alertas críticas por Web Push
+    try:
+        background_tasks.add_task(
+            check_and_notify_measurement_alert,
+            user_id=current_user.id,
+            tank_id=target_tank_id,
+            measurement_id=db_measurement.id
+        )
+    except Exception as bg_err:
+        logger.warning(f"Aviso programando tarea push en background: {bg_err}")
+
     return db_measurement
 
 @app.post(
@@ -823,6 +855,7 @@ def create_measurement(
 def create_tank_measurement(
     tank_id: int,
     payload: MeasurementCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -830,7 +863,12 @@ def create_tank_measurement(
     Guarda una medición vinculada al acuario especificado por tank_id y al usuario activo.
     """
     payload.tank_id = tank_id
-    return create_measurement(payload=payload, current_user=current_user, db=db)
+    return create_measurement(
+        payload=payload,
+        background_tasks=background_tasks,
+        current_user=current_user,
+        db=db
+    )
 
 @app.get(
     "/api/tanks/{tank_id}/measurements",
@@ -1665,6 +1703,156 @@ def record_water_change(
         db.commit()
 
     return WaterChangeResponse.model_validate(wc)
+
+
+# ==============================================================================
+# 🔔 ENDPOINTS DE WEB PUSH NOTIFICATIONS (VAPID) Y CRON REMINDERS
+# ==============================================================================
+
+@app.get(
+    "/api/push/vapid-public-key",
+    summary="Obtener clave pública VAPID para registro en cliente"
+)
+def get_vapid_key():
+    """Retorna la clave pública VAPID configurada en las variables de entorno."""
+    key = get_vapid_public_key()
+    return {"public_key": key}
+
+
+@app.post(
+    "/api/push/subscribe",
+    response_model=PushSubscriptionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Registrar o actualizar suscripción Web Push para el usuario activo"
+)
+def subscribe_push(
+    payload: PushSubscriptionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Registra una suscripción Web Push del navegador vinculada al usuario autenticado.
+    Si el endpoint ya existía, actualiza sus credenciales y preferencias.
+    """
+    sub = db.query(PushSubscription).filter(PushSubscription.endpoint == payload.endpoint).first()
+    if sub:
+        sub.user_id = current_user.id
+        sub.p256dh = payload.p256dh
+        sub.auth = payload.auth
+        if payload.user_agent is not None:
+            sub.user_agent = payload.user_agent
+        if payload.notify_maintenance is not None:
+            sub.notify_maintenance = payload.notify_maintenance
+        if payload.notify_alerts is not None:
+            sub.notify_alerts = payload.notify_alerts
+    else:
+        sub = PushSubscription(
+            user_id=current_user.id,
+            endpoint=payload.endpoint,
+            p256dh=payload.p256dh,
+            auth=payload.auth,
+            user_agent=payload.user_agent,
+            notify_maintenance=payload.notify_maintenance if payload.notify_maintenance is not None else True,
+            notify_alerts=payload.notify_alerts if payload.notify_alerts is not None else True
+        )
+        db.add(sub)
+
+    db.commit()
+    db.refresh(sub)
+    return sub
+
+
+@app.post(
+    "/api/push/unsubscribe",
+    summary="Eliminar suscripción Web Push del usuario"
+)
+def unsubscribe_push(
+    payload: PushUnsubscribeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Elimina la suscripción asociada al endpoint y al usuario activo."""
+    sub = db.query(PushSubscription).filter(
+        PushSubscription.endpoint == payload.endpoint,
+        PushSubscription.user_id == current_user.id
+    ).first()
+    if sub:
+        db.delete(sub)
+        db.commit()
+        return {"status": "success", "message": "Suscripción eliminada con éxito."}
+    return {"status": "not_found", "message": "Suscripción no encontrada."}
+
+
+@app.patch(
+    "/api/push/preferences",
+    summary="Actualizar preferencias de alertas para las suscripciones del usuario"
+)
+def update_push_preferences(
+    payload: PushPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Actualiza las preferencias de notificación de mantenimiento y alertas para el usuario."""
+    subs = db.query(PushSubscription).filter(PushSubscription.user_id == current_user.id).all()
+    for s in subs:
+        if payload.notify_maintenance is not None:
+            s.notify_maintenance = payload.notify_maintenance
+        if payload.notify_alerts is not None:
+            s.notify_alerts = payload.notify_alerts
+    db.commit()
+    return {
+        "status": "success",
+        "updated_subscriptions": len(subs),
+        "notify_maintenance": payload.notify_maintenance,
+        "notify_alerts": payload.notify_alerts
+    }
+
+
+@app.post(
+    "/api/push/test",
+    summary="Enviar notificación push inmediata de prueba"
+)
+def test_push_notification(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Envía una notificación de prueba en tiempo real al usuario autenticado."""
+    sent = send_push_to_user(
+        db=db,
+        user_id=current_user.id,
+        title="🌊 AquaPulse: Notificación de Prueba",
+        body="¡Las notificaciones Web Push están funcionando correctamente en tu dispositivo!",
+        url="/?tab=dashboard",
+        tag="aquapulse-test"
+    )
+    return {
+        "status": "success" if sent > 0 else "no_active_devices",
+        "sent_devices": sent,
+        "message": f"Se envió la notificación a {sent} dispositivo(s) activo(s)." if sent > 0 else "No se encontraron dispositivos con suscripción activa."
+    }
+
+
+@app.post(
+    "/api/cron/send-reminders",
+    summary="Ejecutar recordatorios diarios de mantenimiento para tareas vencidas o que vencen hoy"
+)
+def cron_send_reminders(
+    x_cron_secret: Optional[str] = Header(None, alias="X-CRON-SECRET"),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint seguro invocado por servicio cron diario (ej. GitHub Actions, Render Cron o cron-job.org).
+    Requiere encabezado X-CRON-SECRET coincidente con CRON_SECRET del entorno.
+    """
+    configured_secret = get_cron_secret()
+    if not configured_secret or x_cron_secret != configured_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autorizado: Encabezado X-CRON-SECRET inválido o ausente."
+        )
+
+    summary = process_daily_maintenance_reminders(db)
+    return summary
 
 
 # ==============================================================================

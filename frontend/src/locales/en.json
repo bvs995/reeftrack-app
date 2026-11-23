@@ -340,5 +340,27 @@
     "navLink": "Admin Panel",
     "settingsShortcut": "Open Admin Control Center",
     "settingsShortcutDesc": "Manage user accounts, suspend access, and upgrade Freemium plan tiers."
+  },
+  "push": {
+    "sectionTitle": "Real-Time Push Notifications",
+    "sectionSubtitle": "Receive critical water quality alerts and maintenance reminders directly on your device.",
+    "statusLabel": "Notification Status",
+    "statusActive": "Enabled",
+    "statusInactive": "Disabled",
+    "statusBlocked": "Blocked",
+    "statusUnsupported": "Unsupported",
+    "btnEnable": "Enable Push Notifications",
+    "btnDisable": "Disable Notifications",
+    "maintenanceLabel": "Maintenance Reminders",
+    "maintenanceDesc": "Daily reminders for mechanical equipment and water changes due today or overdue.",
+    "alertsLabel": "Critical Parameter Alerts",
+    "alertsDesc": "Instant alerts on dangerous spikes (NH3/NO2 > 0, sharp 24h KH swings, zero nutrients floor, or thermal stress).",
+    "btnSendTest": "Send Test Push Notification",
+    "testSuccess": "Test notification sent successfully to your device!",
+    "testSending": "Sending test...",
+    "iosNoticeTitle": "Note for iPhone / iOS Safari",
+    "iosNoticeDesc": "To enable Web Push on iOS, tap the Share icon in Safari and select 'Add to Home Screen'. Then launch AquaPulse from your Home Screen.",
+    "permissionDenied": "Notification permission was denied. Please allow notifications in your browser settings.",
+    "blockedHint": "Notifications are blocked in your browser. You can unblock them from your browser address bar settings."
   }
 }

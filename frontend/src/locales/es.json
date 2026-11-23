@@ -340,5 +340,27 @@
     "navLink": "Panel Admin",
     "settingsShortcut": "Abrir Panel de Control Admin",
     "settingsShortcutDesc": "Gestiona cuentas de usuario, suspende accesos y actualiza niveles de suscripción Freemium."
+  },
+  "push": {
+    "sectionTitle": "Notificaciones Push en Tiempo Real",
+    "sectionSubtitle": "Recibe alertas críticas de calidad de agua y recordatorios de mantenimiento en tu dispositivo.",
+    "statusLabel": "Estado de Notificaciones",
+    "statusActive": "Activadas",
+    "statusInactive": "Desactivadas",
+    "statusBlocked": "Bloqueadas",
+    "statusUnsupported": "No Compatible",
+    "btnEnable": "Activar Notificaciones",
+    "btnDisable": "Desactivar Notificaciones",
+    "maintenanceLabel": "Recordatorios de Mantenimiento",
+    "maintenanceDesc": "Avisos diarios de tareas mecánicas y cambios de agua que vencen hoy o están vencidos.",
+    "alertsLabel": "Alertas Críticas de Parámetros",
+    "alertsDesc": "Notificación inmediata ante desbalances graves (NH3/NO2 > 0, delta KH 24h brusco, nutrientes en cero o temperatura fuera de rango).",
+    "btnSendTest": "Enviar Notificación de Prueba",
+    "testSuccess": "¡Notificación de prueba enviada con éxito a tu dispositivo!",
+    "testSending": "Enviando prueba...",
+    "iosNoticeTitle": "Aviso para iPhone / iOS Safari",
+    "iosNoticeDesc": "Para habilitar notificaciones push en iOS, pulsa el botón Compartir de Safari y selecciona 'Agregar a pantalla de inicio'. Luego abre AquaPulse desde el icono instalado.",
+    "permissionDenied": "Permiso denegado por el navegador. Habilita las notificaciones en la configuración del sitio.",
+    "blockedHint": "Las notificaciones están bloqueadas en tu navegador. Puedes desbloquearlas desde la barra de direcciones del navegador."
   }
 }

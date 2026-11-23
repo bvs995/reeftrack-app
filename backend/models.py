@@ -46,6 +46,7 @@ class User(Base):
     measurements = relationship("Measurement", back_populates="user", cascade="all, delete-orphan")
     maintenance_tasks = relationship("MaintenanceTask", back_populates="user", cascade="all, delete-orphan")
     water_changes = relationship("WaterChange", back_populates="user", cascade="all, delete-orphan")
+    push_subscriptions = relationship("PushSubscription", back_populates="user", cascade="all, delete-orphan")
 
 
 class Tank(Base):
@@ -175,6 +176,22 @@ class WaterChange(Base):
 
     user = relationship("User", back_populates="water_changes")
     tank = relationship("Tank", back_populates="water_changes")
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(Text, unique=True, nullable=False)
+    p256dh = Column(String(255), nullable=False)
+    auth = Column(String(255), nullable=False)
+    user_agent = Column(String(500), nullable=True)
+    notify_maintenance = Column(Boolean, default=True, nullable=False)
+    notify_alerts = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="push_subscriptions")
 
 
 # ==============================================================================
@@ -753,6 +770,35 @@ class WaterChangeResponse(BaseModel):
     percentage: Optional[float] = None
     performed_at: datetime
     notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==============================================================================
+# ESQUEMAS PYDANTIC v2 - NOTIFICACIONES PUSH (VAPID)
+# ==============================================================================
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+    user_agent: Optional[str] = None
+    notify_maintenance: Optional[bool] = True
+    notify_alerts: Optional[bool] = True
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str
+
+class PushPreferencesUpdate(BaseModel):
+    notify_maintenance: Optional[bool] = None
+    notify_alerts: Optional[bool] = None
+
+class PushSubscriptionResponse(BaseModel):
+    id: int
+    endpoint: str
+    notify_maintenance: bool
+    notify_alerts: bool
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -191,6 +191,25 @@ def init_db():
                     except Exception:
                         pass
 
+                # Tabla de suscripciones push (VAPID)
+                try:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS push_subscriptions (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            endpoint TEXT NOT NULL UNIQUE,
+                            p256dh VARCHAR(255) NOT NULL,
+                            auth VARCHAR(255) NOT NULL,
+                            user_agent VARCHAR(500),
+                            notify_maintenance BOOLEAN DEFAULT TRUE,
+                            notify_alerts BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                        );
+                    """))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_push_subs_user_id ON push_subscriptions(user_id);"))
+                except Exception as push_err:
+                    logger.debug(f"Aviso creando tabla push_subscriptions: {push_err}")
+
                 # Vistas de compatibilidad
                 try:
                     conn.execute(text("CREATE OR REPLACE VIEW aquariums AS SELECT * FROM tanks;"))

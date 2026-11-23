@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import PushNotificationSettings from './PushNotificationSettings';
 import {
   User,
   Mail,
@@ -523,6 +524,11 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
             <span>{t('settings.upgradeBtn')}</span>
           </button>
         </div>
+      </section>
+
+      {/* 4. SECCIÓN DE NOTIFICACIONES PUSH EN TIEMPO REAL */}
+      <section className="bg-marine-900/90 border border-marine-800/90 rounded-3xl p-5 sm:p-7 shadow-xl">
+        <PushNotificationSettings compact={false} />
       </section>
 
       {/* ACCESO AL PANEL DE ADMINISTRADOR (SOLO SI ES ADMIN) */}
