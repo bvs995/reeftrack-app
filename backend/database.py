@@ -80,6 +80,11 @@ else:
     connect_args = {}
     if "sslmode" not in SQLALCHEMY_DATABASE_URL:
         connect_args["sslmode"] = "require"
+    # Optimización para Session/Transaction Pooler de Supabase (evita desconexiones por timeout de red)
+    connect_args["keepalives"] = 1
+    connect_args["keepalives_idle"] = 30
+    connect_args["keepalives_interval"] = 10
+    connect_args["keepalives_count"] = 5
 
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
