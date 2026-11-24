@@ -298,7 +298,7 @@ class UserScanQuotaManager:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
-                        f"Has alcanzado tu límite diario de {daily_limit} operaciones IA en el {tier_msg}. "
+                        f"Has alcanzado tu límite diario de {daily_limit} escaneos y operaciones IA en el {tier_msg}. "
                         f"Tu cuota se reiniciará a las 00:00 UTC ({reset_seconds // 3600}h {(reset_seconds % 3600) // 60}m restantes), "
                         f"o puedes actualizar a Premium para ampliar tu límite."
                     ),
