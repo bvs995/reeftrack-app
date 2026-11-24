@@ -9,6 +9,11 @@ Soporta exactamente 5 perfiles marinos:
 """
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta, timezone
+from backend.uncertainty import (
+    calculate_measurement_uncertainty,
+    evaluate_parameter_with_interval,
+    evaluate_delta_24h_uncertainty
+)
 
 MARINE_PROFILES: Dict[str, Dict[str, Any]] = {
     # 1. SOLO PECES / FOWLR
@@ -471,7 +476,7 @@ def evaluate_marine_alerts(
     current_time = _parse_dt(current_data.get("timestamp")) or datetime.utcnow()
 
     # -------------------------------------------------------------
-    # 1. DETECTOR DELTA 24H DE KH (Solo si habilitado en enabled_rules)
+    # 1. DETECTOR DELTA 24H DE KH CON INCERTIDUMBRE METROLÓGICA (u = sqrt(e1² + e2²))
     # -------------------------------------------------------------
     if enabled_rules.get("kh_delta_24h") and kh is not None and history_measurements:
         kh_float = float(kh)
@@ -484,98 +489,66 @@ def evaluate_marine_alerts(
             if hace_24h <= m_time <= current_time:
                 m_kh = _get_field(m, "kh", "alkalinity_dkh")
                 if m_kh is not None:
-                    prev_reading = (float(m_kh), m_time)
+                    prev_kit = _get_field(m, "kit")
+                    prev_is_cam = bool(_get_field(m, "is_camera_scan") or False)
+                    prev_reading = (float(m_kh), m_time, prev_kit, prev_is_cam)
                     break
 
         if prev_reading:
-            prev_kh, prev_time = prev_reading
-            delta = kh_float - prev_kh
-            abs_delta = abs(delta)
+            prev_kh, prev_time, prev_kit, prev_is_cam = prev_reading
+            curr_kit = current_data.get("kit")
+            curr_is_cam = bool(current_data.get("is_camera_scan", False))
 
-            if profile_id == "sps_reef":
-                if abs_delta > 0.5:
-                    alerts.append({
-                        "rule": "kh_delta_24h",
-                        "severity": "critical",
-                        "parameter": "kh",
-                        "title": "Alerta Crítica: Oscilación Severa de KH en 24h",
-                        "message": (
-                            f"Oscilación crítica de KH de {delta:+.2f} dKH en 24h "
-                            f"(previo: {prev_kh} -> actual: {kh_float} dKH, límite crítico: ±0.5 dKH). "
-                            "Alto riesgo inminente de RTN/STN (necrosis rápida/lenta de tejido) en corales SPS, "
-                            "incluso si el valor absoluto se encuentra dentro del rango."
-                        ),
-                        "recommendation": "Suspender o estabilizar de inmediato la dosificación; no realizar correcciones bruscas."
-                    })
-                elif abs_delta > 0.3:
-                    alerts.append({
-                        "rule": "kh_delta_24h",
-                        "severity": "warning",
-                        "parameter": "kh",
-                        "title": "Advertencia: Variación Diaria de KH Elevada",
-                        "message": (
-                            f"Variación de KH de {delta:+.2f} dKH en 24h "
-                            f"(previo: {prev_kh} -> actual: {kh_float} dKH, advertencia: >±0.3 dKH). "
-                            "Los corales SPS son sensibles a cambios diarios superiores a 0.3 dKH."
-                        ),
-                        "recommendation": "Verificar temporizador o calibrar dosificadora peristáltica a microdosis a lo largo del fotoperiodo."
-                    })
-            elif profile_id == "mixed_reef":
-                if abs_delta > 0.5:
-                    alerts.append({
-                        "rule": "kh_delta_24h",
-                        "severity": "critical",
-                        "parameter": "kh",
-                        "title": "Alerta Crítica: Inestabilidad de KH en Arrecife Mixto",
-                        "message": (
-                            f"Oscilación de KH de {delta:+.2f} dKH en 24h (límite crítico: ±0.5 dKH). "
-                            "Amenaza la supervivencia de SPS y provoca retracción en corales LPS."
-                        ),
-                        "recommendation": "Revisar rutina de adición y ajustar parámetros suavemente."
-                    })
-                elif abs_delta > 0.4:
-                    alerts.append({
-                        "rule": "kh_delta_24h",
-                        "severity": "warning",
-                        "parameter": "kh",
-                        "title": "Advertencia: Fluctuación de KH en Arrecife Mixto",
-                        "message": (
-                            f"Variación de KH de {delta:+.2f} dKH en 24h (advertencia: >±0.4 dKH). "
-                            "Supera el umbral óptimo diario para la zona SPS del tanque."
-                        ),
-                        "recommendation": "Fraccionar adiciones manuales o configurar bombas peristálticas."
-                    })
-            elif profile_id == "lps_reef":
-                if abs_delta > 0.6:
-                    alerts.append({
-                        "rule": "kh_delta_24h",
-                        "severity": "warning",
-                        "parameter": "kh",
-                        "title": "Advertencia: Salto de KH Superior al Seguro",
-                        "message": (
-                            f"Oscilación de KH de {delta:+.2f} dKH en 24h "
-                            f"(previo: {prev_kh} -> actual: {kh_float} dKH, límite seguro LPS: ±0.6 dKH). "
-                            "Puede causar retracción de pólipos carnosos y estrés osmótico."
-                        ),
-                        "recommendation": "Dosificar buffers en horas de menor variación y diluir la adición."
-                    })
-            elif profile_id == "soft_reef":
-                if abs_delta > 1.0:
-                    alerts.append({
-                        "rule": "kh_delta_24h",
-                        "severity": "warning",
-                        "parameter": "kh",
-                        "title": "Advertencia: Variación Amplia de KH en Blandos",
-                        "message": f"Oscilación de KH de {delta:+.2f} dKH en 24h. Mantener delta < 1.0 dKH para evitar estrés celular.",
-                        "recommendation": "Moderar cambios bruscos de agua."
-                    })
+            u_prev = calculate_measurement_uncertainty("kh", prev_kh, kit=prev_kit, is_camera_scan=prev_is_cam).error
+            u_curr = calculate_measurement_uncertainty("kh", kh_float, kit=curr_kit, is_camera_scan=curr_is_cam).error
+
+            # Umbral según perfil biológico
+            crit_threshold = 0.5
+            warn_threshold = 0.3 if profile_id == "sps_reef" else (0.4 if profile_id == "mixed_reef" else 0.6)
+
+            delta_eval = evaluate_delta_24h_uncertainty(
+                prev_val=prev_kh,
+                prev_error=u_prev,
+                curr_val=kh_float,
+                curr_error=u_curr,
+                threshold=warn_threshold
+            )
+
+            if delta_eval["status"] == "confirmed":
+                sev = "critical" if delta_eval["effective_delta"] > crit_threshold else "warning"
+                alerts.append({
+                    "rule": "kh_delta_24h",
+                    "status": "confirmed",
+                    "severity": sev,
+                    "parameter": "kh",
+                    "title": f"Alerta Confirmada: Oscilación Severa de KH en 24h ({delta_eval['delta']:+.2f} dKH)",
+                    "message": delta_eval["message"],
+                    "recommendation": delta_eval["recommendation"],
+                    "effective_delta": delta_eval["effective_delta"],
+                    "uncertainty": delta_eval["uncertainty"]
+                })
+            elif delta_eval["status"] == "probable":
+                alerts.append({
+                    "rule": "kh_delta_24h",
+                    "status": "probable",
+                    "severity": "watch",
+                    "parameter": "kh",
+                    "title": f"Alerta Probable: Variación Diaria de KH en Zona de Incertidumbre ({delta_eval['delta']:+.2f} dKH)",
+                    "message": delta_eval["message"],
+                    "recommendation": "Retest en 1–2 h para verificar si la oscilación de KH es real antes de alterar la dosificación.",
+                    "effective_delta": delta_eval["effective_delta"],
+                    "uncertainty": delta_eval["uncertainty"]
+                })
 
     # -------------------------------------------------------------
-    # 2. ALERTA DE NUTRIENTES EN CERO (PISO MÍNIMO)
+    # 2. ALERTA DE NUTRIENTES EN CERO / PISO MÍNIMO (< e por debajo del límite de detección)
     # -------------------------------------------------------------
     if enabled_rules.get("zero_nutrient_floor"):
         no3_val = float(nitrate) if nitrate is not None else None
         po4_val = float(phosphate) if phosphate is not None else None
+
+        u_no3 = calculate_measurement_uncertainty("nitrate", no3_val if no3_val is not None else 0.0, kit=current_data.get("kit")).error
+        u_po4 = calculate_measurement_uncertainty("phosphate", po4_val if po4_val is not None else 0.0, kit=current_data.get("kit")).error
 
         zero_no3 = (no3_val is not None and no3_val <= 0.001)
         zero_po4 = (po4_val is not None and po4_val <= 0.001)
@@ -583,9 +556,9 @@ def evaluate_marine_alerts(
         if zero_no3 or zero_po4:
             nutrientes_en_cero = []
             if zero_no3:
-                nutrientes_en_cero.append("Nitratos (NO3 = 0.00 ppm)")
+                nutrientes_en_cero.append(f"Nitratos (< {u_no3:.2f} ppm - por debajo del límite de detección)")
             if zero_po4:
-                nutrientes_en_cero.append("Fosfatos (PO4 = 0.00 ppm)")
+                nutrientes_en_cero.append(f"Fosfatos (< {u_po4:.2f} ppm - por debajo del límite de detección)")
 
             if profile_id == "soft_reef":
                 alerts.append({
@@ -594,7 +567,7 @@ def evaluate_marine_alerts(
                     "parameter": "nutrients",
                     "title": "Piso Mínimo de Nutrientes Bajo",
                     "message": (
-                        f"Nutrientes en cero detectados: {', '.join(nutrientes_en_cero)}. "
+                        f"Nutrientes por debajo del límite de detección: {', '.join(nutrientes_en_cero)}. "
                         "Los corales blandos toleran nutrientes bajos pero necesitan un piso detectable para alimentar sus zooxantelas."
                     ),
                     "recommendation": "Alimentar ligeramente más a los peces o pausar resinas adsorbentes."
@@ -604,9 +577,9 @@ def evaluate_marine_alerts(
                     "rule": "zero_nutrient_floor",
                     "severity": "critical" if (zero_no3 and zero_po4) else "warning",
                     "parameter": "nutrients",
-                    "title": "Alerta de Inanición: Nutrientes en Cero (0.00 ppm)",
+                    "title": "Alerta de Inanición: Nutrientes por Debajo del Límite de Detección",
                     "message": (
-                        f"Nutrientes en cero detectados: {', '.join(nutrientes_en_cero)}. "
+                        f"Nutrientes por debajo del límite de detección: {', '.join(nutrientes_en_cero)}. "
                         "En Arrecife LPS, el agua ultra oligotrófica provoca inanición de zooxantelas y encogimiento severo de tejido carnoso."
                     ),
                     "recommendation": "Dosificar nitrato y fosfato o apagar temporalmente el skimmer para recuperar NO3 >= 5 ppm y PO4 >= 0.03 ppm."
@@ -618,7 +591,7 @@ def evaluate_marine_alerts(
                     "parameter": "nutrients",
                     "title": "Piso Mínimo Comprometido en Arrecife Mixto",
                     "message": (
-                        f"Nutrientes en cero detectados: {', '.join(nutrientes_en_cero)}. "
+                        f"Nutrientes por debajo del límite de detección: {', '.join(nutrientes_en_cero)}. "
                         "Riesgo de inanición en corales LPS y riesgo de blanqueamiento o brote inminente de dinoflagelados en SPS."
                     ),
                     "recommendation": "Mantener equilibrio dosificando nutrientes hasta NO3: 3-5 ppm y PO4: 0.03 ppm."
@@ -628,9 +601,9 @@ def evaluate_marine_alerts(
                     "rule": "zero_nutrient_floor",
                     "severity": "critical",
                     "parameter": "nutrients",
-                    "title": "Alerta Crítica: Agua Ultra Oligotrófica en SPS (0.00 ppm)",
+                    "title": "Alerta Crítica: Agua Ultra Oligotrófica en SPS (< Límite de Detección)",
                     "message": (
-                        f"Nutrientes en cero absoluto: {', '.join(nutrientes_en_cero)}. "
+                        f"Nutrientes por debajo del límite de detección: {', '.join(nutrientes_en_cero)}. "
                         "Alto riesgo inminente de blanqueamiento por inanición (bleaching) y proliferación agresiva de dinoflagelados."
                     ),
                     "recommendation": "Retirar de inmediato resinas GFO / absorbentes y dosificar nitrato y fósforo inorgánico."
@@ -692,5 +665,45 @@ def evaluate_marine_alerts(
                         ),
                         "recommendation": "Migrar a dosificación diaria automatizada con bombas peristálticas (Método Balling 2/3 partes), Kalkwasser o Reactor de Calcio."
                     })
+
+    # -------------------------------------------------------------
+    # 5. EVALUACIÓN DE PARÁMETROS CON INTERVALOS DE INCERTIDUMBRE (Fase 3.2)
+    # -------------------------------------------------------------
+    targets = profile_data.get("targets", {})
+    for p_key, t_spec in targets.items():
+        val = _get_field(current_data, p_key)
+        if val is not None:
+            try:
+                f_val = float(val)
+                # Omitir nutrientes en 0 si ya fueron cubiertos por zero_nutrient_floor
+                if p_key in ["nitrate", "phosphate"] and f_val <= 0.001 and enabled_rules.get("zero_nutrient_floor"):
+                    continue
+
+                kit_name = current_data.get("kit")
+                is_cam = bool(current_data.get("is_camera_scan", False))
+                u_int = calculate_measurement_uncertainty(p_key, f_val, kit=kit_name, is_camera_scan=is_cam)
+
+                eval_res = evaluate_parameter_with_interval(
+                    param=p_key,
+                    interval=u_int,
+                    safe_min=t_spec.get("min"),
+                    safe_max=t_spec.get("max"),
+                    profile_name=profile_data["name"]
+                )
+
+                if eval_res.is_alert:
+                    alerts.append({
+                        "rule": "parameter_interval_target",
+                        "status": eval_res.status,
+                        "severity": eval_res.severity,
+                        "parameter": eval_res.parameter,
+                        "title": eval_res.title,
+                        "message": eval_res.message,
+                        "recommendation": eval_res.recommendation,
+                        "interval": eval_res.interval,
+                        "tested_value": eval_res.tested_value
+                    })
+            except (ValueError, TypeError):
+                pass
 
     return alerts

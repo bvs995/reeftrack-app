@@ -24,6 +24,7 @@ export default function CameraScannerModal({
   const [analyzing, setAnalyzing] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [draftValue, setDraftValue] = useState('');
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (trasera) o 'user' (frontal)
 
   const videoRef = useRef(null);
@@ -185,22 +186,17 @@ export default function CameraScannerModal({
     reader.readAsDataURL(file);
   };
 
-  // Envío al backend FastAPI con Gemini Vision
+  // Envío al backend FastAPI con Gemini Vision (lectura como borrador)
   const processImageWithVision = async (imageData) => {
     setAnalyzing(true);
     setCameraError(null);
     try {
       const result = await scanMeasurement(imageData, preferredParameter);
       setAnalysisResult(result);
-      triggerHaptic([40, 60, 100]);
-
-      // Si se detectó un valor exitosamente, autocompletar tras breve confirmación
-      if (result.success && result.value !== null && result.parameter) {
-        setTimeout(() => {
-          onScanComplete(result);
-          onClose();
-        }, 1400);
+      if (result && result.value !== null && result.value !== undefined) {
+        setDraftValue(String(result.value));
       }
+      triggerHaptic([40, 60, 100]);
     } catch (err) {
       console.error('Error analizando test:', err);
       setCameraError(err.message || 'Error al comunicarse con el modelo de visión IA.');
@@ -209,10 +205,26 @@ export default function CameraScannerModal({
     }
   };
 
+  // Confirmación explícita del borrador por parte del usuario antes de aplicar
+  const handleConfirmDraft = () => {
+    if (!analysisResult) return;
+    triggerHaptic(40);
+    const parsed = parseFloat(draftValue);
+    const finalVal = !isNaN(parsed) ? parsed : analysisResult.value;
+    onScanComplete({
+      ...analysisResult,
+      value: finalVal,
+      is_draft: true,
+      confirmed_by_user: true
+    });
+    onClose();
+  };
+
   const handleRetake = () => {
     triggerHaptic(20);
     setCapturedImage(null);
     setAnalysisResult(null);
+    setDraftValue('');
     setCameraError(null);
     startCamera(facingMode);
   };
@@ -306,24 +318,51 @@ export default function CameraScannerModal({
             </div>
           )}
 
-          {/* Resultado Exitoso */}
+          {/* Resultado Exitoso: Revisión de Borrador por el Usuario */}
           {analysisResult && analysisResult.success && analysisResult.value !== null && (
-            <div className="absolute inset-0 bg-marine-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30 animate-in zoom-in-95">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center mb-3">
-                <CheckCircle2 className="w-9 h-9 text-emerald-400" />
+            <div className="absolute inset-0 bg-marine-950/92 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30 animate-in zoom-in-95">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center mb-2.5">
+                <Sparkles className="w-6 h-6 text-cyan-300 animate-pulse" />
               </div>
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
-                {analysisResult.kit_detected || 'Lectura Detectada'}
-              </span>
-              <div className="text-3xl font-black text-white mb-1 font-mono">
-                {analysisResult.value}
-                <span className="text-base text-cyan-400 ml-1.5 font-sans font-bold">
-                  {analysisResult.parameter?.replace('_', ' ').toUpperCase()}
+
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2">
+                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  📝 Borrador IA (Sin Guardar)
                 </span>
+                {analysisResult.remaining_scans_today !== null && analysisResult.remaining_scans_today !== undefined && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                    Cuota hoy: {analysisResult.remaining_scans_today}/{analysisResult.daily_quota}
+                  </span>
+                )}
               </div>
+
+              <span className="text-xs font-bold text-slate-200 uppercase tracking-wider mb-1">
+                {analysisResult.kit_detected || 'Test Kit Identificado'}
+              </span>
+
+              {/* Input de Edición / Confirmación del Borrador */}
+              <div className="w-full max-w-xs my-2.5 bg-marine-900/90 border border-cyan-500/40 rounded-2xl p-3 shadow-inner">
+                <div className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider mb-1">
+                  {analysisResult.parameter?.replace('_', ' ').toUpperCase()}
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <input
+                    type="number"
+                    step="any"
+                    value={draftValue}
+                    onChange={(e) => setDraftValue(e.target.value)}
+                    className="w-36 text-center text-3xl font-black text-white bg-slate-950/90 border border-cyan-400/50 rounded-xl py-1 focus:outline-none focus:border-cyan-300 font-mono shadow-inner"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Confirma o ajusta la lectura antes de aplicarla
+                </p>
+              </div>
+
               <p className="text-xs text-slate-300 max-w-sm mb-3">
-                {analysisResult.notes || 'Autocompletando formulario...'}
+                {analysisResult.notes || 'Lectura extraída exitosamente.'}
               </p>
+
               {!analysisResult.api_key_configured && (
                 <div className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 px-3 py-1 rounded-xl">
                   {analysisResult.message}
@@ -410,7 +449,17 @@ export default function CameraScannerModal({
                 <RefreshCw className="w-4 h-4" />
                 <span>Repetir Foto</span>
               </button>
-              {analysisResult && !analysisResult.success && (
+              {analysisResult && analysisResult.success && analysisResult.value !== null ? (
+                <button
+                  type="button"
+                  onClick={handleConfirmDraft}
+                  disabled={analyzing}
+                  className="btn-touch flex-1 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-marine-950 text-xs font-black flex items-center justify-center gap-2 rounded-xl shadow-neon-cyan active:scale-95 transition-transform"
+                >
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>Confirmar Borrador</span>
+                </button>
+              ) : analysisResult && !analysisResult.success ? (
                 <button
                   type="button"
                   onClick={() => processImageWithVision(capturedImage)}
@@ -420,7 +469,7 @@ export default function CameraScannerModal({
                   <Sparkles className="w-4 h-4" />
                   <span>Reintentar Análisis</span>
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </div>

@@ -20,7 +20,6 @@ import {
   fetchTankAnalytics,
   fetchPredictions
 } from './api';
-import { evaluateScheduledReminder, checkAndTriggerScheduledNotification } from './utils/notifications';
 import {
   LayoutDashboard,
   LineChart,
@@ -114,23 +113,11 @@ function AppContent() {
     }
   };
 
-  // Temporizador para evaluar recordatorios locales programados
+  // Sincronización automática de cola offline de mediciones (PWA Fase 5)
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const checkReminder = async () => {
-      try {
-        const preds = await fetchPredictions();
-        if (preds) {
-          await checkAndTriggerScheduledNotification(preds);
-        }
-      } catch (e) {
-        // Silencioso en segundo plano
-      }
-    };
-
-    checkReminder();
-    const interval = setInterval(checkReminder, 60000);
-    return () => clearInterval(interval);
+    import('./utils/offlineQueue').then(({ flushOfflineQueue }) => {
+      flushOfflineQueue();
+    }).catch(() => {});
   }, [isAuthenticated]);
 
   useEffect(() => {

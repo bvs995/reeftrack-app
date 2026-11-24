@@ -109,6 +109,13 @@ def get_db() -> Generator:
 
 def init_db():
     """Crea las tablas en la base de datos si aún no existen y migra columnas requeridas."""
+    env = os.getenv("ENVIRONMENT", "").strip().lower()
+    disable_ddl = os.getenv("DISABLE_DEFENSIVE_DDL", "").strip().lower() in ("true", "1", "yes")
+
+    if env == "production" or disable_ddl:
+        logger.info("ℹ️ Entorno de producción detectado: DDL defensivo desactivado en init_db. El esquema es gestionado por Alembic.")
+        return
+
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as ddl_err:

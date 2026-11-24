@@ -169,6 +169,8 @@ def check_and_notify_measurement_alert(
                     "magnesium": m.magnesium or m.magnesium_ppm,
                     "nitrate": m.nitrate or m.nitrate_ppm,
                     "phosphate": m.phosphate or m.phosphate_ppm,
+                    "kit": getattr(m, "kit", None),
+                    "is_camera_scan": getattr(m, "is_camera_scan", False)
                 }
                 for m in recent
             ]
@@ -185,7 +187,9 @@ def check_and_notify_measurement_alert(
             "temperature": meas.temperature or meas.temperatura,
             "ammonia": meas.ammonia,
             "nitrite": meas.nitrite,
-            "test_methods": meas.test_methods or {}
+            "test_methods": meas.test_methods or {},
+            "kit": getattr(meas, "kit", None),
+            "is_camera_scan": getattr(meas, "is_camera_scan", False)
         }
 
         # 1. Evaluar alertas dinámicas especializadas (delta KH 24h, nutrientes en cero, etc.)

@@ -466,17 +466,20 @@ export default function QuickEntryForm({
         </button>
       </div>
 
-      {/* Banner de confirmación de lectura autocompletada por IA */}
+      {/* Banner de confirmación de lectura autocompletada por IA como BORRADOR */}
       {scannedHighlight && (
         <div className="p-3.5 rounded-2xl bg-cyan-500/15 border border-cyan-500/50 text-cyan-200 text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-2 shadow-lg">
           <div className="flex items-center gap-2.5 min-w-0">
             <Sparkles className="w-5 h-5 text-cyan-400 shrink-0 animate-pulse" />
             <div className="min-w-0">
-              <div className="font-extrabold text-white text-xs truncate">
-                {t('quickEntry.detectedParam', { val: scannedHighlight.value }) || `Detectado: ${scannedHighlight.value}`}
+              <div className="font-extrabold text-white text-xs truncate flex items-center gap-2">
+                <span>{`📝 Borrador Aplicado: ${scannedHighlight.parameter ? scannedHighlight.parameter.replace('_', ' ').toUpperCase() : 'Parámetro'} = ${scannedHighlight.value}`}</span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
+                  Borrador Pendiente
+                </span>
               </div>
               <div className="text-[11px] text-slate-300">
-                {t('quickEntry.detectedDesc') || 'Valor verificado e insertado en el formulario.'}
+                {t('quickEntry.detectedDesc') || 'Valor verificado e insertado como borrador.'} Pulsa <strong>"{t('quickEntry.submitBtn') || 'Registrar Medición'}"</strong> abajo para guardarlo definitivamente.
                 {scannedHighlight.kit_detected && (
                   <span className="text-cyan-300 ml-1.5 font-bold">({scannedHighlight.kit_detected})</span>
                 )}
@@ -487,7 +490,7 @@ export default function QuickEntryForm({
             type="button"
             onClick={() => setScannedHighlight(null)}
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-marine-800 transition-colors shrink-0"
-            title={t('common.close')}
+            title={t('common.close') || 'Cerrar'}
           >
             ✕
           </button>

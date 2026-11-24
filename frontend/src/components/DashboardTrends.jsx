@@ -28,8 +28,9 @@ import {
   Info,
   Camera
 } from 'lucide-react';
-import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis } from '../api';
+import { fetchPredictions, fetchMeasurements, fetchPredictiveAnalysis, fetchMarineProfiles } from '../api';
 import { getProfileConfig, getMarineProfile, AQUARIUM_TYPES } from '../utils/marineProfiles';
+import ReefAnalysisCard from './ReefAnalysisCard';
 
 // Registrar plugins requeridos de Chart.js incluyendo annotationPlugin oficial
 ChartJS.register(
@@ -73,6 +74,40 @@ export default function DashboardTrends({
     { id: 'freshwater', label: '🐟 Dulce Peces', key: 'freshwater' }
   ];
 
+  const [availableProfiles, setAvailableProfiles] = useState(TRENDS_PROFILES);
+
+  // Sincronización con catálogo oficial desde GET /api/marine-profiles (Fase 5)
+  useEffect(() => {
+    let isMounted = true;
+    fetchMarineProfiles()
+      .then(res => {
+        if (isMounted && res?.profiles && Array.isArray(res.profiles)) {
+          const profileIconMap = {
+            sps_reef: '🪸',
+            lps_reef: '🪸',
+            soft_reef: '🪸',
+            mixed_reef: '🌊',
+            fish_only: '🐠',
+            planted: '🌿',
+            freshwater: '🐟'
+          };
+          const mapped = res.profiles.map(p => ({
+            id: p.id,
+            label: `${profileIconMap[p.id] || '🐟'} ${p.short_name || p.name || p.id}`,
+            key: p.id
+          }));
+          if (mapped.length > 0) {
+            setAvailableProfiles(mapped);
+          }
+        }
+      })
+      .catch(err => {
+        // En caso de modo offline o error de red, mantiene TRENDS_PROFILES canónico
+        console.warn('Perfiles marinos cargados desde fallback local:', err);
+      });
+    return () => { isMounted = false; };
+  }, []);
+
   // Normalización del ecosistema del acuario según perfil unificado
   const rawTank = propAcuarioActual || activeTank || {};
   const effectiveTank = userSelectedEcosystem
@@ -95,6 +130,36 @@ export default function DashboardTrends({
     tipo: currentTipo,
     tipoAgua: esAguaSalada ? 'salada' : 'dulce'
   };
+
+  const aquariumAnalysisData = useMemo(() => {
+    const alk = predictions?.alkalinity;
+    const cal = predictions?.calcium;
+    const wc = predictions?.water_change;
+    const pRanges = profileConfig.ranges || {};
+
+    return {
+      id: effectiveTank.id,
+      nombre_acuario: effectiveTank.name || 'Mi Acuario Principal',
+      volumen_litros: Number(effectiveTank.volume_liters) || 280,
+      tipo: profileConfig.id,
+      tank_type: profileConfig.id,
+      reef_profile: profileConfig.isMarine ? profileConfig.id : null,
+      dosing_method: effectiveTank.dosing_method || (profileConfig.isMarine ? 'water_changes' : null),
+      lighting_par: effectiveTank.lighting_par,
+      flow_profile: effectiveTank.flow_profile,
+      ph: pRanges.ph?.target ?? 8.2,
+      kh: alk?.latest_value ?? pRanges.kh?.target ?? 8.2,
+      calcio: profileConfig.id === 'fish_only' || !profileConfig.isMarine ? null : (cal?.latest_value ?? pRanges.calcium?.target ?? 420),
+      magnesio: profileConfig.id === 'fish_only' || !profileConfig.isMarine ? null : (pRanges.magnesium?.target ?? 1320),
+      nitrato: wc?.current_nitrate_ppm ?? pRanges.nitrate?.target ?? 5.0,
+      fosfato: pRanges.phosphate?.target ?? 0.04,
+      temperatura: pRanges.temperature?.target ?? 25.0,
+      salinidad: profileConfig.isMarine ? (pRanges.salinity?.target ?? 1.025) : null,
+      ammonia: pRanges.ammonia?.target ?? 0.0,
+      nitrite: pRanges.nitrite?.target ?? 0.0,
+      tendencia_reciente: `Biotipo activo: ${profileConfig.name}. Consumo KH: ${alk?.daily_consumption_rate ? alk.daily_consumption_rate.toFixed(2) + ' dKH/d' : 'Estable'}. Acumulación NO3: ${wc?.daily_accumulation_rate ? wc.daily_accumulation_rate.toFixed(2) + ' ppm/d' : 'Estable'}.`
+    };
+  }, [effectiveTank, predictions, profileConfig]);
 
   // Listas maestras de parámetros especializadas por perfil
   const parametrosFishOnly = [
@@ -1234,7 +1299,16 @@ export default function DashboardTrends({
                         days: alk.days_remaining_safe,
                         unit: alk.days_remaining_safe === 1 ? t('common.day') : t('common.days')
                       })}
+                      {alk?.uncertainty && (
+                        <span className="text-cyan-300 ml-1.5 font-bold text-xs">
+                          (Margen: ±{alk.uncertainty} dKH)
+                        </span>
+                      )}
                     </>
+                  ) : alk?.status === 'inconclusive_trend' ? (
+                    <span className="text-amber-300 font-semibold">
+                      {alk.alert_message || 'Tendencia no concluyente (R² < 0.50). Dispersión en mediciones.'}
+                    </span>
                   ) : alk?.status === 'insufficient_data' ? (
                     t('trends.alkNeedConsecutive')
                   ) : (
@@ -1358,9 +1432,9 @@ export default function DashboardTrends({
 
       {/* ---------------- 2. SELECTOR DE ECOSISTEMA (6 OPCIONES) Y PARÁMETROS DINÁMICOS ---------------- */}
       <div className="space-y-4 mb-6">
-        {/* Barra Superior con los 6 Perfiles Canónicos */}
+        {/* Barra Superior con los Perfiles Dinámicos / Canónicos */}
         <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-marine-950/90 border border-marine-800 overflow-x-auto scrollbar-none flex-nowrap sm:flex-wrap">
-          {TRENDS_PROFILES.map((tipoItem) => {
+          {(availableProfiles || TRENDS_PROFILES).map((tipoItem) => {
             const isSelected = profileConfig.id === tipoItem.id;
             return (
               <button
@@ -1485,81 +1559,10 @@ export default function DashboardTrends({
           </div>
         </div>
 
-        {/* NUEVO: Panel de IA de Ancho Completo (Se muestra al hacer clic en el botón) */}
+        {/* Panel de IA y Verificación con Margen y Disclaimer Oficial (Fase 4 & 5) */}
         {mostrarDiagnosticoIA && (
-          <div className="w-full bg-[#111827] border border-cyan-500/30 rounded-xl p-6 mb-6 shadow-lg shadow-cyan-900/20 animate-fade-in">
-            
-            {/* Encabezado del Panel IA */}
-            <div className="flex items-center justify-between mb-5 border-b border-gray-700/50 pb-4">
-              <div className="flex items-center">
-                <img 
-                  src="/robot-fish.jpg" 
-                  alt="AquaPulse AI" 
-                  className="w-12 h-12 mr-4 rounded-lg shadow-lg border border-cyan-500/50 object-cover" 
-                />
-                <div>
-                  <h3 className="text-xl font-bold text-cyan-400">Diagnóstico Predictivo AquaPulse</h3>
-                  <p className="text-sm text-gray-400">Análisis clínico impulsado por Gemini 2.5 Flash</p>
-                </div>
-              </div>
-              {aiLoading && (
-                <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 bg-cyan-950/60 px-3 py-1.5 rounded-full border border-cyan-800">
-                  <Activity className="w-4 h-4 animate-spin text-cyan-400" />
-                  <span>Analizando química...</span>
-                </div>
-              )}
-            </div>
-            
-            {/* Grid de 3 columnas para aprovechar el espacio horizontal */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* Columna 1: Riesgo */}
-              <div className={`p-4 rounded-lg border ${
-                aiAnalysis?.nivel_riesgo?.toLowerCase().includes('crítico') || aiAnalysis?.nivel_riesgo?.toLowerCase().includes('alto')
-                  ? 'bg-red-900/20 border-red-800/50'
-                  : aiAnalysis?.nivel_riesgo?.toLowerCase().includes('moderad')
-                  ? 'bg-amber-900/20 border-amber-800/50'
-                  : 'bg-emerald-900/20 border-emerald-800/50'
-              }`}>
-                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Nivel de Riesgo</span>
-                <p className={`text-xl font-bold mt-1 ${
-                  aiAnalysis?.nivel_riesgo?.toLowerCase().includes('crítico') || aiAnalysis?.nivel_riesgo?.toLowerCase().includes('alto')
-                    ? 'text-red-400'
-                    : aiAnalysis?.nivel_riesgo?.toLowerCase().includes('moderad')
-                    ? 'text-amber-400'
-                    : 'text-emerald-400'
-                }`}>
-                  {aiAnalysis?.nivel_riesgo || 'Bajo'}
-                </p>
-              </div>
-              
-              {/* Columna 2: Diagnóstico */}
-              <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
-                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Diagnóstico General</span>
-                <p className="text-sm text-gray-300 mt-2">
-                  {aiAnalysis?.diagnostico_general || 'El sistema presenta una estabilidad química excelente con parámetros dentro de los rangos óptimos...'}
-                </p>
-              </div>
-              
-              {/* Columna 3: Proyección y Acciones */}
-              <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
-                <span className="text-xs text-amber-500/80 font-bold uppercase tracking-wider flex items-center">
-                  ⚠️ Predicción a 48 Horas
-                </span>
-                <p className="text-sm text-gray-300 mt-2">
-                  {aiAnalysis?.alerta_predictiva_48h || 'Continuará el crecimiento coralino, pero falta registro de temperatura.'}
-                </p>
-                
-                {/* Sugerencia como "Chip" */}
-                <div className="mt-3 bg-cyan-900/30 border border-cyan-800 text-cyan-300 text-xs p-2 rounded">
-                  <strong>Acción:</strong>{' '}
-                  {aiAnalysis?.acciones_correctoras && aiAnalysis.acciones_correctoras.length > 0
-                    ? `${aiAnalysis.acciones_correctoras[0].parametro ? aiAnalysis.acciones_correctoras[0].parametro + ': ' : ''}${aiAnalysis.acciones_correctoras[0].producto || ''} ${aiAnalysis.acciones_correctoras[0].cantidad_sugerida ? '(' + aiAnalysis.acciones_correctoras[0].cantidad_sugerida + ')' : ''}`
-                    : 'Instalar sensor de monitoreo continuo.'}
-                </div>
-              </div>
-              
-            </div>
+          <div className="mb-6 animate-fade-in">
+            <ReefAnalysisCard aquariumData={aquariumAnalysisData} />
           </div>
         )}
 

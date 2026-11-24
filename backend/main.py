@@ -1,8 +1,13 @@
 import os
+import uuid
+import secrets
+import time
+import threading
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Body, status, BackgroundTasks, Header
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Body, status, BackgroundTasks, Header, Request, Response, Cookie
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -46,6 +51,9 @@ from backend.models import (
     MaintenanceTask,
     MaintenanceLog,
     WaterChange,
+    DiagnosticFeedback,
+    DiagnosticFeedbackCreate,
+    DiagnosticFeedbackResponse,
     MaintenanceTaskCreate,
     MaintenanceTaskUpdate,
     MaintenanceTaskResponse,
@@ -56,7 +64,10 @@ from backend.models import (
     PushSubscriptionCreate,
     PushUnsubscribeRequest,
     PushPreferencesUpdate,
-    PushSubscriptionResponse
+    PushSubscriptionResponse,
+    DiagnosticAudit,
+    DiagnosticAuditResponse,
+    DiagnosticAuditStatsResponse
 )
 from backend.push_service import (
     get_vapid_public_key,
@@ -80,6 +91,9 @@ from backend.auth import (
     hash_password,
     verify_password,
     create_access_token,
+    create_refresh_token,
+    verify_refresh_token,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_password_reset_token,
     verify_password_reset_token,
     get_current_user,
@@ -94,19 +108,178 @@ from backend.vision import (
     analyze_test_image
 )
 
+# Determinación estricta de entorno
+is_production = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+
+# Rate limiting in-memory con ventana deslizante para endpoints de autenticación (/api/auth/*)
+auth_attempts: Dict[str, List[float]] = defaultdict(list)
+auth_lock = threading.Lock()
+AUTH_RATE_LIMIT_MAX = 5
+AUTH_RATE_LIMIT_WINDOW_SECONDS = 60.0
+
+def check_auth_rate_limit(request: Request):
+    """Aplica rate limit estricto por IP a los endpoints de autenticación (máx 5 peticiones/minuto)."""
+    ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+
+    now = time.time()
+    with auth_lock:
+        timestamps = auth_attempts[ip]
+        valid_timestamps = [ts for ts in timestamps if now - ts < AUTH_RATE_LIMIT_WINDOW_SECONDS]
+        if len(valid_timestamps) >= AUTH_RATE_LIMIT_MAX:
+            auth_attempts[ip] = valid_timestamps
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Demasiadas solicitudes de autenticación. Por favor espera un minuto antes de reintentar."
+            )
+        valid_timestamps.append(now)
+        auth_attempts[ip] = valid_timestamps
+
+# Control de cuota diaria y rate limit por usuario para escaneos IA con Gemini
+class UserScanQuotaManager:
+    """
+    Control de cuotas y rate limiting por usuario para escaneos de tests con IA.
+    Protege los costos del modelo de visión (Google Gemini) limitando:
+    - Plan Free: Máximo 5 escaneos por día natural (UTC), burst de 5 peticiones/minuto.
+    - Plan Premium / Admin: Máximo 100 escaneos por día natural (UTC), burst de 15 peticiones/minuto.
+    """
+    def __init__(self):
+        self._lock = threading.Lock()
+        # Estructura: user_id -> {"date": "YYYY-MM-DD", "count": int, "timestamps": [float, ...]}
+        self._usage: Dict[int, Dict[str, Any]] = defaultdict(dict)
+
+    def _get_daily_limit(self, subscription_tier: str, is_admin: bool) -> int:
+        if is_admin:
+            return int(os.environ.get("SCAN_DAILY_LIMIT_ADMIN", "500"))
+        if subscription_tier == "premium":
+            return int(os.environ.get("SCAN_DAILY_LIMIT_PREMIUM", "100"))
+        return int(os.environ.get("SCAN_DAILY_LIMIT_FREE", "5"))
+
+    def _get_burst_limit(self, subscription_tier: str, is_admin: bool) -> int:
+        if is_admin or subscription_tier == "premium":
+            return 15
+        return 5
+
+    def get_quota_info(self, user_id: int, subscription_tier: str, is_admin: bool) -> Dict[str, Any]:
+        now_utc = datetime.now(timezone.utc)
+        today_str = now_utc.strftime("%Y-%m-%d")
+        daily_limit = self._get_daily_limit(subscription_tier, is_admin)
+
+        tomorrow_utc = datetime.combine(now_utc.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        reset_seconds = max(1, int((tomorrow_utc - now_utc).total_seconds()))
+
+        with self._lock:
+            record = self._usage.get(user_id, {})
+            if record.get("date") != today_str:
+                used = 0
+            else:
+                used = record.get("count", 0)
+
+        remaining = max(0, daily_limit - used)
+        return {
+            "tier": "admin" if is_admin else subscription_tier,
+            "daily_quota": daily_limit,
+            "used_today": used,
+            "remaining_today": remaining,
+            "reset_seconds": reset_seconds
+        }
+
+    def check_and_consume(self, user_id: int, subscription_tier: str, is_admin: bool) -> Dict[str, Any]:
+        now_utc = datetime.now(timezone.utc)
+        now_ts = now_utc.timestamp()
+        today_str = now_utc.strftime("%Y-%m-%d")
+        daily_limit = self._get_daily_limit(subscription_tier, is_admin)
+        burst_limit = self._get_burst_limit(subscription_tier, is_admin)
+
+        tomorrow_utc = datetime.combine(now_utc.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        reset_seconds = max(1, int((tomorrow_utc - now_utc).total_seconds()))
+
+        with self._lock:
+            record = self._usage[user_id]
+            if record.get("date") != today_str:
+                record["date"] = today_str
+                record["count"] = 0
+                record["timestamps"] = []
+
+            # 1. Verificar cuota diaria primero
+            current_count = record.get("count", 0)
+            if current_count >= daily_limit:
+                tier_msg = "plan gratuito" if subscription_tier == "free" and not is_admin else "plan actual"
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        f"Has alcanzado tu límite diario de {daily_limit} escaneos IA en el {tier_msg}. "
+                        f"Tu cuota se reiniciará a las 00:00 UTC ({reset_seconds // 3600}h {(reset_seconds % 3600) // 60}m restantes), "
+                        f"o puedes actualizar a Premium para ampliar tu límite."
+                    ),
+                    headers={
+                        "X-RateLimit-Limit": str(daily_limit),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": str(reset_seconds)
+                    }
+                )
+
+            # 2. Verificar burst limit (últimos 60s)
+            timestamps = [ts for ts in record.get("timestamps", []) if now_ts - ts < 60.0]
+            if len(timestamps) >= burst_limit:
+                record["timestamps"] = timestamps
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Demasiadas peticiones de escaneo en poco tiempo. Por favor espera un minuto antes de reintentar.",
+                    headers={
+                        "X-RateLimit-Limit": str(daily_limit),
+                        "X-RateLimit-Remaining": str(max(0, daily_limit - record["count"])),
+                        "X-RateLimit-Reset": str(reset_seconds),
+                        "Retry-After": "60"
+                    }
+                )
+
+            # 3. Consumir escaneo
+            current_count += 1
+            record["count"] = current_count
+            timestamps.append(now_ts)
+            record["timestamps"] = timestamps
+
+            remaining = max(0, daily_limit - current_count)
+            return {
+                "tier": "admin" if is_admin else subscription_tier,
+                "daily_quota": daily_limit,
+                "used_today": current_count,
+                "remaining_today": remaining,
+                "reset_seconds": reset_seconds
+            }
+
+    def reset_for_tests(self):
+        with self._lock:
+            self._usage.clear()
+
+scan_quota_manager = UserScanQuotaManager()
+
+# Inicialización de la aplicación FastAPI (/docs deshabilitado en producción)
 app = FastAPI(
     title="AquaPulse Commercial Multi-User API",
     description="Backend SaaS multi-usuario de alta precisión para acuarios con autenticación JWT y aislamiento de datos.",
-    version="3.0.0"
+    version="3.0.0",
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json"
 )
 
-# Configuración dinámica de CORS para producción (Vercel) y desarrollo local
-raw_origins = os.environ.get("ALLOWED_ORIGINS", "*")
-if raw_origins == "*":
-    origins = ["*"]
-    allow_creds = False
-else:
+# Configuración estricta de CORS con lista blanca (nunca wildcard '*' con credenciales)
+raw_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if raw_origins and raw_origins != "*":
     origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    allow_creds = True
+else:
+    # Lista blanca segura para desarrollo local y PWA
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://localhost:8000"
+    ]
     allow_creds = True
 
 app.add_middleware(
@@ -117,8 +290,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Middleware de seguridad HTTP y trazabilidad con Request-ID (UUID4)
+@app.middleware("http")
+async def security_and_request_id_middleware(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+
+    response = await call_next(request)
+
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+
+    if is_production:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline' https:; "
+            "style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; "
+            "font-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'none';"
+        )
+
+    return response
+
+# Manejador global de excepciones 500 genéricas (oculta stacktrace técnico, loguea con request_id)
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None)
+        )
+    req_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    logger.exception(f"Unhandled server exception [request_id={req_id}]: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Error interno del servidor. Por favor contacte a soporte indicando el identificador del incidente.",
+            "request_id": req_id
+        },
+        headers={"X-Request-ID": req_id}
+    )
+
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Convierte errores de validación de Pydantic en HTTP 400 Bad Request con detalle claro."""
     errors = exc.errors()
     first_error = errors[0] if errors else {}
@@ -148,15 +365,56 @@ def startup_event():
     except Exception as e:
         logger.warning(f"Aviso durante seed_database_if_empty en startup: {e}")
 
-@app.get("/api/health")
-def health_check():
+@app.get("/api/health", summary="Monitor operativo de salud del sistema, base de datos y IA")
+def health_check(db: Session = Depends(get_db)):
     db_ok = check_db_connection()
-    return {
-        "status": "online" if db_ok else "degraded",
+    from backend.services.ai_service import get_ai_audit_statistics
+    ai_stats = get_ai_audit_statistics(db)
+
+    # El servicio está 'degraded' si la tasa de descarte es anómala o si se excedió el presupuesto
+    is_degraded = ai_stats.get("discard_rate_alert") or ai_stats.get("budget_status") == "exceeded"
+    status_str = "online" if db_ok and not is_degraded else ("degraded" if db_ok else "offline")
+
+    health_data = {
+        "status": status_str,
         "database": "connected" if db_ok else "disconnected",
         "service": "AquaPulse Multi-User Predictive Engine",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "ai_operational_monitor": {
+            "budget_status": ai_stats["budget_status"],
+            "month_spend_usd": ai_stats["total_cost_usd"],
+            "budget_limit_usd": ai_stats["budget_limit_usd"],
+            "recent_evaluations": ai_stats["total_evaluations"],
+            "discard_rate": ai_stats["discard_rate"],
+            "discard_rate_alert": ai_stats["discard_rate_alert"]
+        }
     }
+    if not db_ok:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=health_data
+        )
+    return health_data
+
+
+@app.get(
+    "/api/admin/ai-audit-stats",
+    response_model=DiagnosticAuditStatsResponse,
+    summary="Estadísticas consolidadas de auditoría operativa de IA y control de costos (Fase 7)"
+)
+def get_ai_audit_stats_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retorna métricas de evaluación de IA: tasa de descarte, gasto mensual y alertas de deriva."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido a administradores del sistema."
+        )
+    from backend.services.ai_service import get_ai_audit_statistics
+    stats = get_ai_audit_statistics(db, sample_size=100)
+    return stats
 
 
 # ==============================================================================
@@ -175,8 +433,14 @@ AUTO_ADMIN_EMAILS = {
     status_code=status.HTTP_201_CREATED,
     summary="Registrar una nueva cuenta de usuario"
 )
-def register_user(payload: UserRegister, db: Session = Depends(get_db)):
-    """Crea una nueva cuenta de usuario, inicializa su primer acuario y emite token JWT."""
+def register_user(
+    payload: UserRegister,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """Crea una nueva cuenta de usuario, inicializa su primer acuario y emite token JWT con refresh token en cookie."""
+    check_auth_rate_limit(request)
     normalized_email = payload.email.strip().lower()
 
     existing_user = db.query(User).filter(User.email == normalized_email).first()
@@ -215,10 +479,23 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)):
     db.add(default_tank)
     db.commit()
 
-    token = create_access_token({"sub": str(new_user.id), "email": new_user.email})
+    access_token = create_access_token({"sub": str(new_user.id), "email": new_user.email})
+    refresh_token = create_refresh_token(new_user.id)
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/auth"
+    )
+
     return TokenResponse(
-        access_token=token,
+        access_token=access_token,
         token_type="bearer",
+        refresh_token=refresh_token,
         user=UserResponse.model_validate(new_user)
     )
 
@@ -227,8 +504,14 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)):
     response_model=TokenResponse,
     summary="Iniciar sesión con correo y contraseña"
 )
-def login_user(payload: UserLogin, db: Session = Depends(get_db)):
-    """Valida credenciales y emite token JWT de sesión. Promueve automáticamente a is_admin si coincide con paliyo995@gmail.com."""
+def login_user(
+    payload: UserLogin,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """Valida credenciales y emite token JWT con refresh token en cookie HttpOnly. Evita enumeración de usuarios."""
+    check_auth_rate_limit(request)
     normalized_email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
 
@@ -251,24 +534,105 @@ def login_user(payload: UserLogin, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
-    token = create_access_token({"sub": str(user.id), "email": user.email})
+    access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    refresh_token = create_refresh_token(user.id)
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/auth"
+    )
+
     return TokenResponse(
-        access_token=token,
+        access_token=access_token,
         token_type="bearer",
+        refresh_token=refresh_token,
         user=UserResponse.model_validate(user)
     )
+
+@app.post(
+    "/api/auth/refresh",
+    response_model=TokenResponse,
+    summary="Renovar token de acceso usando refresh token rotativo en cookie o cabecera"
+)
+def refresh_access_token(
+    request: Request,
+    response: Response,
+    x_refresh_token: Optional[str] = Header(None, alias="X-Refresh-Token"),
+    db: Session = Depends(get_db)
+):
+    """Verifica el refresh token de la cookie HttpOnly (o cabecera) y rota emitiendo un nuevo par de tokens."""
+    cookie_token = request.cookies.get("refresh_token")
+    token_to_verify = cookie_token or x_refresh_token
+
+    if not token_to_verify:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No se proporcionó refresh token válido en cookie HttpOnly o cabecera X-Refresh-Token.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    payload = verify_refresh_token(token_to_verify)
+    user_id = int(payload["sub"])
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user or not user.is_active:
+        response.delete_cookie(key="refresh_token", path="/api/auth")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión expirada o usuario inactivo. Inicie sesión nuevamente.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    new_access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    new_refresh_token = create_refresh_token(user.id)
+
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/auth"
+    )
+
+    return TokenResponse(
+        access_token=new_access_token,
+        token_type="bearer",
+        refresh_token=new_refresh_token,
+        user=UserResponse.model_validate(user)
+    )
+
+@app.post(
+    "/api/auth/logout",
+    summary="Cerrar sesión e invalidar la cookie del refresh token"
+)
+def logout_user(response: Response):
+    """Limpia la cookie HttpOnly del refresh token."""
+    response.delete_cookie(key="refresh_token", path="/api/auth")
+    return {"status": "success", "message": "Sesión cerrada correctamente."}
 
 @app.post(
     "/api/auth/forgot-password",
     response_model=PasswordResetResponse,
     summary="Solicitar enlace para restablecer contraseña"
 )
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
     """
     Genera un token firmado temporal y emite un enlace de restablecimiento.
     Por seguridad (OWASP), siempre responde de manera neutral para evitar enumeración de correos.
     Si no hay SMTP configurado, imprime el enlace seguro directamente en la consola para pruebas.
     """
+    check_auth_rate_limit(request)
     normalized_email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
 
@@ -370,6 +734,132 @@ def update_user_profile(
     db.commit()
     db.refresh(current_user)
     return UserResponse.model_validate(current_user)
+
+
+# ==============================================================================
+# 📂 PRIVACIDAD Y DERECHOS DE USUARIO (GDPR / ARCO - EXPORTACIÓN Y BORRADO)
+# ==============================================================================
+
+@app.get(
+    "/api/user/export",
+    summary="Exportar todos los datos personales del usuario (Derecho de portabilidad GDPR)"
+)
+def export_user_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Genera una copia íntegra y portable de todos los datos del usuario en formato JSON."""
+    tanks = db.query(Tank).filter(Tank.user_id == current_user.id).all()
+    measurements = db.query(Measurement).filter(Measurement.user_id == current_user.id).all()
+    tasks = db.query(MaintenanceTask).filter(MaintenanceTask.user_id == current_user.id).all()
+    water_changes = db.query(WaterChange).filter(WaterChange.user_id == current_user.id).all()
+    push_subs = db.query(PushSubscription).filter(PushSubscription.user_id == current_user.id).all()
+
+    return {
+        "exported_at": datetime.utcnow().isoformat(),
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "unit_preference": current_user.unit_preference,
+            "subscription_tier": current_user.subscription_tier,
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+        },
+        "tanks": [
+            {
+                "id": t.id,
+                "name": t.name,
+                "tank_type": t.tank_type,
+                "volume_liters": t.volume_liters,
+                "reef_profile": t.reef_profile,
+                "dosing_method": t.dosing_method,
+                "lighting_par": t.lighting_par,
+                "flow_profile": t.flow_profile,
+                "notes": t.notes,
+                "created_at": t.created_at.isoformat() if t.created_at else None
+            }
+            for t in tanks
+        ],
+        "measurements": [
+            {
+                "id": m.id,
+                "tank_id": m.tank_id,
+                "timestamp": m.timestamp.isoformat() if m.timestamp else None,
+                "ph": m.ph,
+                "kh": m.kh,
+                "calcium": m.calcium,
+                "magnesium": m.magnesium,
+                "nitrate": m.nitrate,
+                "phosphate": m.phosphate,
+                "salinity": m.salinity,
+                "temperature": m.temperature,
+                "ammonia": m.ammonia,
+                "nitrite": m.nitrite,
+                "trace_elements": m.trace_elements,
+                "test_methods": m.test_methods,
+                "notes": m.notes
+            }
+            for m in measurements
+        ],
+        "maintenance_tasks": [
+            {
+                "id": task.id,
+                "aquarium_id": task.aquarium_id,
+                "task_key": task.task_key,
+                "title": task.title,
+                "category": task.category,
+                "frequency_days": task.frequency_days,
+                "last_completed_at": task.last_completed_at.isoformat() if task.last_completed_at else None,
+                "next_due_at": task.next_due_at.isoformat() if task.next_due_at else None,
+                "is_enabled": task.is_enabled,
+                "notes": task.notes
+            }
+            for task in tasks
+        ],
+        "water_changes": [
+            {
+                "id": wc.id,
+                "tank_id": wc.tank_id,
+                "volume_liters": wc.volume_liters,
+                "percentage": wc.percentage,
+                "performed_at": wc.performed_at.isoformat() if wc.performed_at else None,
+                "notes": wc.notes
+            }
+            for wc in water_changes
+        ],
+        "push_subscriptions": [
+            {
+                "id": ps.id,
+                "endpoint": ps.endpoint,
+                "notify_maintenance": ps.notify_maintenance,
+                "notify_alerts": ps.notify_alerts,
+                "created_at": ps.created_at.isoformat() if ps.created_at else None
+            }
+            for ps in push_subs
+        ]
+    }
+
+@app.delete(
+    "/api/user/account",
+    summary="Eliminar permanentemente la cuenta de usuario y todos los datos asociados (Derecho al olvido GDPR)"
+)
+def delete_user_account(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Elimina en cascada estricta el usuario y absolutamente todos sus registros asociados."""
+    user_id = current_user.id
+    email = current_user.email
+    db.delete(current_user)
+    db.commit()
+
+    response.delete_cookie(key="refresh_token", path="/api/auth")
+    logger.info(f"Cuenta y datos eliminados íntegramente para el usuario {email} (ID: {user_id}).")
+    return {
+        "status": "success",
+        "message": "Tu cuenta y todos tus datos (tanques, mediciones, tareas, cambios de agua) han sido eliminados de forma permanente."
+    }
 
 
 # ==============================================================================
@@ -581,14 +1071,13 @@ def create_user_tank(
 @app.post("/api/acuarios", include_in_schema=False)
 def create_aquarium_via_schema(
     payload: AquariumCreate,
-    current_user: Optional[User] = Depends(get_optional_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Crea un nuevo acuario utilizando el esquema AquariumCreate.
-    Valida el biotipo dentro de: arrecife, plantado, dulce, peces_marinos, mixto.
+    Crea un nuevo acuario utilizando el esquema AquariumCreate vinculado estrictamente al usuario autenticado.
     """
-    user_id = current_user.id if current_user else 1
+    user_id = current_user.id
     new_tank = Tank(
         user_id=user_id,
         name=payload.name.strip(),
@@ -638,26 +1127,36 @@ def update_aquarium(
     aquarium_id: int,
     volume_liters: Optional[int] = Query(None, description="Nuevo volumen en litros"),
     payload: Optional[dict] = Body(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Actualiza el volumen en litros de un acuario por su ID.
-    Acepta el parámetro volume_liters como query param o en el cuerpo JSON.
+    Actualiza el volumen en litros y parámetros de un acuario verificando que pertenezca al usuario autenticado (Anti-IDOR).
     """
     actual_volume = volume_liters
     if actual_volume is None and payload and "volume_liters" in payload:
         actual_volume = payload["volume_liters"]
-    elif actual_volume is None and isinstance(payload, int):
+    elif actual_volume is None and isinstance(payload, (int, float)):
         actual_volume = payload
 
-    if actual_volume is None and not (payload and any(k in payload for k in ["name", "tank_type", "type", "notes"])):
+    if actual_volume is None and not (payload and any(k in payload for k in ["name", "tank_type", "type", "notes", "reef_profile", "dosing_method", "lighting_par", "flow_profile"])):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Se requiere el campo 'volume_liters' o datos a actualizar")
 
-    tank = db.query(Aquarium).filter(Aquarium.id == aquarium_id).first()
+    # Validación estricta anti-IDOR: verificar pertenencia a current_user.id
+    tank = db.query(Aquarium).filter(Aquarium.id == aquarium_id, Aquarium.user_id == current_user.id).first()
     if not tank:
-        tank = db.query(Acuario).filter(Acuario.id == aquarium_id).first()
+        try:
+            legacy_acuario = db.query(Acuario).filter(Acuario.id == aquarium_id, Acuario.usuario_id == str(current_user.id)).first()
+            if legacy_acuario:
+                tank = legacy_acuario
+        except Exception:
+            db.rollback()
+
     if not tank:
-        raise HTTPException(status_code=404, detail="Acuario no encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
 
     if actual_volume is not None:
         tank.volume_liters = actual_volume
@@ -769,6 +1268,16 @@ def create_measurement(
     Si se especifica tank_id, verifica que pertenezca al usuario.
     Si el motor de reglas detecta alerta crítica o advertencia grave, dispara notificación push vía BackgroundTasks.
     """
+    # Control de idempotencia (Fase 5 - Cola Offline PWA)
+    if payload.client_uuid:
+        existing_meas = db.query(Measurement).filter(
+            Measurement.client_uuid == payload.client_uuid,
+            Measurement.user_id == current_user.id
+        ).first()
+        if existing_meas:
+            logger.info(f"Medición idempotente detectada ({payload.client_uuid}). Retornando existente.")
+            return MeasurementResponse.model_validate(existing_meas)
+
     measurement_time = payload.timestamp or datetime.utcnow()
     target_tank_id = payload.tank_id
 
@@ -796,10 +1305,10 @@ def create_measurement(
 
     temp_val = payload.temperature if payload.temperature is not None else payload.temperatura
     kh_val = payload.kh if payload.kh is not None else payload.alkalinity_dkh
-    ca_val = payload.calcium if payload.calcium is not None else payload.calcium_ppm
-    mg_val = payload.magnesium if payload.magnesium is not None else payload.magnesium_ppm
-    no3_val = payload.nitrate if payload.nitrate is not None else payload.nitrate_ppm
-    po4_val = payload.phosphate if payload.phosphate is not None else payload.phosphate_ppm
+    ca_val = payload.calcium if payload.calcium is not None else (payload.calcium_ppm if payload.calcium_ppm is not None else payload.calcio)
+    mg_val = payload.magnesium if payload.magnesium is not None else (payload.magnesium_ppm if payload.magnesium_ppm is not None else payload.magnesio)
+    no3_val = payload.nitrate if payload.nitrate is not None else (payload.nitrate_ppm if payload.nitrate_ppm is not None else payload.nitrato)
+    po4_val = payload.phosphate if payload.phosphate is not None else (payload.phosphate_ppm if payload.phosphate_ppm is not None else payload.fosfato)
     sal_val = payload.salinity if payload.salinity is not None else payload.salinity_ppt
     nh3_val = payload.ammonia if payload.ammonia is not None else payload.ammonia_ppm
     no2_val = payload.nitrite if payload.nitrite is not None else payload.nitrite_ppm
@@ -827,7 +1336,11 @@ def create_measurement(
         nitrite=no2_val,
         trace_elements=payload.trace_elements,
         test_methods=payload.test_methods,
-        notes=payload.notes
+        notes=payload.notes,
+        kit=payload.kit,
+        is_camera_scan=payload.is_camera_scan or False,
+        is_draft=payload.is_draft or False,
+        client_uuid=payload.client_uuid
     )
     db.add(db_measurement)
     db.commit()
@@ -862,6 +1375,12 @@ def create_tank_measurement(
     """
     Guarda una medición vinculada al acuario especificado por tank_id y al usuario activo.
     """
+    tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
     payload.tank_id = tank_id
     return create_measurement(
         payload=payload,
@@ -883,6 +1402,12 @@ def get_tank_measurements(
     db: Session = Depends(get_db)
 ):
     """Retorna las mediciones pertenecientes al acuario especificado y al usuario activo."""
+    tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
     query = db.query(Measurement).filter(
         Measurement.user_id == current_user.id,
         Measurement.tank_id == tank_id
@@ -906,6 +1431,13 @@ def get_measurements(
     db: Session = Depends(get_db)
 ):
     """Retorna únicamente las mediciones pertenecientes al usuario autenticado."""
+    if tank_id:
+        tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+        if not tank:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Acuario no encontrado o no pertenece a tu cuenta."
+            )
     query = db.query(Measurement).filter(Measurement.user_id == current_user.id)
     if tank_id:
         query = query.filter(Measurement.tank_id == tank_id)
@@ -928,6 +1460,13 @@ def get_predictions(
     db: Session = Depends(get_db)
 ):
     """Calcula predicciones de consumo y cambios de agua exclusivamente para el usuario activo."""
+    if tank_id:
+        tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+        if not tank:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Acuario no encontrado o no pertenece a tu cuenta."
+            )
     query = db.query(Measurement).filter(Measurement.user_id == current_user.id)
     if tank_id:
         query = query.filter(Measurement.tank_id == tank_id)
@@ -940,6 +1479,25 @@ def get_predictions(
 # ==============================================================================
 # 📷 ENDPOINT DE VISIÓN ARTIFICIAL (IA VISION)
 # ==============================================================================
+# 📷 ENDPOINTS DE VISIÓN ARTIFICIAL (IA VISION & CUOTA)
+# ==============================================================================
+
+@app.get(
+    "/api/scan-quota",
+    summary="Consultar cuota restante de escaneos IA del usuario"
+)
+def get_user_scan_quota(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna la información de cuota diaria y escaneos restantes del usuario autenticado.
+    No consume ninguna cuota.
+    """
+    return scan_quota_manager.get_quota_info(
+        user_id=current_user.id,
+        subscription_tier=current_user.subscription_tier,
+        is_admin=current_user.is_admin
+    )
 
 @app.post(
     "/api/scan-measurement",
@@ -948,19 +1506,46 @@ def get_predictions(
 )
 def scan_measurement_photo(
     payload: ScanMeasurementRequest,
-    current_user: Optional[User] = Depends(get_optional_current_user)
+    response: Response,
+    current_user: User = Depends(get_current_user)
 ):
     """
     Recibe una fotografía en Base64 tomada por el móvil, la procesa mediante
     Google Gemini Vision e identifica el parámetro, valor numérico y test kit.
+    Requiere autenticación activa del usuario.
+    Aplica:
+    1. Rate limit y cuota diaria por usuario para proteger costos de Gemini.
+    2. Validación de magic bytes (JPEG/PNG/WebP), máx. 5 MB, re-codificación con Pillow y purga de EXIF/GPS.
+    3. Tratamiento del texto en la imagen como dato observacional, nunca instrucción.
+    4. Toda respuesta es un borrador no persistido en BD que requiere revisión humana.
     """
+    # 1. Aplicar rate limit y cuota diaria por usuario
+    quota_info = scan_quota_manager.check_and_consume(
+        user_id=current_user.id,
+        subscription_tier=current_user.subscription_tier,
+        is_admin=current_user.is_admin
+    )
+
+    # Cabeceras de rate limiting en la respuesta
+    response.headers["X-RateLimit-Limit"] = str(quota_info["daily_quota"])
+    response.headers["X-RateLimit-Remaining"] = str(quota_info["remaining_today"])
+    response.headers["X-RateLimit-Reset"] = str(quota_info["reset_seconds"])
+
     try:
         result = analyze_test_image(
             image_data=payload.image_base64,
             preferred_parameter=payload.preferred_parameter,
-            allow_demo_fallback=payload.demo_fallback
+            allow_demo_fallback=payload.demo_fallback,
+            save_image=payload.save_image
         )
+        result.remaining_scans_today = quota_info["remaining_today"]
+        result.daily_quota = quota_info["daily_quota"]
         return result
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -981,39 +1566,64 @@ router = APIRouter()
 )
 def obtener_analisis_json(
     data: AquariumDataRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Endpoint estructurado para obtener diagnóstico predictivo en formato JSON puro.
-    Ejecuta inferencia técnica con Gemini mediante esquemas tipados.
+    Ejecuta inferencia técnica con Gemini mediante esquemas tipados verificando pertenencia de datos (Anti-IDOR).
     Si se especifica acuario_id o tank_id, consulta automáticamente el historial real de las últimas 48h.
     """
+    if data.is_draft:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lectura de cámara en estado borrador (sin confirmar): toda lectura por visión es un borrador que el usuario debe confirmar o corregir antes de usarse en un diagnóstico."
+        )
+
     try:
         data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
         target_id = data.acuario_id or data.tank_id
         if target_id:
+            tank_obj = db.query(Tank).filter(Tank.id == target_id, Tank.user_id == current_user.id).first()
+            if not tank_obj:
+                try:
+                    legacy_acuario = db.query(Acuario).filter(Acuario.id == target_id, Acuario.usuario_id == str(current_user.id)).first()
+                    if legacy_acuario:
+                        tank_obj = legacy_acuario
+                except Exception:
+                    db.rollback()
+
+            if not tank_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Acuario no encontrado o no pertenece a tu cuenta."
+                )
+
             if not data.tendencia_reciente or data.tendencia_reciente in ["Estable en las últimas 24h", "Estable"]:
                 historial_48h = obtener_tendencia_ultimas_48h(db, target_id)
                 data_dict["tendencia_reciente"] = historial_48h
-            tank_obj = db.query(Tank).filter(Tank.id == target_id).first() or db.query(Acuario).filter(Acuario.id == target_id).first()
-            if tank_obj:
-                db_type = getattr(tank_obj, "tank_type", None) or getattr(tank_obj, "tipo", None)
-                if db_type and (not data_dict.get("tipo") or data_dict.get("tipo") == "mixto"):
-                    data_dict["tipo"] = db_type
-                    data_dict["tank_type"] = db_type
-                if not data_dict.get("reef_profile"):
-                    data_dict["reef_profile"] = getattr(tank_obj, "reef_profile", None)
-                if not data_dict.get("dosing_method"):
-                    data_dict["dosing_method"] = getattr(tank_obj, "dosing_method", None)
-                if not data_dict.get("lighting_par"):
-                    data_dict["lighting_par"] = getattr(tank_obj, "lighting_par", None)
-                if not data_dict.get("flow_profile"):
-                    data_dict["flow_profile"] = getattr(tank_obj, "flow_profile", None)
 
-            # Extraer mediciones recientes para evaluación de alertas de delta KH y dosificación
+            db_type = getattr(tank_obj, "tank_type", None) or getattr(tank_obj, "tipo", None)
+            if db_type and (not data_dict.get("tipo") or data_dict.get("tipo") == "mixto"):
+                data_dict["tipo"] = db_type
+                data_dict["tank_type"] = db_type
+            if not data_dict.get("reef_profile"):
+                data_dict["reef_profile"] = getattr(tank_obj, "reef_profile", None)
+            if not data_dict.get("dosing_method"):
+                data_dict["dosing_method"] = getattr(tank_obj, "dosing_method", None)
+            if not data_dict.get("lighting_par"):
+                data_dict["lighting_par"] = getattr(tank_obj, "lighting_par", None)
+            if not data_dict.get("flow_profile"):
+                data_dict["flow_profile"] = getattr(tank_obj, "flow_profile", None)
+
+            # Extraer mediciones recientes para evaluación de alertas de delta KH y dosificación (excluyendo borradores no confirmados)
             recent_meas = (
                 db.query(Measurement)
-                .filter(Measurement.tank_id == target_id)
+                .filter(
+                    Measurement.tank_id == target_id,
+                    Measurement.user_id == current_user.id,
+                    (Measurement.is_draft == False) | (Measurement.is_draft == None)
+                )
                 .order_by(Measurement.timestamp.desc())
                 .limit(20)
                 .all()
@@ -1036,6 +1646,7 @@ def obtener_analisis_json(
             # Extraer tareas de mantenimiento activas para correlación diagnóstica con IA
             active_maint = db.query(MaintenanceTask).filter(
                 MaintenanceTask.aquarium_id == target_id,
+                MaintenanceTask.user_id == current_user.id,
                 MaintenanceTask.is_enabled == True
             ).all()
             if active_maint:
@@ -1043,11 +1654,25 @@ def obtener_analisis_json(
                     task_to_response_dict(t) for t in active_maint
                 ]
 
-        resultado_estructurado = analizar_parametros_estructurado(data_dict)
+        resultado_estructurado = analizar_parametros_estructurado(
+            data_dict,
+            db=db,
+            user_id=current_user.id,
+            tank_id=target_id
+        )
         return {"status": "success", "data": resultado_estructurado}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error en obtener_analisis_json: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error en obtener_analisis_json: {e}. Activando fallback determinístico sin error 500.")
+        from backend.ai_validator import generate_rules_deterministic_diagnosis
+        fallback_res = generate_rules_deterministic_diagnosis(
+            aquarium_name=data.nombre_acuario or "Principal",
+            biotope=data.tipo or "Acuario",
+            rules_alerts=[{"parameter": "diagnóstico", "status": "safe", "severity": "watch", "message": "Diagnóstico de respaldo determinístico por reglas de seguridad."}],
+            measured_intervals=[]
+        )
+        return {"status": "success", "data": fallback_res}
 
 @router.get(
     "/api/tanks/{tank_id}/tendencia-48h",
@@ -1060,12 +1685,29 @@ def obtener_analisis_json(
 def endpoint_tendencia_48h(
     tank_id: Optional[int] = None,
     acuario_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Consulta las mediciones registradas en las últimas 48h y devuelve la cadena formateada."""
+    """Consulta las mediciones registradas en las últimas 48h verificando que el tanque pertenezca al usuario (Anti-IDOR)."""
     target_id = tank_id or acuario_id
     if not target_id:
         raise HTTPException(status_code=400, detail="Debe proporcionarse el ID del acuario.")
+
+    tank = db.query(Tank).filter(Tank.id == target_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        try:
+            legacy_acuario = db.query(Acuario).filter(Acuario.id == target_id, Acuario.usuario_id == str(current_user.id)).first()
+            if legacy_acuario:
+                tank = legacy_acuario
+        except Exception:
+            db.rollback()
+
+    if not tank:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
+
     resumen = obtener_tendencia_ultimas_48h(db, target_id)
     return {"status": "success", "acuario_id": target_id, "tendencia": resumen}
 
@@ -1082,20 +1724,44 @@ def endpoint_tendencia_48h(
 def endpoint_analisis_con_historial(
     acuario_id: Optional[int] = None,
     tank_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     target_id = acuario_id or tank_id
     if not target_id:
         raise HTTPException(status_code=400, detail="Debe especificarse el ID del acuario.")
 
+    tank_obj = db.query(Tank).filter(Tank.id == target_id, Tank.user_id == current_user.id).first()
+    if not tank_obj:
+        try:
+            legacy_acuario = db.query(Acuario).filter(Acuario.id == target_id, Acuario.usuario_id == str(current_user.id)).first()
+            if legacy_acuario:
+                tank_obj = legacy_acuario
+        except Exception:
+            db.rollback()
+
+    if not tank_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
+
     try:
         # 1. Obtener la última medición actual del acuario
         ultima_medicion = (
-            db.query(MedicionAcuario)
-            .filter(MedicionAcuario.acuario_id == target_id)
-            .order_by(MedicionAcuario.fecha_registro.desc())
+            db.query(Measurement)
+            .filter(Measurement.tank_id == target_id, Measurement.user_id == current_user.id)
+            .order_by(Measurement.timestamp.desc())
             .first()
         )
+
+        if not ultima_medicion:
+            ultima_medicion = (
+                db.query(MedicionAcuario)
+                .filter(MedicionAcuario.acuario_id == target_id)
+                .order_by(MedicionAcuario.fecha_registro.desc())
+                .first()
+            )
 
         if not ultima_medicion:
             raise HTTPException(status_code=404, detail="No se encontraron mediciones para este acuario.")
@@ -1104,18 +1770,13 @@ def endpoint_analisis_con_historial(
         tendencia = obtener_tendencia_ultimas_48h(db, target_id)
 
         # 3. Preparar el paquete de datos para la IA
-        tank_obj = (
-            db.query(Tank).filter(Tank.id == target_id).first()
-            or (ultima_medicion.acuario if hasattr(ultima_medicion, "acuario") and ultima_medicion.acuario else None)
-            or db.query(Acuario).filter(Acuario.id == target_id).first()
-        )
         nombre_acuario = getattr(tank_obj, "nombre", None) or getattr(tank_obj, "name", "Principal") if tank_obj else "Principal"
         volumen_litros = float(getattr(tank_obj, "volumen", None) or getattr(tank_obj, "volume_liters", 280.0) if tank_obj else 280.0)
         tipo_acuario = getattr(tank_obj, "tank_type", None) or getattr(tank_obj, "tipo", "mixto") if tank_obj else "mixto"
 
         recent_meas = (
             db.query(Measurement)
-            .filter(Measurement.tank_id == target_id)
+            .filter(Measurement.tank_id == target_id, Measurement.user_id == current_user.id)
             .order_by(Measurement.timestamp.desc())
             .limit(20)
             .all()
@@ -1162,20 +1823,28 @@ def endpoint_analisis_con_historial(
             "maintenance_tasks_summary": [
                 task_to_response_dict(t) for t in db.query(MaintenanceTask).filter(
                     MaintenanceTask.aquarium_id == target_id,
+                    MaintenanceTask.user_id == current_user.id,
                     MaintenanceTask.is_enabled == True
                 ).all()
             ]
         }
 
-        # 4. Llamar a tu función de Gemini estructurada
+        # 4. Llamar a la función de IA estructurada con verificación y fallback
         resultado_ia = analizar_acuario_estructurado(datos_para_ia)
 
         return {"status": "success", "data": resultado_ia}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error en endpoint_analisis_con_historial: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error en endpoint_analisis_con_historial: {e}. Activando fallback determinístico sin error 500.")
+        from backend.ai_validator import generate_rules_deterministic_diagnosis
+        fallback_res = generate_rules_deterministic_diagnosis(
+            aquarium_name=getattr(tank_obj, "name", "Principal") if tank_obj else "Principal",
+            biotope=getattr(tank_obj, "tank_type", "mixto") if tank_obj else "mixto",
+            rules_alerts=[{"parameter": "diagnóstico", "status": "safe", "severity": "watch", "message": "Diagnóstico de respaldo determinístico por reglas de seguridad."}],
+            measured_intervals=[]
+        )
+        return {"status": "success", "data": fallback_res}
 
 app.include_router(router)
 
@@ -1184,7 +1853,24 @@ app.include_router(router)
     response_model=AquariumAnalysisResponse,
     summary="Analizar parámetros químicos y prever colapsos con IA (AquaPulse AI)"
 )
-def endpoint_analizar_acuario(data: AquariumDataRequest):
+def endpoint_analizar_acuario(
+    data: AquariumDataRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini)
+    con Structured Outputs (AnalisisAcuarioSchema).
+    Devuelve diagnóstico estructurado de estado, riesgo potencial predictivo y lista de dosis recomendadas.
+    """
+    try:
+        resultado_ia = analizar_parametros_estructurado(data.model_dump())
+        return AquariumAnalysisResponse(status="success", analisis=resultado_ia)
+    except Exception as e:
+        logger.error(f"Error en endpoint_analizar_acuario: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al generar análisis con IA: {str(e)}"
+        )
     """
     Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini)
     con Structured Outputs (AnalisisAcuarioSchema).
@@ -1212,6 +1898,11 @@ def get_tank_parameters(
     db: Session = Depends(get_db)
 ):
     tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
     from backend.marine_profiles import get_marine_profile
     r_profile = getattr(tank, "reef_profile", None) or getattr(tank, "tank_type", None)
     profile = get_marine_profile(r_profile)
@@ -1258,12 +1949,10 @@ def get_tank_analytics(
 ):
     tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
     if not tank:
-        tank = db.query(Tank).filter(Tank.user_id == current_user.id).first()
-        if not tank:
-            tank = Tank(user_id=current_user.id, name="Mi Acuario", tank_type="reef", volume_liters=280.0)
-            db.add(tank)
-            db.commit()
-            db.refresh(tank)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
 
     measurements = db.query(Measurement).filter(
         Measurement.user_id == current_user.id,
@@ -1355,6 +2044,193 @@ def get_tank_analytics(
             "recommended_liters": tank.volume_liters * ((wc.suggested_percentage or 20) / 100.0),
             "reason": wc.message
         }
+    }
+
+
+@app.get(
+    "/api/marine-profiles",
+    summary="Listar todos los perfiles de acuarios (marinos y de agua dulce)"
+)
+def get_marine_profiles_endpoint():
+    """Retorna el catálogo completo de biotipos y perfiles de referencia oficiales de AquaPulse."""
+    from backend.marine_profiles import MARINE_PROFILES
+    return {
+        "status": "success",
+        "profiles": list(MARINE_PROFILES.values())
+    }
+
+
+@app.post(
+    "/api/diagnostics/feedback",
+    response_model=DiagnosticFeedbackResponse,
+    summary="Reportar diagnóstico incorrecto con consentimiento para auditoría del modelo"
+)
+def report_diagnostic_feedback_endpoint(
+    payload: DiagnosticFeedbackCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Registra el reporte de discrepancia o diagnóstico incorrecto realizado por un usuario (Fase 5).
+    Exige consentimiento explícito previo para almacenar el reporte y usarlo en la auditoría del modelo.
+    """
+    if not payload.consent_given:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Se requiere otorgar consentimiento explícito para remitir el reporte a auditoría."
+        )
+
+    if payload.tank_id:
+        tank_check = db.query(Tank).filter(Tank.id == payload.tank_id, Tank.user_id == current_user.id).first()
+        if not tank_check:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Acuario no encontrado o no pertenece a tu cuenta."
+            )
+
+    feedback_record = DiagnosticFeedback(
+        user_id=current_user.id,
+        tank_id=payload.tank_id,
+        diagnosis_summary=payload.diagnosis_summary,
+        severity=payload.severity,
+        user_comment=payload.user_comment.strip(),
+        category=payload.category or "incorrect_diagnosis",
+        consent_given=True
+    )
+    db.add(feedback_record)
+    db.commit()
+    db.refresh(feedback_record)
+
+    logger.info(f"Feedback de diagnóstico registrado (id={feedback_record.id}, user={current_user.email}): {payload.user_comment[:60]}...")
+
+    return DiagnosticFeedbackResponse(
+        status="success",
+        message="Reporte recibido correctamente. Gracias por colaborar con la seguridad y precisión de AquaPulse.",
+        feedback_id=feedback_record.id,
+        consent_given=True
+    )
+
+
+@app.get(
+    "/api/tanks/{tank_id}/corrective-actions",
+    summary="Obtener recomendaciones de dosificación y acciones correctoras anti-colapso"
+)
+def get_tank_corrective_actions(
+    tank_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Calcula acciones correctoras seguras (Anti-Colapso) para el acuario (Fase 3.3):
+    1. Si la corrección necesaria es menor que el error de medición -> no actuar: 'dentro del margen de error, repite la prueba'.
+    2. Cambio diario permitido = límite_del_perfil - error.
+    3. Extremo que menos corrige: usa el extremo del intervalo que menos corrección exige.
+    4. Coordinación química: nunca corregir dos parámetros que interactúan simultáneamente (Mg > KH > Ca).
+    5. Retest obligatorio antes de cualquier otra adición.
+    """
+    tank = db.query(Tank).filter(Tank.id == tank_id, Tank.user_id == current_user.id).first()
+    if not tank:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Acuario no encontrado o no pertenece a tu cuenta."
+        )
+
+    latest_m = (
+        db.query(Measurement)
+        .filter(Measurement.tank_id == tank.id, Measurement.user_id == current_user.id)
+        .order_by(Measurement.timestamp.desc())
+        .first()
+    )
+    if not latest_m:
+        return {
+            "tank_id": tank_id,
+            "has_measurements": False,
+            "message": "No hay mediciones registradas para calcular correcciones.",
+            "actions": []
+        }
+
+    from backend.marine_profiles import get_marine_profile
+    from backend.uncertainty import (
+        calculate_measurement_uncertainty,
+        calculate_safe_correction,
+        coordinate_chemical_corrections
+    )
+
+    r_prof = getattr(tank, "reef_profile", None) or getattr(tank, "tank_type", None)
+    profile = get_marine_profile(r_prof)
+    targets = profile.get("targets", {})
+
+    raw_corrections = {}
+    param_map = {
+        "kh": latest_m.kh or latest_m.alkalinity_dkh,
+        "calcium": latest_m.calcium or latest_m.calcium_ppm,
+        "magnesium": latest_m.magnesium or latest_m.magnesium_ppm,
+        "salinity": latest_m.salinity or latest_m.salinity_ppt,
+        "temperature": latest_m.temperature or latest_m.temperatura,
+        "nitrate": latest_m.nitrate or latest_m.nitrate_ppm,
+        "phosphate": latest_m.phosphate or latest_m.phosphate_ppm
+    }
+
+    daily_delta_limits = {
+        "kh": targets.get("kh", {}).get("max_daily_delta") or targets.get("kh", {}).get("warn_daily_delta") or 0.5,
+        "calcium": 25.0,
+        "magnesium": 50.0,
+        "salinity": 1.0,
+        "temperature": 1.0,
+        "nitrate": 5.0,
+        "phosphate": 0.05
+    }
+
+    kit_name = getattr(latest_m, "kit", None)
+    is_cam = bool(getattr(latest_m, "is_camera_scan", False))
+
+    for p_key, current_val in param_map.items():
+        if current_val is not None and p_key in targets:
+            t_spec = targets[p_key]
+            t_min = t_spec.get("min")
+            t_max = t_spec.get("max")
+            target_mid = t_spec.get("target") or t_spec.get("ideal") or ((t_min + t_max) / 2.0 if (t_min is not None and t_max is not None) else None)
+
+            if target_mid is not None and (t_min is not None and t_max is not None):
+                if current_val < t_min or current_val > t_max:
+                    target_goal = t_min if current_val < t_min else t_max
+                    u_int = calculate_measurement_uncertainty(p_key, current_val, kit=kit_name, is_camera_scan=is_cam)
+                    max_daily = daily_delta_limits.get(p_key, 0.5)
+
+                    action = calculate_safe_correction(
+                        parameter=p_key,
+                        current_value=float(current_val),
+                        target_value=float(target_goal),
+                        error=u_int.error,
+                        profile_max_daily_change=float(max_daily)
+                    )
+                    raw_corrections[p_key] = action
+
+    coordinated = coordinate_chemical_corrections(raw_corrections)
+    actions_dict = {k: (act.model_dump() if hasattr(act, "model_dump") else act.dict()) for k, act in coordinated.items()}
+    actions_list = list(actions_dict.values())
+    has_active = any(a.get("can_act", False) for a in actions_list)
+
+    # Resumen metrológico y químico
+    paused_count = sum(1 for a in actions_list if a.get("status") == "paused_interaction")
+    if paused_count > 0:
+        summary_msg = f"Anti-Colapso activo: Hay {paused_count} ajuste(s) pausados por interacción química (Mg > KH > Ca)."
+    elif has_active:
+        summary_msg = "Ajustes conservadores calculados con margen de error de medición y límites diarios seguros."
+    else:
+        summary_msg = "Parámetros estables o desviaciones dentro del margen de error del kit."
+
+    return {
+        "tank_id": tank.id,
+        "tank_name": tank.name,
+        "water_type": r_prof,
+        "profile": profile["name"],
+        "has_measurements": True,
+        "measured_at": latest_m.timestamp.isoformat(),
+        "actions": actions_dict,
+        "actions_list": actions_list,
+        "has_active_corrections": has_active,
+        "summary": summary_msg
     }
 
 
@@ -1845,7 +2721,7 @@ def cron_send_reminders(
     Requiere encabezado X-CRON-SECRET coincidente con CRON_SECRET del entorno.
     """
     configured_secret = get_cron_secret()
-    if not configured_secret or x_cron_secret != configured_secret:
+    if not configured_secret or not x_cron_secret or not secrets.compare_digest(x_cron_secret, configured_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No autorizado: Encabezado X-CRON-SECRET inválido o ausente."

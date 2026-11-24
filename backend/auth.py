@@ -1,5 +1,6 @@
 import os
 import logging
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
@@ -15,18 +16,26 @@ from backend.models import User
 load_dotenv()
 logger = logging.getLogger("aquapulse.auth")
 
-# Clave secreta robusta de 64 caracteres para firma JWT
-JWT_SECRET = os.environ.get(
-    "JWT_SECRET",
-    "aquapulse_marine_super_secret_jwt_encryption_key_reef_freemium_2026_token"
-)
+# 1. Validación estricta de SECRET_KEY: falla el arranque si falta o está vacía
+RAW_SECRET = os.environ.get("SECRET_KEY") or os.environ.get("JWT_SECRET")
+if not RAW_SECRET or not RAW_SECRET.strip():
+    critical_msg = (
+        "🚨 ERROR CRÍTICO DE SEGURIDAD: La variable de entorno SECRET_KEY no está configurada o está vacía.\n"
+        "AquaPulse se niega a arrancar sin una clave secreta configurada explícitamente en el entorno.\n"
+        "Configura SECRET_KEY en tu archivo .env o en el panel de variables de entorno de tu servidor."
+    )
+    logger.critical(critical_msg)
+    raise RuntimeError(critical_msg)
+
+JWT_SECRET = RAW_SECRET.strip()
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 15  # JWT de vida corta (15 min) según especificación FASE 1
+REFRESH_TOKEN_EXPIRE_DAYS = 7     # Refresh token rotativo de 7 días
 
 security = HTTPBearer(auto_error=False)
 
 def hash_password(password: str) -> str:
-    """Genera hash seguro de contraseña usando bcrypt."""
+    """Genera hash seguro de contraseña usando bcrypt con factor de coste >= 12."""
     salt = bcrypt.gensalt(rounds=12)
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
@@ -43,11 +52,46 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Genera un token JWT firmado con expiración estándar para autenticación."""
+    """Genera un token JWT firmado de vida corta (15 min) para autenticación de API."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire, "iat": datetime.utcnow(), "purpose": "access"})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def create_refresh_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
+    """Genera un refresh token rotativo criptográficamente aleatorio (7 días)."""
+    expire = datetime.utcnow() + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    payload = {
+        "sub": str(user_id),
+        "purpose": "refresh",
+        "jti": secrets.token_hex(16),
+        "exp": expire,
+        "iat": datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_refresh_token(token: str) -> dict:
+    """Valida un refresh token y asegura que tenga purpose='refresh'."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La sesión de refresco ha expirado. Por favor inicia sesión nuevamente."
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de refresco inválido o corrupto."
+        )
+
+    if payload.get("purpose") != "refresh" or "sub" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El token proporcionado no es un token de refresco válido."
+        )
+
+    return payload
 
 def create_password_reset_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
     """Genera un token criptográfico firmado temporal (30 min) para restablecimiento de contraseña."""

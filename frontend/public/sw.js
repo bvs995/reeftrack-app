@@ -20,13 +20,29 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Siempre ir a la red primero para la API y el HTML
+  // SEGURIDAD PWA (Fase 5): NUNCA almacenar ni servir desde caché peticiones a /api/* (datos privados de usuario)
   if (event.request.url.includes('/api/') || event.request.mode === 'navigate') {
     return;
   }
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   );
+});
+
+// ==============================================================================
+// 🔄 BACKGROUND SYNC: COLA OFFLINE DE MEDICIONES (FASE 5)
+// ==============================================================================
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-offline-measurements') {
+    event.waitUntil(
+      self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'SYNC_OFFLINE_MEASUREMENTS' });
+        });
+      })
+    );
+  }
 });
 
 // ==============================================================================

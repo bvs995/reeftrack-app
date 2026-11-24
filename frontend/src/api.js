@@ -164,14 +164,33 @@ export async function fetchPredictions() {
   return res.json();
 }
 
-export async function scanMeasurement(imageBase64, preferredParameter = null) {
+export async function fetchCorrectiveActions(tankId) {
+  const res = await authFetch(`/tanks/${tankId}/corrective-actions`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener acciones correctoras anti-colapso');
+  }
+  return res.json();
+}
+
+export async function fetchScanQuota() {
+  const res = await authFetch('/scan-quota');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener la cuota de escaneos IA');
+  }
+  return res.json();
+}
+
+export async function scanMeasurement(imageBase64, preferredParameter = null, saveImage = false) {
   const res = await authFetch('/scan-measurement', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       image_base64: imageBase64,
       preferred_parameter: preferredParameter,
-      demo_fallback: true
+      demo_fallback: true,
+      save_image: saveImage
     }),
   });
   if (!res.ok) {
@@ -355,18 +374,34 @@ export async function recordMeasurement(tankId, data) {
     payload.temperature = parseFloat(payload.temperatura);
   }
 
+  // Control offline: si no hay conexión, encolar en IndexedDB con ID idempotente
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const { enqueueOfflineMeasurement } = await import('./utils/offlineQueue');
+    const queued = await enqueueOfflineMeasurement(tankId, payload);
+    return { ...queued.payload, id: queued.client_uuid, is_offline_pending: true };
+  }
+
   // Soporta tanto la ruta /api/tanks/:id/measurements como /api/measurements
   const targetUrl = tankId ? `/tanks/${tankId}/measurements` : '/measurements';
-  const res = await authFetch(targetUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || 'Error al registrar medición');
+  try {
+    const res = await authFetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Error al registrar medición');
+    }
+    return res.json();
+  } catch (err) {
+    if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('Network')) {
+      const { enqueueOfflineMeasurement } = await import('./utils/offlineQueue');
+      const queued = await enqueueOfflineMeasurement(tankId, payload);
+      return { ...queued.payload, id: queued.client_uuid, is_offline_pending: true };
+    }
+    throw err;
   }
-  return res.json();
 }
 
 export async function recordBatchMeasurements(tankId, batchData) {
@@ -567,6 +602,28 @@ export async function sendTestPush() {
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
     throw new Error(errData.detail || 'Error al enviar notificación de prueba');
+  }
+  return res.json();
+}
+
+export async function fetchMarineProfiles() {
+  const res = await authFetch('/marine-profiles');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al obtener perfiles marinos');
+  }
+  return res.json();
+}
+
+export async function sendDiagnosticFeedback(feedbackData) {
+  const res = await authFetch('/diagnostics/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(feedbackData),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al enviar reporte de feedback');
   }
   return res.json();
 }
