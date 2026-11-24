@@ -492,36 +492,19 @@ def startup_event():
     except Exception as e:
         logger.warning(f"Aviso durante seed_database_if_empty en startup: {e}")
 
-@app.get("/api/health", summary="Monitor operativo de salud del sistema, base de datos y IA")
+@app.get("/api/health", summary="Health check público mínimo del servicio y base de datos (P2.13)")
 def health_check(db: Session = Depends(get_db)):
+    """
+    Endpoint público mínimo: solo realiza ping a la base de datos y retorna {'status': 'ok'}.
+    Las métricas de IA (gasto, descarte) están protegidas en /api/admin/ai-audit-stats.
+    """
     db_ok = check_db_connection()
-    from backend.services.ai_service import get_ai_audit_statistics
-    ai_stats = get_ai_audit_statistics(db)
-
-    # El servicio está 'degraded' si la tasa de descarte es anómala o si se excedió el presupuesto
-    is_degraded = ai_stats.get("discard_rate_alert") or ai_stats.get("budget_status") == "exceeded"
-    status_str = "online" if db_ok and not is_degraded else ("degraded" if db_ok else "offline")
-
-    health_data = {
-        "status": status_str,
-        "database": "connected" if db_ok else "disconnected",
-        "service": "AquaPulse Multi-User Predictive Engine",
-        "timestamp": datetime.utcnow().isoformat(),
-        "ai_operational_monitor": {
-            "budget_status": ai_stats["budget_status"],
-            "month_spend_usd": ai_stats["total_cost_usd"],
-            "budget_limit_usd": ai_stats["budget_limit_usd"],
-            "recent_evaluations": ai_stats["total_evaluations"],
-            "discard_rate": ai_stats["discard_rate"],
-            "discard_rate_alert": ai_stats["discard_rate_alert"]
-        }
-    }
     if not db_ok:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=health_data
+            detail={"status": "error", "database": "disconnected"}
         )
-    return health_data
+    return {"status": "ok", "database": "connected"}
 
 
 @app.get(

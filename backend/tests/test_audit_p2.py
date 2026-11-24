@@ -52,3 +52,86 @@ class TestAuditP2Point12:
         ci_content = ci_path.read_text(encoding="utf-8")
         assert "pip-audit" in ci_content, "CI must run pip-audit"
         assert "pytest" in ci_content, "CI must run pytest"
+
+
+# ==============================================================================
+# P2.13 - /api/health mínimo y métricas operativas de IA solo para admin
+# ==============================================================================
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+from backend.main import app
+from backend.database import get_db, SessionLocal
+from backend.models import User
+from backend.auth import hash_password, create_access_token
+
+client = TestClient(app)
+
+class TestAuditP2Point13:
+    @classmethod
+    def setup_class(cls):
+        db = SessionLocal()
+        # Admin user
+        admin = db.query(User).filter(User.email == "admin_health_p2@example.com").first()
+        if not admin:
+            admin = User(
+                email="admin_health_p2@example.com",
+                hashed_password=hash_password("AdminPass123!"),
+                is_admin=True,
+                is_active=True,
+                email_verified=True
+            )
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+        cls.admin_token = create_access_token({"sub": str(admin.id), "email": admin.email})
+
+        # Regular user
+        reg = db.query(User).filter(User.email == "reg_health_p2@example.com").first()
+        if not reg:
+            reg = User(
+                email="reg_health_p2@example.com",
+                hashed_password=hash_password("UserPass123!"),
+                is_admin=False,
+                is_active=True,
+                email_verified=True
+            )
+            db.add(reg)
+            db.commit()
+            db.refresh(reg)
+        cls.user_token = create_access_token({"sub": str(reg.id), "email": reg.email})
+        db.close()
+
+    def test_public_health_is_minimal_and_contains_no_ai_metrics(self):
+        res = client.get("/api/health")
+        assert res.status_code == 200
+        data = res.json()
+        # Minimal response
+        assert data.get("status") == "ok"
+        # Must NOT leak AI metrics or operational monitoring
+        assert "ai_operational_monitor" not in data
+        assert "month_spend_usd" not in data
+        assert "budget_status" not in data
+        assert "discard_rate" not in data
+        assert "discard_rate_alert" not in data
+
+    def test_public_health_returns_503_when_db_down(self):
+        with patch("backend.main.check_db_connection", return_value=False):
+            res = client.get("/api/health")
+            assert res.status_code == 503
+            data = res.json()
+            assert "ok" not in data.get("status", "")
+
+    def test_ai_audit_metrics_endpoint_requires_admin(self):
+        # 1. Anonymous access -> 401
+        res_anon = client.get("/api/admin/ai-audit-stats")
+        assert res_anon.status_code in [401, 403]
+
+        # 2. Regular user access -> 403
+        res_user = client.get("/api/admin/ai-audit-stats", headers={"Authorization": f"Bearer {self.user_token}"})
+        assert res_user.status_code == 403
+
+        # 3. Admin access -> 200 with metrics
+        res_admin = client.get("/api/admin/ai-audit-stats", headers={"Authorization": f"Bearer {self.admin_token}"})
+        assert res_admin.status_code == 200
+        data = res_admin.json()
+        assert "total_cost_usd" in data or "budget_status" in data
