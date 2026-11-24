@@ -189,7 +189,6 @@ export async function scanMeasurement(imageBase64, preferredParameter = null, sa
     body: JSON.stringify({
       image_base64: imageBase64,
       preferred_parameter: preferredParameter,
-      demo_fallback: true,
       save_image: saveImage
     }),
   });

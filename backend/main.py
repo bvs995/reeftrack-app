@@ -1610,10 +1610,11 @@ def scan_measurement_photo(
     response.headers["X-RateLimit-Reset"] = str(quota_info["reset_seconds"])
 
     try:
+        is_dev = os.getenv("ENVIRONMENT", "").strip().lower() == "development"
         result = analyze_test_image(
             image_data=payload.image_base64,
             preferred_parameter=payload.preferred_parameter,
-            allow_demo_fallback=payload.demo_fallback,
+            allow_demo_fallback=is_dev,
             save_image=payload.save_image
         )
         result.remaining_scans_today = quota_info["remaining_today"]

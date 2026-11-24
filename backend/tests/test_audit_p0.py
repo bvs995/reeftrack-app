@@ -228,3 +228,67 @@ class TestAuditP0Point3:
         res3 = client.get("/..%2fbackend%2fmain.py")
         assert "from fastapi import" not in res3.text, "Path traversal detectado con URL-encoded slash"
         assert res3.status_code == 200
+
+
+class TestAuditP0Point4:
+    """Tests para Punto 4: Eliminación de demo_fallback y errores claros en producción."""
+
+    def test_demo_fallback_field_rejected_in_request(self):
+        """Enviar demo_fallback en el payload de scan-measurement debe ser rechazado (extra='forbid')."""
+        from backend.tests.test_vision_phase2 import create_test_image
+        valid_b64 = create_test_image()
+
+        # Iniciar sesión para obtener token
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "scan_user_p0@aquapulse.io").first()
+        if not user:
+            user = User(email="scan_user_p0@aquapulse.io", hashed_password=hash_password("Pass123!"), is_active=True, email_verified=True)
+            db.add(user)
+            db.commit()
+        db.close()
+
+        login_res = client.post("/api/auth/login", json={"email": "scan_user_p0@aquapulse.io", "password": "Pass123!"})
+        token = login_res.json()["access_token"]
+
+        # Enviar con demo_fallback
+        res = client.post(
+            "/api/scan-measurement",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "image_base64": valid_b64,
+                "demo_fallback": True
+            }
+        )
+        assert res.status_code in (400, 422), "El campo demo_fallback debe ser rechazado por Pydantic (extra='forbid')"
+        assert "extra" in res.json()["detail"].lower() or "not permitted" in res.json()["detail"].lower()
+
+    def test_production_mode_never_returns_invented_demo_values_when_gemini_fails(self, monkeypatch):
+        """En producción, si Gemini falla o no hay clave, devuelve error claro y NUNCA valores inventados."""
+        import os
+        from unittest.mock import patch
+        from backend.tests.test_vision_phase2 import create_test_image
+        valid_b64 = create_test_image()
+
+        # Simular entorno de producción sin clave de Gemini
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("GEMINI_API_KEY", "")
+
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "scan_user_p0@aquapulse.io").first()
+        token = create_access_token({"sub": str(user.id), "email": user.email, "token_version": 1})
+        db.close()
+
+        res = client.post(
+            "/api/scan-measurement",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"image_base64": valid_b64}
+        )
+
+        assert res.status_code in (400, 422, 502, 503) or (res.status_code == 200 and res.json().get("success") is False)
+        if res.status_code == 200:
+            data = res.json()
+            assert data.get("value") is None, "En producción NUNCA se deben inventar valores de prueba"
+            assert "manualmente" in data.get("message", "").lower()
+        else:
+            detail = res.json().get("detail", "").lower()
+            assert "manualmente" in detail or "no se pudo leer" in detail or "no tiene una clave" in detail
