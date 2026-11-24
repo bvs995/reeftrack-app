@@ -232,12 +232,16 @@ class UserScanQuotaManager:
         self._lock = threading.Lock()
         self._usage = {}
 
-    def _get_daily_limit(self, subscription_tier: str, is_admin: bool) -> int:
+    @classmethod
+    def get_daily_limit(cls, subscription_tier: str = "free", is_admin: bool = False, is_premium: bool = False) -> int:
         if is_admin:
             return int(os.environ.get("SCAN_DAILY_LIMIT_ADMIN", "500"))
-        if subscription_tier == "premium":
-            return int(os.environ.get("SCAN_DAILY_LIMIT_PREMIUM", "100"))
+        if is_premium or subscription_tier == "premium":
+            return int(os.environ.get("SCAN_DAILY_LIMIT_PREMIUM", "25"))
         return int(os.environ.get("SCAN_DAILY_LIMIT_FREE", "5"))
+
+    def _get_daily_limit(self, subscription_tier: str, is_admin: bool) -> int:
+        return self.get_daily_limit(subscription_tier=subscription_tier, is_admin=is_admin)
 
     def _get_burst_limit(self, subscription_tier: str, is_admin: bool) -> int:
         if is_admin or subscription_tier == "premium":

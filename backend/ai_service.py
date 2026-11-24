@@ -10,7 +10,13 @@ from backend.services.ai_service import (
     DEPRECATED_MODELS,
     validate_gemini_model,
     AI_GENERATION_MAX_OUTPUT_TOKENS,
-    AI_GENERATION_THINKING_BUDGET
+    AI_GENERATION_THINKING_BUDGET,
+    USER_MONTHLY_AI_BUDGET_USD,
+    get_current_month_user_ai_spend,
+    should_execute_double_pass,
+    get_diagnosis_cache_key,
+    check_diagnosis_cache,
+    set_diagnosis_cache
 )
 from backend.ai_validator import (
     AIDiagnosisOutput,
@@ -52,5 +58,11 @@ __all__ = [
     "DEPRECATED_MODELS",
     "validate_gemini_model",
     "AI_GENERATION_MAX_OUTPUT_TOKENS",
-    "AI_GENERATION_THINKING_BUDGET"
+    "AI_GENERATION_THINKING_BUDGET",
+    "USER_MONTHLY_AI_BUDGET_USD",
+    "get_current_month_user_ai_spend",
+    "should_execute_double_pass",
+    "get_diagnosis_cache_key",
+    "check_diagnosis_cache",
+    "set_diagnosis_cache"
 ]

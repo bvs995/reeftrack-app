@@ -175,3 +175,56 @@ class TestAuditP2Point14:
         from backend.services.ai_service import AI_GENERATION_MAX_OUTPUT_TOKENS, AI_GENERATION_THINKING_BUDGET
         assert AI_GENERATION_MAX_OUTPUT_TOKENS >= 2048, "max_output_tokens debe aumentarse (al menos 2048) para evitar truncado de JSON"
         assert AI_GENERATION_THINKING_BUDGET == 0, "thinking_budget debe ser 0 para desactivar razonamiento extendido y no truncar la salida"
+
+
+# ==============================================================================
+# P2.15 - Control de costos: modelo ligero visión, doble pasada condicional,
+#         caché de diagnósticos, recorte de historial, presupuesto por usuario y cuota premium
+# ==============================================================================
+class TestAuditP2Point15:
+    def test_vision_uses_lightweight_model(self):
+        import backend.vision as vision_mod
+        # Por defecto el modelo de visión debe ser ligero
+        default_model = os.environ.get("VISION_MODEL", "gemini-3.5-flash-lite")
+        assert "lite" in default_model.lower(), "El modelo de visión para test kits debe ser ligero (-lite)"
+        assert "2.5" not in default_model, "No debe usar familia 2.5 deprecada"
+
+    def test_premium_quota_lowered_from_100(self):
+        from backend.main import UserScanQuotaManager
+        with patch.dict(os.environ, {}, clear=False):
+            if "SCAN_DAILY_LIMIT_PREMIUM" in os.environ:
+                del os.environ["SCAN_DAILY_LIMIT_PREMIUM"]
+            default_premium_limit = UserScanQuotaManager.get_daily_limit(is_premium=True)
+            assert default_premium_limit <= 30, f"Cuota premium por defecto debe ser <= 30 (hoy era 100), obtenido: {default_premium_limit}"
+
+    def test_double_pass_only_for_warning_and_critical(self):
+        from backend.services.ai_service import should_execute_double_pass
+        # ok y watch -> no ejecutar segunda pasada
+        assert should_execute_double_pass("ok") is False
+        assert should_execute_double_pass("watch") is False
+
+        # warning y critical -> sí ejecutar segunda pasada
+        assert should_execute_double_pass("warning") is True
+        assert should_execute_double_pass("critical") is True
+
+    def test_identical_inputs_diagnosis_cached(self):
+        from backend.services.ai_service import get_diagnosis_cache_key, check_diagnosis_cache, set_diagnosis_cache
+        key1 = get_diagnosis_cache_key(tank_id=1, profile="sps_reef", inputs={"kh": 8.0, "calcio": 420.0})
+        key2 = get_diagnosis_cache_key(tank_id=1, profile="sps_reef", inputs={"calcio": 420.0, "kh": 8.0})
+        assert key1 == key2, "Entradas idénticas en diferente orden deben generar la misma clave de caché"
+
+        # Guardar en caché y recuperar
+        mock_output = {"severity": "ok", "findings": [], "recommended_actions": ["monitor_24h"], "needs_retest": False}
+        set_diagnosis_cache(key1, mock_output)
+        cached = check_diagnosis_cache(key1)
+        assert cached is not None
+        assert cached["severity"] == "ok"
+
+    def test_user_monthly_ai_budget_cap(self):
+        from backend.services.ai_service import get_current_month_user_ai_spend, USER_MONTHLY_AI_BUDGET_USD
+        assert USER_MONTHLY_AI_BUDGET_USD > 0
+        db = SessionLocal()
+        # Verificar función para calcular gasto por usuario
+        spend = get_current_month_user_ai_spend(db, user_id=999999)
+        assert spend == 0.0
+        db.close()

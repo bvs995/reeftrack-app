@@ -289,8 +289,8 @@ def analyze_test_image(
         from google import genai
         from google.genai import types
 
-        primary_model = os.environ.get("VISION_MODEL", "gemini-3.1-flash-lite")
-        fallback_models = [primary_model, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash-lite"]
+        primary_model = os.environ.get("VISION_MODEL", "gemini-3.5-flash-lite")
+        fallback_models = [primary_model, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
         candidate_models = list(dict.fromkeys(fallback_models))
 
         client = genai.Client(api_key=api_key)

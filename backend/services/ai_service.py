@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple, Set
@@ -138,7 +139,7 @@ def get_current_month_ai_spend(db: Optional[Session]) -> float:
     if not db:
         return 0.0
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         first_day_of_month = datetime(now.year, now.month, 1)
         total = db.query(func.coalesce(func.sum(DiagnosticAudit.cost_usd), 0.0)).filter(
             DiagnosticAudit.created_at >= first_day_of_month
@@ -147,6 +148,68 @@ def get_current_month_ai_spend(db: Optional[Session]) -> float:
     except Exception as e:
         logger.debug(f"Aviso consultando gasto de IA: {e}")
         return 0.0
+
+
+# Presupuesto mensual individual por usuario (P2.15)
+USER_MONTHLY_AI_BUDGET_USD = float(os.getenv("USER_MONTHLY_AI_BUDGET_USD", "2.00"))
+
+
+def get_current_month_user_ai_spend(db: Optional[Session], user_id: Optional[int]) -> float:
+    """Calcula el gasto acumulado en USD en llamadas a Gemini por un usuario en el mes en curso (P2.15)."""
+    if not db or not user_id:
+        return 0.0
+    try:
+        now = datetime.now(timezone.utc)
+        first_day_of_month = datetime(now.year, now.month, 1)
+        total = db.query(func.coalesce(func.sum(DiagnosticAudit.cost_usd), 0.0)).filter(
+            DiagnosticAudit.user_id == user_id,
+            DiagnosticAudit.created_at >= first_day_of_month
+        ).scalar()
+        return round(float(total or 0.0), 4)
+    except Exception as e:
+        logger.debug(f"Aviso consultando gasto de IA de usuario: {e}")
+        return 0.0
+
+
+def should_execute_double_pass(rules_max_severity: str) -> bool:
+    """
+    Control de costos (P2.15):
+    Ejecuta la segunda llamada de verificación (doble pasada) únicamente
+    si la severidad calculada por las reglas determinísticas es 'warning' o 'critical'.
+    Para lecturas estables ('ok') o preventivas ('watch'), se ahorra el segundo llamado a Gemini.
+    """
+    return str(rules_max_severity).lower() in ["warning", "critical"]
+
+
+# Caché en memoria para diagnósticos con entradas idénticas (P2.15)
+_DIAGNOSIS_CACHE: Dict[str, Tuple[float, Any]] = {}
+DIAGNOSIS_CACHE_TTL_SECONDS = 900  # 15 minutos
+
+
+def get_diagnosis_cache_key(tank_id: Any, profile: str, inputs: Dict[str, Any]) -> str:
+    """Genera hash determinístico para cachear diagnósticos con entradas idénticas (P2.15)."""
+    norm_inputs = {
+        str(k): round(float(v), 4) if isinstance(v, (int, float)) else str(v)
+        for k, v in sorted(inputs.items()) if v is not None
+    }
+    raw = f"{tank_id}:{profile}:{json.dumps(norm_inputs, sort_keys=True)}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def check_diagnosis_cache(cache_key: str) -> Optional[Any]:
+    now = time.time()
+    if cache_key in _DIAGNOSIS_CACHE:
+        ts, result = _DIAGNOSIS_CACHE[cache_key]
+        if now - ts <= DIAGNOSIS_CACHE_TTL_SECONDS:
+            return result
+        del _DIAGNOSIS_CACHE[cache_key]
+    return None
+
+
+def set_diagnosis_cache(cache_key: str, result: Any) -> None:
+    if len(_DIAGNOSIS_CACHE) > 1000:
+        _DIAGNOSIS_CACHE.clear()
+    _DIAGNOSIS_CACHE[cache_key] = (time.time(), result)
 
 
 def record_diagnostic_audit(
@@ -510,11 +573,11 @@ def analizar_parametros_estructurado(
             days_since_last_measurement=days_since_last
         )
 
-    # Control de Presupuesto Operativo Gemini (Fase 7)
+    # Control de Presupuesto Operativo Gemini Global (Fase 7)
     budget_limit_usd = float(os.getenv("GEMINI_MONTHLY_BUDGET_USD", "25.0"))
     current_spend_usd = get_current_month_ai_spend(db)
     if current_spend_usd >= budget_limit_usd:
-        budget_msg = f"Límite mensual de gasto en IA alcanzado (${current_spend_usd:.2f} >= ${budget_limit_usd:.2f}). Activando modo determinístico por reglas."
+        budget_msg = f"Límite mensual global de gasto en IA alcanzado (${current_spend_usd:.2f} >= ${budget_limit_usd:.2f}). Activando modo determinístico por reglas."
         logger.warning(budget_msg)
         record_diagnostic_audit(
             db=db,
@@ -537,6 +600,44 @@ def analizar_parametros_estructurado(
             measured_intervals=list(intervals_dict.values()),
             days_since_last_measurement=days_since_last
         )
+
+    # Control de Presupuesto Operativo por Usuario (P2.15)
+    user_spend_usd = get_current_month_user_ai_spend(db, effective_user_id)
+    if user_spend_usd >= USER_MONTHLY_AI_BUDGET_USD:
+        user_budget_msg = f"Tope mensual de gasto en IA por usuario alcanzado (${user_spend_usd:.2f} >= ${USER_MONTHLY_AI_BUDGET_USD:.2f}). Activando modo determinístico por reglas."
+        logger.warning(user_budget_msg)
+        record_diagnostic_audit(
+            db=db,
+            user_id=effective_user_id,
+            tank_id=effective_tank_id,
+            prompt_version="v1",
+            inputs=raw_params,
+            rules_alerts=all_rules_alerts,
+            raw_ai_output=None,
+            status="budget_exceeded",
+            rejection_reason=user_budget_msg,
+            cost_usd=0.0,
+            token_count=0,
+            latency_ms=round((time.time() - start_time) * 1000, 2)
+        )
+        return generate_rules_deterministic_diagnosis(
+            aquarium_name=nombre,
+            biotope=profile_info["name"],
+            rules_alerts=all_rules_alerts,
+            measured_intervals=list(intervals_dict.values()),
+            days_since_last_measurement=days_since_last
+        )
+
+    # Verificación de Caché de Diagnósticos Idénticos (P2.15)
+    diagnosis_cache_key = get_diagnosis_cache_key(
+        tank_id=effective_tank_id,
+        profile=profile_info.get("name", ""),
+        inputs=raw_params
+    )
+    cached_diagnosis = check_diagnosis_cache(diagnosis_cache_key)
+    if cached_diagnosis is not None:
+        logger.info(f"Diagnóstico recuperado exitosamente desde caché determinística (key: {diagnosis_cache_key[:8]})")
+        return cached_diagnosis
 
     # ==========================================================================
     # PASO 2: GEMINI (EXPLICA, NO DECIDE) CON SYSTEM PROMPT VERSIONADO
@@ -563,6 +664,9 @@ def analizar_parametros_estructurado(
         safe_nombre = sanitize_prompt_text(nombre, max_len=80)
         safe_tendencia = sanitize_prompt_text(tendencia, max_len=500)
 
+        # Recortar tareas de mantenimiento a máximo 5 recientes (P2.15)
+        pruned_maintenance = maintenance_tasks[:5] if isinstance(maintenance_tasks, list) else maintenance_tasks
+
         user_prompt = f"""
         EVALUACIÓN CLÍNICA DETERMINÍSTICA PRE-COMPUTADA (INAPELABLE):
         - Acuario: '{safe_nombre}' ({volumen} L)
@@ -572,7 +676,7 @@ def analizar_parametros_estructurado(
         - Alertas Determinísticas Pre-evaluadas (Inapelables): {json.dumps(all_rules_alerts, ensure_ascii=False)}
         - Severidad máxima calculada por reglas: {rules_max_severity.upper()}
         - Antigüedad del último test: {f'{days_since_last:.1f} días' if days_since_last is not None else 'Sin fecha exacta'}
-        - Correlación de mantenimiento y equipo: {json.dumps(maintenance_tasks, ensure_ascii=False) if maintenance_tasks else 'Al día'}
+        - Correlación de mantenimiento y equipo: {json.dumps(pruned_maintenance, ensure_ascii=False) if pruned_maintenance else 'Al día'}
         - Tendencia reciente: {safe_tendencia}
 
         REGLAS DE RESPUESTA:
@@ -622,39 +726,41 @@ def analizar_parametros_estructurado(
             raise RuntimeError(f"Falla en generación con modelos Gemini: {last_error}")
 
         # ======================================================================
-        # PASO 3: DOBLE PASADA (SEGUNDA REVISIÓN INDEPENDIENTE)
+        # PASO 3: DOBLE PASADA (SEGUNDA REVISIÓN INDEPENDIENTE) CONDICIONAL (P2.15)
+        # Solo se ejecuta si la severidad de las reglas determinísticas es 'warning' o 'critical'
         # ======================================================================
         pass2_output: Optional[AIDiagnosisOutput] = None
-        try:
-            auditor_prompt = (
-                f"Audita críticamente la siguiente evaluación preliminar del acuario '{nombre}' con perfil '{profile_info['name']}':\n"
-                f"Severidad preliminar: {pass1_output.severity}, Acciones: {pass1_output.recommended_actions}\n"
-                f"Alertas determinísticas inapelables: {json.dumps(all_rules_alerts, ensure_ascii=False)}\n"
-                "Emite una segunda evaluación independiente de máxima prudencia biológica respetando estrictamente el catálogo cerrado de acciones."
-            )
-            resp_audit = client.models.generate_content(
-                model=PRIMARY_MODEL,
-                contents=auditor_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.1,
-                    max_output_tokens=AI_GENERATION_MAX_OUTPUT_TOKENS,
-                    thinking_config=types.ThinkingConfig(thinking_budget=AI_GENERATION_THINKING_BUDGET),
-                    response_mime_type="application/json",
-                    response_schema=AIDiagnosisOutput,
-                ),
-            )
-            if resp_audit:
-                if hasattr(resp_audit, "parsed") and resp_audit.parsed is not None:
-                    pass2_output = resp_audit.parsed
-                elif resp_audit.text:
-                    c_txt = resp_audit.text.strip()
-                    if c_txt.startswith("```"):
-                        c_txt = re.sub(r"^```(?:json)?\s*", "", c_txt)
-                        c_txt = re.sub(r"\s*```$", "", c_txt)
-                    pass2_output = AIDiagnosisOutput.model_validate_json(c_txt)
-        except Exception as audit_err:
-            logger.debug(f"Aviso en segunda pasada de auditoría: {audit_err}. Procediendo con verificación estricta de Pasada 1.")
+        if should_execute_double_pass(rules_max_severity):
+            try:
+                auditor_prompt = (
+                    f"Audita críticamente la siguiente evaluación preliminar del acuario '{nombre}' con perfil '{profile_info['name']}':\n"
+                    f"Severidad preliminar: {pass1_output.severity}, Acciones: {pass1_output.recommended_actions}\n"
+                    f"Alertas determinísticas inapelables: {json.dumps(all_rules_alerts, ensure_ascii=False)}\n"
+                    "Emite una segunda evaluación independiente de máxima prudencia biológica respetando estrictamente el catálogo cerrado de acciones."
+                )
+                resp_audit = client.models.generate_content(
+                    model=PRIMARY_MODEL,
+                    contents=auditor_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=0.1,
+                        max_output_tokens=AI_GENERATION_MAX_OUTPUT_TOKENS,
+                        thinking_config=types.ThinkingConfig(thinking_budget=AI_GENERATION_THINKING_BUDGET),
+                        response_mime_type="application/json",
+                        response_schema=AIDiagnosisOutput,
+                    ),
+                )
+                if resp_audit:
+                    if hasattr(resp_audit, "parsed") and resp_audit.parsed is not None:
+                        pass2_output = resp_audit.parsed
+                    elif resp_audit.text:
+                        c_txt = resp_audit.text.strip()
+                        if c_txt.startswith("```"):
+                            c_txt = re.sub(r"^```(?:json)?\s*", "", c_txt)
+                            c_txt = re.sub(r"\s*```$", "", c_txt)
+                        pass2_output = AIDiagnosisOutput.model_validate_json(c_txt)
+            except Exception as audit_err:
+                logger.debug(f"Aviso en segunda pasada de auditoría: {audit_err}. Procediendo con verificación estricta de Pasada 1.")
 
         # Consolidar doble pasada si está disponible
         if pass2_output:
@@ -724,6 +830,8 @@ def analizar_parametros_estructurado(
             latency_ms=latency_ms
         )
 
+        # Cachear diagnóstico sanitizado final (P2.15)
+        set_diagnosis_cache(diagnosis_cache_key, sanitized_output)
         return sanitized_output
 
     except Exception as e:
