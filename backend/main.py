@@ -19,9 +19,17 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger("aquapulse.main")
 
-from backend.database import get_db, init_db, check_db_connection
+from backend.database import get_db, init_db, check_db_connection, SessionLocal
+
+# Asegurar creación inicial de tablas al cargar el módulo
+try:
+    init_db()
+except Exception as _e:
+    logger.debug(f"Aviso en init_db de carga de módulo: {_e}")
 from backend.models import (
     User,
+    UserDailyQuota,
+    RateLimitRecord,
     Tank,
     Measurement,
     UserRegister,
@@ -116,44 +124,113 @@ from backend.vision import (
 # Determinación estricta de entorno
 is_production = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
 
-# Rate limiting in-memory con ventana deslizante para endpoints de autenticación (/api/auth/*)
-auth_attempts: Dict[str, List[float]] = defaultdict(list)
-auth_lock = threading.Lock()
-AUTH_RATE_LIMIT_MAX = 5
-AUTH_RATE_LIMIT_WINDOW_SECONDS = 60.0
+# ==============================================================================
+# RESOLUCIÓN SEGURA DE IP Y RATE LIMITING PERSISTENTE (P1.7)
+# ==============================================================================
 
-def check_auth_rate_limit(request: Request):
-    """Aplica rate limit estricto por IP a los endpoints de autenticación (máx 5 peticiones/minuto)."""
-    ip = request.client.host if request.client else "unknown"
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip = forwarded.split(",")[0].strip()
+TRUSTED_PROXIES = set(
+    ip.strip() for ip in os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1,::1,localhost,testclient").split(",") if ip.strip()
+)
 
+def get_client_ip(request: Request) -> str:
+    """
+    Resuelve la IP real del cliente solo detrás de un proxy de confianza (P1.7).
+    Previene spoofing de cabeceras X-Forwarded-For cuando proviene de clientes no autorizados.
+    """
+    peer_ip = request.client.host if request.client else "127.0.0.1"
+    if peer_ip in TRUSTED_PROXIES or "*" in TRUSTED_PROXIES:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return peer_ip
+
+AUTH_RATE_LIMIT_IP_MAX = int(os.getenv("AUTH_RATE_LIMIT_IP_MAX", "5"))
+AUTH_RATE_LIMIT_EMAIL_MAX = int(os.getenv("AUTH_RATE_LIMIT_EMAIL_MAX", "5"))
+AUTH_RATE_LIMIT_WINDOW_SECONDS = float(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60.0"))
+
+class PersistentAuthAttemptsAdapter(defaultdict):
+    """Adaptador de compatibilidad para auth_attempts que limpia la base de datos en tests."""
+    def __init__(self):
+        super().__init__(list)
+
+    def clear(self):
+        super().clear()
+        try:
+            db = SessionLocal()
+            db.query(RateLimitRecord).filter(RateLimitRecord.action == "auth").delete()
+            db.commit()
+            db.close()
+        except Exception:
+            pass
+
+auth_attempts = PersistentAuthAttemptsAdapter()
+
+def check_auth_rate_limit(request: Request, email: Optional[str] = None):
+    """
+    Aplica rate limit persistente en PostgreSQL/SQLite por IP y por Correo (P1.7).
+    Tolerante con múltiples usuarios detrás de la misma IP móvil/CGNAT.
+    """
+    ip = get_client_ip(request)
     now = time.time()
-    with auth_lock:
-        timestamps = auth_attempts[ip]
-        valid_timestamps = [ts for ts in timestamps if now - ts < AUTH_RATE_LIMIT_WINDOW_SECONDS]
-        if len(valid_timestamps) >= AUTH_RATE_LIMIT_MAX:
-            auth_attempts[ip] = valid_timestamps
+    cutoff = now - AUTH_RATE_LIMIT_WINDOW_SECONDS
+
+    db = SessionLocal()
+    try:
+        # 1. Comprobar límite por IP en BD
+        ip_key = f"auth_ip:{ip}"
+        ip_count = db.query(RateLimitRecord).filter(
+            RateLimitRecord.key == ip_key,
+            RateLimitRecord.action == "auth",
+            RateLimitRecord.timestamp >= cutoff
+        ).count()
+
+        if ip_count >= AUTH_RATE_LIMIT_IP_MAX:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Demasiadas solicitudes de autenticación. Por favor espera un minuto antes de reintentar."
+                detail="Demasiadas solicitudes de autenticación desde esta red. Por favor espera un minuto antes de reintentar."
             )
-        valid_timestamps.append(now)
-        auth_attempts[ip] = valid_timestamps
 
-# Control de cuota diaria y rate limit por usuario para escaneos IA con Gemini
+        # 2. Comprobar límite por email en BD (si se especificó)
+        if email:
+            norm_email = email.strip().lower()
+            email_key = f"auth_email:{norm_email}"
+            email_count = db.query(RateLimitRecord).filter(
+                RateLimitRecord.key == email_key,
+                RateLimitRecord.action == "auth",
+                RateLimitRecord.timestamp >= cutoff
+            ).count()
+
+            if email_count >= AUTH_RATE_LIMIT_EMAIL_MAX:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Demasiados intentos de autenticación para esta cuenta. Por favor espera un minuto antes de reintentar."
+                )
+
+        # 3. Registrar el intento en BD
+        db.add(RateLimitRecord(key=ip_key, action="auth", timestamp=now))
+        if email:
+            db.add(RateLimitRecord(key=f"auth_email:{email.strip().lower()}", action="auth", timestamp=now))
+
+        # Limpieza oportunista de registros viejos (> 1 hora)
+        db.query(RateLimitRecord).filter(RateLimitRecord.timestamp < (now - 3600.0)).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+
+# ==============================================================================
+# CONTROL DE CUOTA DIARIA Y RATE LIMIT PERSISTENTE EN BASE DE DATOS (P1.7)
+# ==============================================================================
+
 class UserScanQuotaManager:
     """
-    Control de cuotas y rate limiting por usuario para escaneos de tests con IA.
-    Protege los costos del modelo de visión (Google Gemini) limitando:
-    - Plan Free: Máximo 5 escaneos por día natural (UTC), burst de 5 peticiones/minuto.
-    - Plan Premium / Admin: Máximo 100 escaneos por día natural (UTC), burst de 15 peticiones/minuto.
+    Control de cuotas y rate limiting persistente en PostgreSQL (P1.7).
+    Cuota diaria compartida entre escaneos y diagnósticos IA.
+    Sobrevive reinicios de workers y se comparte entre múltiples procesos.
     """
     def __init__(self):
         self._lock = threading.Lock()
-        # Estructura: user_id -> {"date": "YYYY-MM-DD", "count": int, "timestamps": [float, ...]}
-        self._usage: Dict[int, Dict[str, Any]] = defaultdict(dict)
+        self._usage = {}
 
     def _get_daily_limit(self, subscription_tier: str, is_admin: bool) -> int:
         if is_admin:
@@ -175,12 +252,15 @@ class UserScanQuotaManager:
         tomorrow_utc = datetime.combine(now_utc.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
         reset_seconds = max(1, int((tomorrow_utc - now_utc).total_seconds()))
 
-        with self._lock:
-            record = self._usage.get(user_id, {})
-            if record.get("date") != today_str:
-                used = 0
-            else:
-                used = record.get("count", 0)
+        db = SessionLocal()
+        try:
+            record = db.query(UserDailyQuota).filter(
+                UserDailyQuota.user_id == user_id,
+                UserDailyQuota.date == today_str
+            ).first()
+            used = record.count if record else 0
+        finally:
+            db.close()
 
         remaining = max(0, daily_limit - used)
         return {
@@ -191,7 +271,7 @@ class UserScanQuotaManager:
             "reset_seconds": reset_seconds
         }
 
-    def check_and_consume(self, user_id: int, subscription_tier: str, is_admin: bool) -> Dict[str, Any]:
+    def check_and_consume(self, user_id: int, subscription_tier: str, is_admin: bool, request: Optional[Request] = None) -> Dict[str, Any]:
         now_utc = datetime.now(timezone.utc)
         now_ts = now_utc.timestamp()
         today_str = now_utc.strftime("%Y-%m-%d")
@@ -201,21 +281,24 @@ class UserScanQuotaManager:
         tomorrow_utc = datetime.combine(now_utc.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
         reset_seconds = max(1, int((tomorrow_utc - now_utc).total_seconds()))
 
-        with self._lock:
-            record = self._usage[user_id]
-            if record.get("date") != today_str:
-                record["date"] = today_str
-                record["count"] = 0
-                record["timestamps"] = []
+        db = SessionLocal()
+        try:
+            # 1. Verificar cuota diaria compartida persistida en BD
+            record = db.query(UserDailyQuota).filter(
+                UserDailyQuota.user_id == user_id,
+                UserDailyQuota.date == today_str
+            ).with_for_update().first() if db.bind.dialect.name != "sqlite" else db.query(UserDailyQuota).filter(
+                UserDailyQuota.user_id == user_id,
+                UserDailyQuota.date == today_str
+            ).first()
 
-            # 1. Verificar cuota diaria primero
-            current_count = record.get("count", 0)
+            current_count = record.count if record else 0
             if current_count >= daily_limit:
                 tier_msg = "plan gratuito" if subscription_tier == "free" and not is_admin else "plan actual"
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
-                        f"Has alcanzado tu límite diario de {daily_limit} escaneos IA en el {tier_msg}. "
+                        f"Has alcanzado tu límite diario de {daily_limit} operaciones IA en el {tier_msg}. "
                         f"Tu cuota se reiniciará a las 00:00 UTC ({reset_seconds // 3600}h {(reset_seconds % 3600) // 60}m restantes), "
                         f"o puedes actualizar a Premium para ampliar tu límite."
                     ),
@@ -226,39 +309,77 @@ class UserScanQuotaManager:
                     }
                 )
 
-            # 2. Verificar burst limit (últimos 60s)
-            timestamps = [ts for ts in record.get("timestamps", []) if now_ts - ts < 60.0]
-            if len(timestamps) >= burst_limit:
-                record["timestamps"] = timestamps
+            # 2. Verificar burst limit por usuario (últimos 60s) en BD
+            user_burst_key = f"burst_user:{user_id}"
+            user_burst_count = db.query(RateLimitRecord).filter(
+                RateLimitRecord.key == user_burst_key,
+                RateLimitRecord.action == "ai_burst",
+                RateLimitRecord.timestamp >= (now_ts - 60.0)
+            ).count()
+
+            if user_burst_count >= burst_limit:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Demasiadas peticiones de escaneo en poco tiempo. Por favor espera un minuto antes de reintentar.",
+                    detail="Demasiadas peticiones de IA en poco tiempo. Por favor espera un minuto antes de reintentar.",
                     headers={
                         "X-RateLimit-Limit": str(daily_limit),
-                        "X-RateLimit-Remaining": str(max(0, daily_limit - record["count"])),
+                        "X-RateLimit-Remaining": str(max(0, daily_limit - current_count)),
                         "X-RateLimit-Reset": str(reset_seconds),
                         "Retry-After": "60"
                     }
                 )
 
-            # 3. Consumir escaneo
-            current_count += 1
-            record["count"] = current_count
-            timestamps.append(now_ts)
-            record["timestamps"] = timestamps
+            # 3. Verificar burst limit por IP (si request está disponible) en BD
+            if request:
+                client_ip = get_client_ip(request)
+                ip_burst_key = f"burst_ip:{client_ip}"
+                ip_burst_count = db.query(RateLimitRecord).filter(
+                    RateLimitRecord.key == ip_burst_key,
+                    RateLimitRecord.action == "ai_burst",
+                    RateLimitRecord.timestamp >= (now_ts - 60.0)
+                ).count()
+                if ip_burst_count >= 30:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Demasiadas peticiones desde tu dirección IP. Por favor espera un minuto.",
+                        headers={"Retry-After": "60"}
+                    )
+                db.add(RateLimitRecord(key=ip_burst_key, action="ai_burst", timestamp=now_ts))
 
-            remaining = max(0, daily_limit - current_count)
+            # 4. Consumir y persistir en BD
+            if record:
+                record.count += 1
+                record.updated_at = datetime.utcnow()
+            else:
+                record = UserDailyQuota(user_id=user_id, date=today_str, count=1)
+                db.add(record)
+
+            db.add(RateLimitRecord(key=user_burst_key, action="ai_burst", timestamp=now_ts))
+            db.commit()
+
+            new_count = current_count + 1
+            remaining = max(0, daily_limit - new_count)
             return {
                 "tier": "admin" if is_admin else subscription_tier,
                 "daily_quota": daily_limit,
-                "used_today": current_count,
+                "used_today": new_count,
                 "remaining_today": remaining,
                 "reset_seconds": reset_seconds
             }
+        finally:
+            db.close()
 
     def reset_for_tests(self):
         with self._lock:
             self._usage.clear()
+        try:
+            db = SessionLocal()
+            db.query(UserDailyQuota).delete()
+            db.query(RateLimitRecord).delete()
+            db.commit()
+            db.close()
+        except Exception:
+            pass
 
 scan_quota_manager = UserScanQuotaManager()
 
@@ -439,7 +560,7 @@ def register_user(
     db: Session = Depends(get_db)
 ):
     """Crea una nueva cuenta de usuario, inicializa su primer acuario y emite token JWT con refresh token en cookie."""
-    check_auth_rate_limit(request)
+    check_auth_rate_limit(request, email=payload.email)
     normalized_email = payload.email.strip().lower()
 
     existing_user = db.query(User).filter(User.email == normalized_email).first()
@@ -521,7 +642,7 @@ def login_user(
     db: Session = Depends(get_db)
 ):
     """Valida credenciales y emite token JWT con refresh token en cookie HttpOnly. Evita enumeración de usuarios."""
-    check_auth_rate_limit(request)
+    check_auth_rate_limit(request, email=payload.email)
     normalized_email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
 
@@ -651,7 +772,7 @@ def forgot_password(
     Por seguridad (OWASP), siempre responde de manera neutral para evitar enumeración de correos.
     El token es de un solo uso y se envía por proveedor transaccional SMTP sin exponerlo en logs.
     """
-    check_auth_rate_limit(request)
+    check_auth_rate_limit(request, email=payload.email)
     normalized_email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
 
@@ -1581,6 +1702,7 @@ def get_user_scan_quota(
 )
 def scan_measurement_photo(
     payload: ScanMeasurementRequest,
+    request: Request,
     response: Response,
     current_user: User = Depends(get_current_user)
 ):
@@ -1598,7 +1720,8 @@ def scan_measurement_photo(
     quota_info = scan_quota_manager.check_and_consume(
         user_id=current_user.id,
         subscription_tier=current_user.subscription_tier,
-        is_admin=current_user.is_admin
+        is_admin=current_user.is_admin,
+        request=request
     )
 
     # Cabeceras de rate limiting en la respuesta
@@ -1642,6 +1765,7 @@ router = APIRouter()
 )
 def obtener_analisis_json(
     data: AquariumDataRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1657,7 +1781,7 @@ def obtener_analisis_json(
         )
 
     # Consumir cuota diaria de IA del usuario
-    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin)
+    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin, request=request)
 
     try:
         data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
@@ -1811,12 +1935,13 @@ def endpoint_tendencia_48h(
     summary="Análisis predictivo con IA inyectando historial de 48h desde base de datos (alias tanks)"
 )
 def endpoint_analisis_con_historial(
+    request: Request,
     acuario_id: Optional[int] = None,
     tank_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin)
+    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin, request=request)
     target_id = acuario_id or tank_id
     if not target_id:
         raise HTTPException(status_code=400, detail="Debe especificarse el ID del acuario.")
@@ -1950,6 +2075,7 @@ app.include_router(router)
 )
 def endpoint_analizar_acuario(
     data: AquariumDataRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1965,7 +2091,7 @@ def endpoint_analizar_acuario(
         )
 
     # Consumir cuota diaria de IA del usuario
-    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin)
+    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin, request=request)
 
     try:
         data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()

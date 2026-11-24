@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func, JSON
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func, JSON, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, synonym
 from backend.database import Base
@@ -259,6 +259,40 @@ class PasswordResetToken(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
 
     user = relationship("User")
+
+
+class UserDailyQuota(Base):
+    """
+    Control de cuota diaria persistente por usuario (P1.7).
+    Compartida entre escaneos y diagnósticos IA en PostgreSQL/SQLite.
+    """
+    __tablename__ = "user_daily_quotas"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD UTC
+    count = Column(Integer, default=0, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_user_daily_quota"),
+    )
+
+    user = relationship("User")
+
+
+class RateLimitRecord(Base):
+    """
+    Registro persistente de intentos para rate limiting (P1.7).
+    Controla límites por IP y por email en PostgreSQL/SQLite.
+    """
+    __tablename__ = "rate_limit_records"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    key = Column(String(255), nullable=False, index=True)      # e.g., 'ip:1.2.3.4', 'email:test@reef.com'
+    action = Column(String(50), nullable=False, index=True)    # 'auth', 'scan_burst', 'ai_burst'
+    timestamp = Column(Float, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
 
 
 # ==============================================================================
