@@ -29,8 +29,11 @@ except Exception as _e:
 from backend.models import (
     User,
     RefreshToken,
+    PasswordResetToken,
     UserDailyQuota,
     RateLimitRecord,
+    DiagnosticAudit,
+    AccountDeleteRequest,
     Tank,
     Measurement,
     UserRegister,
@@ -1109,16 +1112,56 @@ def export_user_data(
 
 @app.delete(
     "/api/user/account",
-    summary="Eliminar permanentemente la cuenta de usuario y todos los datos asociados (Derecho al olvido GDPR)"
+    summary="Eliminar permanentemente o programar borrado de la cuenta de usuario (Derecho al olvido GDPR / P2.16)"
 )
 def delete_user_account(
+    payload: AccountDeleteRequest,
     response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Elimina en cascada estricta el usuario y absolutamente todos sus registros asociados."""
+    """
+    Elimina la cuenta del usuario previa confirmación de contraseña (P2.16).
+    Soporta periodo de gracia opcional (ej: 7 días). Si grace_period_days == 0,
+    elimina inmediatamente en cascada estricta el usuario y absolutamente todos sus registros asociados,
+    incluyendo diagnósticos, auditorías, feedback y notificaciones push.
+    """
+    if not payload.password or not verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Contraseña incorrecta. Se requiere confirmación de contraseña para eliminar la cuenta."
+        )
+
     user_id = current_user.id
     email = current_user.email
+
+    # Periodo de gracia opcional (P2.16)
+    if payload.grace_period_days and payload.grace_period_days > 0:
+        scheduled_date = datetime.now(timezone.utc) + timedelta(days=payload.grace_period_days)
+        current_user.is_active = False
+        current_user.deletion_scheduled_at = scheduled_date
+        current_user.token_version = (current_user.token_version or 1) + 1
+
+        # Revocar sesiones y refresh tokens
+        db.query(RefreshToken).filter(RefreshToken.user_id == user_id).delete()
+        db.commit()
+
+        response.delete_cookie(key="refresh_token", path="/api/auth")
+        logger.info(f"Cuenta de {email} (ID: {user_id}) programada para eliminación en {payload.grace_period_days} días ({scheduled_date.isoformat()}).")
+        return {
+            "status": "scheduled_for_deletion",
+            "message": f"Tu cuenta ha sido desactivada y se eliminará permanentemente tras el periodo de gracia de {payload.grace_period_days} días.",
+            "deletion_scheduled_at": scheduled_date.isoformat()
+        }
+
+    # Borrado inmediato en cascada total
+    db.query(DiagnosticFeedback).filter(DiagnosticFeedback.user_id == user_id).delete()
+    db.query(DiagnosticAudit).filter(DiagnosticAudit.user_id == user_id).delete()
+    db.query(PushSubscription).filter(PushSubscription.user_id == user_id).delete()
+    db.query(RefreshToken).filter(RefreshToken.user_id == user_id).delete()
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).delete()
+    db.query(UserDailyQuota).filter(UserDailyQuota.user_id == user_id).delete()
+
     db.delete(current_user)
     db.commit()
 
@@ -1126,7 +1169,7 @@ def delete_user_account(
     logger.info(f"Cuenta y datos eliminados íntegramente para el usuario {email} (ID: {user_id}).")
     return {
         "status": "success",
-        "message": "Tu cuenta y todos tus datos (tanques, mediciones, tareas, cambios de agua) han sido eliminados de forma permanente."
+        "message": "Tu cuenta y todos tus datos (tanques, mediciones, tareas, auditorías de IA y suscripciones) han sido eliminados de forma permanente."
     }
 
 

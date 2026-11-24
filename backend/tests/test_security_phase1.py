@@ -260,8 +260,8 @@ class TestSecurityPhase1(unittest.TestCase):
         self.assertIn("measurements", data)
         self.assertIn("maintenance_tasks", data)
 
-        # Borrar cuenta
-        del_res = client.delete("/api/user/account", headers=headers)
+        # Borrar cuenta con confirmación de contraseña (P2.16)
+        del_res = client.request("DELETE", "/api/user/account", headers=headers, json={"password": self.password})
         self.assertEqual(del_res.status_code, 200)
 
         # Confirmar que el token ya no tiene cuenta asociada

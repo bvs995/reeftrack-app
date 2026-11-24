@@ -228,3 +228,103 @@ class TestAuditP2Point15:
         spend = get_current_month_user_ai_spend(db, user_id=999999)
         assert spend == 0.0
         db.close()
+
+
+# ==============================================================================
+# P2.16 - Eliminación de cuenta: confirmación con contraseña, cascada completa
+#         y periodo de gracia opcional de 7 días
+# ==============================================================================
+from backend.models import DiagnosticAudit, DiagnosticFeedback, PushSubscription
+
+class TestAuditP2Point16:
+    @pytest.fixture(autouse=True)
+    def setup_user(self):
+        db = SessionLocal()
+        from backend.models import RateLimitRecord
+        db.query(RateLimitRecord).delete()
+        db.commit()
+        db.close()
+
+        self.email = f"del_user_{os.urandom(4).hex()}@aquapulse.io"
+        self.password = "ValidDeletePass123!"
+        reg = client.post("/api/auth/register", json={
+            "email": self.email,
+            "password": self.password,
+            "full_name": "Usuario a Borrar"
+        })
+        assert reg.status_code == 201
+        self.token = reg.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.token}"}
+        db = SessionLocal()
+        self.user = db.query(User).filter(User.email == self.email).first()
+        assert self.user is not None
+
+        self.user_id = self.user.id
+
+        # Crear auditoría y feedback asociados al usuario
+        audit = DiagnosticAudit(
+            user_id=self.user.id,
+            tank_id=None,
+            prompt_version="v1",
+            inputs={"kh": 8.0},
+            rules_alerts=[],
+            status="accepted"
+        )
+        db.add(audit)
+        db.commit()
+        self.audit_id = audit.id
+
+        feedback = DiagnosticFeedback(
+            user_id=self.user.id,
+            tank_id=None,
+            consent_given=True,
+            user_comment="Observación de prueba de diagnóstico erróneo"
+        )
+        db.add(feedback)
+        db.commit()
+
+        push = PushSubscription(
+            user_id=self.user.id,
+            endpoint=f"https://push.example.com/{os.urandom(4).hex()}",
+            p256dh="key_p256dh",
+            auth="auth_secret"
+        )
+        db.add(push)
+        db.commit()
+        db.close()
+
+    def test_delete_account_without_password_fails(self):
+        res = client.request("DELETE", "/api/user/account", headers=self.headers, json={})
+        assert res.status_code in [400, 401, 422]
+
+    def test_delete_account_with_wrong_password_fails(self):
+        res = client.request("DELETE", "/api/user/account", headers=self.headers, json={"password": "WrongPassword123!"})
+        assert res.status_code in [400, 401]
+
+    def test_delete_account_immediate_cascades_audits_feedback_and_push(self):
+        res = client.request("DELETE", "/api/user/account", headers=self.headers, json={"password": self.password, "grace_period_days": 0})
+        assert res.status_code == 200
+        data = res.json()
+        assert data.get("status") in ["success", "deleted"]
+
+        db = SessionLocal()
+        # Verificar que el usuario ya no existe
+        assert db.query(User).filter(User.id == self.user_id).first() is None
+        # Verificar cascada en audits, feedback y push
+        assert db.query(DiagnosticAudit).filter(DiagnosticAudit.user_id == self.user_id).first() is None
+        assert db.query(DiagnosticFeedback).filter(DiagnosticFeedback.user_id == self.user_id).first() is None
+        assert db.query(PushSubscription).filter(PushSubscription.user_id == self.user_id).first() is None
+        db.close()
+
+    def test_delete_account_grace_period_schedules_deletion(self):
+        res = client.request("DELETE", "/api/user/account", headers=self.headers, json={"password": self.password, "grace_period_days": 7})
+        assert res.status_code == 200
+        data = res.json()
+        assert "grace" in str(data).lower() or "scheduled" in str(data).lower() or "7" in str(data)
+
+        db = SessionLocal()
+        u = db.query(User).filter(User.id == self.user_id).first()
+        assert u is not None
+        assert u.is_active is False
+        assert u.deletion_scheduled_at is not None
+        db.close()

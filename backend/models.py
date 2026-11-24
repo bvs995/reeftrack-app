@@ -42,6 +42,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     email_verified = Column(Boolean, default=False, nullable=False)
     token_version = Column(Integer, default=1, nullable=False)
+    deletion_scheduled_at = Column(DateTime, nullable=True) # Periodo de gracia para borrado de cuenta (P2.16)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relaciones estrictas por usuario
@@ -425,6 +426,13 @@ class AdminUserListItem(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class AccountDeleteRequest(BaseModel):
+    password: str = Field(..., min_length=1, description="Contraseña actual del usuario para confirmar la eliminación de la cuenta (P2.16)")
+    grace_period_days: Optional[int] = Field(0, ge=0, le=30, description="Días de gracia opcional antes del borrado permanente (0 para borrado inmediato)")
+
+    model_config = ConfigDict(extra="forbid")
+
 
 class TokenResponse(BaseModel):
     access_token: str
