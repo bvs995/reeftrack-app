@@ -50,6 +50,17 @@ PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
 
 
+def first_not_none(*vals):
+    """
+    Retorna el primer valor que no sea None (P0.5).
+    Preserva estrictamente el valor numérico 0 y 0.0 para evitar descartar mediciones válidas.
+    """
+    for v in vals:
+        if v is not None:
+            return v
+    return None
+
+
 def get_current_month_ai_spend(db: Optional[Session]) -> float:
     """Calcula el gasto acumulado en USD en llamadas a Gemini en el mes en curso (Fase 7)."""
     if not db:
@@ -538,16 +549,16 @@ def analizar_parametros_estructurado(
     lighting_par = datos_acuario.get("lighting_par")
     flow_profile = datos_acuario.get("flow_profile")
 
-    ph = datos_acuario.get("ph")
-    kh = datos_acuario.get("kh") or datos_acuario.get("alkalinity_dkh")
-    calcio = datos_acuario.get("calcio") or datos_acuario.get("calcium") or datos_acuario.get("calcium_ppm")
-    magnesio = datos_acuario.get("magnesio") or datos_acuario.get("magnesium") or datos_acuario.get("magnesium_ppm")
-    nitrato = datos_acuario.get("nitrato") or datos_acuario.get("nitrate") or datos_acuario.get("nitrate_ppm")
-    fosfato = datos_acuario.get("fosfato") or datos_acuario.get("phosphate") or datos_acuario.get("phosphate_ppm")
-    temperatura = datos_acuario.get("temperatura") or datos_acuario.get("temperature")
-    salinity = datos_acuario.get("salinity") or datos_acuario.get("salinity_ppt")
-    ammonia = datos_acuario.get("ammonia") or datos_acuario.get("ammonia_ppm")
-    nitrite = datos_acuario.get("nitrite") or datos_acuario.get("nitrite_ppm")
+    ph = first_not_none(datos_acuario.get("ph"))
+    kh = first_not_none(datos_acuario.get("kh"), datos_acuario.get("alkalinity_dkh"))
+    calcio = first_not_none(datos_acuario.get("calcio"), datos_acuario.get("calcium"), datos_acuario.get("calcium_ppm"))
+    magnesio = first_not_none(datos_acuario.get("magnesio"), datos_acuario.get("magnesium"), datos_acuario.get("magnesium_ppm"))
+    nitrato = first_not_none(datos_acuario.get("nitrato"), datos_acuario.get("nitrate"), datos_acuario.get("nitrate_ppm"))
+    fosfato = first_not_none(datos_acuario.get("fosfato"), datos_acuario.get("phosphate"), datos_acuario.get("phosphate_ppm"))
+    temperatura = first_not_none(datos_acuario.get("temperatura"), datos_acuario.get("temperature"))
+    salinity = first_not_none(datos_acuario.get("salinity"), datos_acuario.get("salinity_ppt"))
+    ammonia = first_not_none(datos_acuario.get("ammonia"), datos_acuario.get("ammonia_ppm"))
+    nitrite = first_not_none(datos_acuario.get("nitrite"), datos_acuario.get("nitrite_ppm"))
     trace_elements = datos_acuario.get("trace_elements") or {}
     test_methods = datos_acuario.get("test_methods") or {}
     tendencia = datos_acuario.get("tendencia_reciente", "Estable")

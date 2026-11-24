@@ -256,6 +256,20 @@ def evaluate_parameter_with_interval(
             tested_value=v
         )
 
+    # Amoníaco y nitrito a 0.0 representan el nivel ideal indetectable (no es alerta)
+    if p_norm in ("ammonia", "nitrite") and v <= 0.0:
+        return IntervalAlertResult(
+            parameter=p_norm,
+            status="safe",
+            severity="safe",
+            is_alert=False,
+            title=f"{p_norm.capitalize()} no detectable (Óptimo)",
+            message=f"{p_norm.capitalize()} en nivel indetectable o cero, óptimo para la fauna.",
+            recommendation="Mantener rutina de filtración biológica.",
+            interval=[v_min, v_max],
+            tested_value=v
+        )
+
     # 1. EVALUAR LÍMITE SUPERIOR
     if safe_max is not None:
         if v_min > safe_max:

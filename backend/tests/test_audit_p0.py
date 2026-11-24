@@ -292,3 +292,66 @@ class TestAuditP0Point4:
         else:
             detail = res.json().get("detail", "").lower()
             assert "manualmente" in detail or "no se pudo leer" in detail or "no tiene una clave" in detail
+
+
+class TestAuditP0Point5:
+    """Tests para Punto 5: Corrección del bug de ceros en ai_service y first_not_none."""
+
+    def test_first_not_none_utility(self):
+        """first_not_none nunca debe descartar 0 ni 0.0 por falsedad lógica."""
+        from backend.services.ai_service import first_not_none
+        assert first_not_none(None, 0, 5) == 0
+        assert first_not_none(None, 0.0, 10.0) == 0.0
+        assert first_not_none(None, None, "value") == "value"
+        assert first_not_none(None, None) is None
+
+    def test_zero_nitrate_and_phosphate_in_sps_trigger_floor_alert(self):
+        """Nitrato 0 y Fosfato 0 en perfil SPS deben evaluarse como 0 y disparar alerta de piso de nutrientes."""
+        from backend.services.ai_service import analizar_parametros_estructurado
+
+        # Perfil SPS con NO3 = 0.0 y PO4 = 0.0
+        datos = {
+            "reef_profile": "sps_reef",
+            "volumen_litros": 300.0,
+            "kh": 8.0,
+            "calcium": 430.0,
+            "magnesium": 1350.0,
+            "nitrate": 0.0,
+            "phosphate": 0.0,
+            "salinity": 35.0,
+            "temperature": 25.0,
+            "ammonia": 0.0
+        }
+
+        # Ejecutamos análisis
+        resultado = analizar_parametros_estructurado(datos)
+        res_dict = resultado.model_dump() if hasattr(resultado, "model_dump") else resultado
+        
+        # En SPS, 0.0 en nutrientes es peligro biológico de blanqueamiento y dinoflagelados
+        findings_text = " ".join([f"{f.get('parameter', '')} {f.get('observation', '')}" for f in res_dict.get("findings", [])]).lower()
+        rules_text = " ".join(res_dict.get("rule_alerts_retained", [])).lower()
+        combined = findings_text + " " + rules_text
+
+        assert "nutrientes" in combined or "nitrato" in combined or "fosfato" in combined, "Debe alertar sobre piso de nutrientes con 0.0"
+        assert res_dict.get("severity") in ("warning", "critical"), "Severidad debe ser warning o critical por piso de nutrientes en SPS"
+
+    def test_zero_ammonia_does_not_trigger_alert(self):
+        """Amoníaco 0.0 es el estado ideal y óptimo; NUNCA debe generar alertas de peligro de amoníaco."""
+        from backend.services.ai_service import analizar_parametros_estructurado
+
+        datos = {
+            "reef_profile": "mixed_reef",
+            "volumen_litros": 200.0,
+            "kh": 8.2,
+            "calcium": 420.0,
+            "magnesium": 1320.0,
+            "nitrate": 5.0,
+            "phosphate": 0.04,
+            "ammonia": 0.0,
+            "nitrite": 0.0
+        }
+
+        resultado = analizar_parametros_estructurado(datos)
+        res_dict = resultado.model_dump() if hasattr(resultado, "model_dump") else resultado
+        ammonia_findings = [f for f in res_dict.get("findings", []) if f.get("parameter") in ("ammonia", "nitrite") and f.get("severity") in ("watch", "warning", "critical")]
+        assert len(ammonia_findings) == 0, f"Amoníaco en 0.0 nunca debe disparar alertas de peligro: {ammonia_findings}"
