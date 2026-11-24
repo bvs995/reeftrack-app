@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias de Python en wheels
+# Instalar dependencias de Python en wheels (solo producción)
 COPY backend/requirements.txt .
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
@@ -48,11 +48,13 @@ RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-# Variables de entorno por defecto
+# Variables de entorno por defecto (seguras para producción)
+# Sin comodín de orígenes permitidos por seguridad (P2.12)
+# WORKERS ajustable a la memoria RAM asignada al contenedor (default 2 workers)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
-    ALLOWED_ORIGINS="*" \
+    WORKERS=2 \
     DB_POOL_SIZE=10 \
     DB_MAX_OVERFLOW=20
 
@@ -62,5 +64,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/health || exit 1
 
-# Comando de arranque para producción con migraciones automáticas y workers de Uvicorn
-CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT} --workers 2"]
+# Comando de arranque para producción con migraciones automáticas y workers parametrizados
+CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS}"]
