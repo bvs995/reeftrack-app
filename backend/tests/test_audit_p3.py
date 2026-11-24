@@ -57,3 +57,33 @@ class TestAuditP3Point18:
         auth_path = REPO_ROOT / "frontend" / "src" / "components" / "AuthModal.jsx"
         auth_content = auth_path.read_text(encoding="utf-8").lower()
         assert "términos" in auth_content or "terminos" in auth_content or "privacidad" in auth_content
+
+
+# ==============================================================================
+# P3.19 - Confirmación de nivel de pago en API de Gemini (privacidad de datos)
+# ==============================================================================
+class TestAuditP3Point19:
+    def test_gemini_paid_tier_enforced_in_production(self, monkeypatch):
+        import backend.services.ai_service as ai_srv
+        assert hasattr(ai_srv, "validate_gemini_tier"), "Debe existir validate_gemini_tier en ai_service"
+
+        # En producción con tier 'free' debe fallar
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("GEMINI_TIER", "free")
+        with pytest.raises((ValueError, RuntimeError)) as exc:
+            ai_srv.validate_gemini_tier()
+        assert "pago" in str(exc.value).lower() or "paid" in str(exc.value).lower() or "entrenar" in str(exc.value).lower()
+
+        # En producción con tier 'pay-as-you-go' o 'paid' debe ser válido
+        monkeypatch.setenv("GEMINI_TIER", "pay-as-you-go")
+        assert ai_srv.validate_gemini_tier() is True
+
+        monkeypatch.setenv("GEMINI_TIER", "paid")
+        assert ai_srv.validate_gemini_tier() is True
+
+    def test_privacy_and_security_docs_specify_paid_tier_no_training(self):
+        privacy_path = REPO_ROOT / "PRIVACY.md"
+        priv_text = privacy_path.read_text(encoding="utf-8").lower()
+        assert "pago" in priv_text or "comercial" in priv_text or "no se utilizan para entrenar" in priv_text or "entrenar" in priv_text, (
+            "PRIVACY.md debe confirmar explícitamente que la API de Gemini es de nivel de pago donde los datos no se usan para entrenar modelos"
+        )

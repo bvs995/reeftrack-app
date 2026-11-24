@@ -86,6 +86,24 @@ def validate_gemini_model(model_name: Optional[str]) -> str:
         )
     return clean_model
 
+def validate_gemini_tier() -> bool:
+    """
+    Verifica que en entorno de producción se utilice una clave/tier de pago (Pay-As-You-Go / Enterprise)
+    de Google Gemini API para garantizar que los datos de telemetría de los usuarios no sean
+    utilizados por Google para entrenar o mejorar sus modelos (P3.19 / GDPR / Play Store).
+    """
+    is_prod = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+    tier = os.getenv("GEMINI_TIER", "pay-as-you-go" if is_prod else "free").strip().lower()
+
+    if is_prod and tier in ["free", "unpaid", "trial_unpaid"]:
+        raise RuntimeError(
+            "POLÍTICA DE PRIVACIDAD: En entorno de producción (ENVIRONMENT=production) "
+            "la API de Google Gemini debe ser de nivel de pago (GEMINI_TIER=pay-as-you-go o paid). "
+            "En el nivel gratuito de Google AI Studio los datos de los usuarios pueden ser utilizados "
+            "para entrenar modelos de IA, lo que infringe la política de privacidad y protección de datos de AquaPulse."
+        )
+    return True
+
 RAW_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 PRIMARY_MODEL = validate_gemini_model(RAW_GEMINI_MODEL)
 FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
@@ -416,6 +434,9 @@ def analizar_parametros_estructurado(
         api_key == "tu_gemini_api_key_aqui" or
         api_key.startswith("inserta_")
     )
+
+    if not is_dummy_key:
+        validate_gemini_tier()
 
     nombre = datos_acuario.get("nombre_acuario", "Principal")
     volumen = float(datos_acuario.get("volumen_litros") or 280.0)

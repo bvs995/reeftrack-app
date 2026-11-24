@@ -19,7 +19,7 @@ Bienvenido a AquaPulse ("la Aplicación", "el Servicio", "nosotros"). Al registr
 
 ## 2. Uso de Inteligencia Artificial y Proveedores Externos (Google Gemini API)
 
-2.1. **Procesamiento de Parámetros e Imágenes**: AquaPulse utiliza la API empresarial de **Google Gemini** para asistir en la interpretación de parámetros químicos y en la lectura asistida por cámara de viales de pruebas colorimétricas o fotómetros digitales.
+2.1. **Procesamiento de Parámetros e Imágenes**: AquaPulse utiliza la API empresarial de **Google Gemini** bajo nivel comercial de pago (Pay-As-You-Go) para asistir en la interpretación de parámetros químicos y en la lectura asistida por cámara de viales de pruebas colorimétricas o fotómetros digitales. En este nivel de servicio, Google garantiza contractualmente que los datos de los usuarios no se utilizan para entrenar modelos.
 
 2.2. **Despersonalización y Privacidad**: Únicamente se transmiten al proveedor de inferencia datos numéricos despersonalizados (valores de pH, KH, Ca, Mg, nutrientes, temperatura), tipo de biotipo y volúmenes del tanque. **Nunca** se envían a los modelos de lenguaje nombres reales, contraseñas, direcciones de correo electrónico ni datos de geolocalización.
 
