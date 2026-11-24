@@ -639,6 +639,12 @@ export default function AuthModal({ isOpen, onClose }) {
               </>
             )}
           </button>
+
+          {authModalTab === 'register' && (
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed mt-2">
+              Al registrarte aceptas los <span className="text-cyan-400 font-semibold">Términos de Uso</span> y la <span className="text-cyan-400 font-semibold">Política de Privacidad</span>. Los diagnósticos emitidos por el sistema e IA son de carácter estrictamente orientativo.
+            </p>
+          )}
         </form>
 
         {/* Botón Volver a Iniciar Sesión en Vistas Secundarias */}

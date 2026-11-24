@@ -27,6 +27,7 @@ from backend.routers import (
     ai_router,
     maintenance_router,
     push_router,
+    legal_router,
 )
 
 # Re-exportaciones para compatibilidad con suites de tests existentes
@@ -206,6 +207,7 @@ app.include_router(measurements_router)
 app.include_router(ai_router)
 app.include_router(maintenance_router)
 app.include_router(push_router)
+app.include_router(legal_router)
 
 
 # ==============================================================================

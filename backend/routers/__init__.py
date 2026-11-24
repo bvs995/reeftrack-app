@@ -8,6 +8,7 @@ from backend.routers.ai import router as ai_router
 from backend.routers.maintenance import router as maintenance_router
 from backend.routers.push import router as push_router
 from backend.routers.admin import router as admin_router
+from backend.routers.legal import router as legal_router
 
 __all__ = [
     "auth_router",
@@ -17,4 +18,5 @@ __all__ = [
     "maintenance_router",
     "push_router",
     "admin_router",
+    "legal_router",
 ]

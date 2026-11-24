@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   CheckCircle2,
   Calendar,
-  Layers
+  Layers,
+  FileText,
+  X
 } from 'lucide-react';
 
 export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
@@ -36,6 +38,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
   const [selectedUnits, setSelectedUnits] = useState(unitPreference || 'liters');
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+  const [showLegalModal, setShowLegalModal] = useState(false);
 
   const currentLang = (i18n.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
 
@@ -262,6 +265,19 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
               <span className="text-cyan-400 font-bold mr-1">{currentLang.toUpperCase()}</span>
               · ES / EN {'>'}
             </span>
+          </button>
+
+          {/* Opción Privacidad y Términos */}
+          <button 
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setShowLegalModal(true);
+            }}
+            className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+          >
+            <span className="flex items-center">🔒 Privacidad y Términos de Uso</span>
+            <span className="text-gray-400">{'>'}</span>
           </button>
 
           {/* Opción Panel Admin (Solo visible si es admin) */}
@@ -587,6 +603,78 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
           </button>
         </div>
       </section>
+      {/* Modal de Privacidad y Términos de Uso */}
+      {showLegalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-marine-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-marine-900 border border-marine-800 rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-marine-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-black text-white">Privacidad y Términos de Uso</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLegalModal(false)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-marine-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                <p className="font-bold">⚠️ Diagnóstico de IA Orientativo y Preventivo</p>
+                <p className="text-xs text-amber-200/80 mt-1">
+                  Todos los diagnósticos y recomendaciones de AquaPulse son de carácter estrictamente orientativo y preventivo. No constituyen prescripción veterinaria ni garantía biológica absoluta. Verifica siempre anomalías críticas con un retest.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-white text-sm mb-1">🤖 Procesamiento con Google Gemini API</h4>
+                <p className="text-xs text-slate-400">
+                  Las mediciones químicas e imágenes de test kits se analizan de forma despersonalizada mediante la API de Google Gemini. No compartimos nombres, correos ni datos de ubicación. Todas las imágenes son despojadas de metadatos EXIF y GPS.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-white text-sm mb-1">🛡️ Derechos del Usuario (GDPR / CCPA)</h4>
+                <p className="text-xs text-slate-400">
+                  Tienes derecho a acceder a tus datos, rectificar mediciones y solicitar el borrado permanente total de tu cuenta ("Derecho al Olvido") en cualquier momento desde esta pantalla de Ajustes.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <a
+                  href="/api/legal/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
+                >
+                  Ver Política de Privacidad Completa (JSON/MD)
+                </a>
+                <a
+                  href="/api/legal/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
+                >
+                  Ver Términos de Uso Completos (JSON/MD)
+                </a>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-marine-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLegalModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-cyan-500 text-marine-950 font-bold text-xs hover:brightness-110 transition"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
