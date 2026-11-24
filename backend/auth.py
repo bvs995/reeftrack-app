@@ -182,6 +182,78 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
         logger.error(f"Error enviando correo transaccional de reseteo: {type(e).__name__}")
         return False
 
+def create_email_verification_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
+    """Genera token JWT firmado (24h) para verificación de correo electrónico."""
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=24))
+    payload = {
+        "sub": str(user_id),
+        "email": email.strip().lower(),
+        "purpose": "email_verification",
+        "exp": expire,
+        "iat": datetime.now(timezone.utc)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_email_verification_token(token: str) -> dict:
+    """Valida un token de verificación de correo electrónico."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de verificación ha expirado. Por favor solicita uno nuevo."
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token de verificación es inválido o está corrupto."
+        )
+
+    if payload.get("purpose") != "email_verification" or "sub" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token proporcionado no es válido para verificación de correo."
+        )
+
+    return payload
+
+def send_email_verification(to_email: str, verify_url: str) -> bool:
+    """Envía correo transaccional de verificación mediante SMTP si está configurado."""
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", "noreply@aquapulse.io")
+    smtp_tls = os.getenv("SMTP_TLS", "true").lower() in ("true", "1", "yes")
+
+    if not smtp_host:
+        logger.info("Proveedor SMTP no configurado; notificación de verificación registrada de forma segura.")
+        return False
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "AquaPulse - Verifica tu correo electrónico"
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+        text_content = (
+            f"Hola,\n\n"
+            f"Gracias por registrarte en AquaPulse. Para activar tu cuenta, por favor verifica tu correo:\n"
+            f"{verify_url}\n\n"
+            f"Este enlace expirará en 24 horas.\n\n"
+            f"— El equipo de AquaPulse"
+        )
+        msg.attach(MIMEText(text_content, "plain"))
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            if smtp_tls:
+                server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        logger.error(f"Error enviando correo de verificación: {type(e).__name__}")
+        return False
+
 def decode_access_token(token: str) -> Optional[dict]:
     """Decodifica y valida la firma y expiración de un token JWT."""
     try:
@@ -255,16 +327,6 @@ def get_current_user(
                 detail="Sesión revocada debido a un cambio de credenciales. Por favor inicia sesión nuevamente.",
                 headers={"WWW-Authenticate": "Bearer"}
             )
-
-    # Auto-promoción a Administrador si coincide con paliyo995@gmail.com o ADMIN_EMAIL
-    auto_admin_emails = {
-        "paliyo995@gmail.com",
-        os.getenv("ADMIN_EMAIL", "").strip().lower()
-    } - {""}
-    if user.email and user.email.lower() in auto_admin_emails and not user.is_admin:
-        user.is_admin = True
-        db.commit()
-        db.refresh(user)
 
     return user
 

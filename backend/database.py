@@ -128,6 +128,7 @@ def init_db():
             try:
                 # Columnas de perfiles marinos en tanks y acuarios
                 conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 1;"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
@@ -317,6 +318,9 @@ def init_db():
                 if "token_version" not in user_columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;"))
                     logger.info("Auto-migración: Columna token_version añadida a users.")
+                if "email_verified" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;"))
+                    logger.info("Auto-migración: Columna email_verified añadida a users.")
 
                 # Saneamiento de posibles valores nulos preexistentes para evitar IntegrityError
                 try:

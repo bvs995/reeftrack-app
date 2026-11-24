@@ -11,6 +11,8 @@ class TestAuditP0Point1:
     """Tests para Punto 1: Forgot Password seguro, de un solo uso e invalidación de sesiones."""
 
     def setup_method(self):
+        from backend.main import auth_attempts
+        auth_attempts.clear()
         db = SessionLocal()
         # Limpiar tokens y usuario previo
         db.query(PasswordResetToken).delete()
@@ -124,4 +126,84 @@ class TestAuditP0Point1:
         res_after = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_access_token}"})
         assert res_after.status_code == 401
         assert "revocada" in res_after.json()["detail"].lower()
+        db.close()
+
+
+class TestAuditP0Point2:
+    """Tests para Punto 2: Eliminación de auto-admin por correo y verificación de email."""
+
+    def setup_method(self):
+        from backend.main import auth_attempts
+        auth_attempts.clear()
+        db = SessionLocal()
+        for email in ["paliyo995@gmail.com", "verify_me@aquapulse.io"]:
+            u = db.query(User).filter(User.email == email).first()
+            if u:
+                db.delete(u)
+        db.commit()
+        db.close()
+
+    def test_no_auto_admin_on_register(self):
+        """Registrarse con paliyo995@gmail.com o cualquier correo NUNCA otorga admin automáticamente."""
+        res = client.post("/api/auth/register", json={
+            "email": "paliyo995@gmail.com",
+            "password": "SecurePassword123!",
+            "full_name": "Test User"
+        })
+        assert res.status_code in (201, 200)
+
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "paliyo995@gmail.com").first()
+        assert user is not None
+        assert user.is_admin is False, "El usuario NUNCA debe ser administrador automáticamente al registrarse"
+        assert not hasattr(app.state, "AUTO_ADMIN_EMAILS") or not hasattr(app, "AUTO_ADMIN_EMAILS")
+        db.close()
+
+    def test_no_auto_admin_on_login(self):
+        """Iniciar sesión con paliyo995@gmail.com NUNCA promueve a admin automáticamente."""
+        db = SessionLocal()
+        user = User(
+            email="paliyo995@gmail.com",
+            hashed_password=hash_password("SecurePassword123!"),
+            is_admin=False,
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.close()
+
+        res = client.post("/api/auth/login", json={
+            "email": "paliyo995@gmail.com",
+            "password": "SecurePassword123!"
+        })
+        assert res.status_code == 200
+
+        db = SessionLocal()
+        user_after = db.query(User).filter(User.email == "paliyo995@gmail.com").first()
+        assert user_after.is_admin is False, "El login NUNCA debe auto-promover a administrador"
+        db.close()
+
+    def test_email_verification_flow(self):
+        """El registro emite token de verificación y la cuenta se activa tras verificar el correo."""
+        res = client.post("/api/auth/register", json={
+            "email": "verify_me@aquapulse.io",
+            "password": "SecurePassword123!",
+            "full_name": "Verify Me"
+        })
+        assert res.status_code in (201, 200)
+
+        # Verificar endpoint de verificación
+        from backend.auth import create_email_verification_token
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "verify_me@aquapulse.io").first()
+        token = create_email_verification_token(user.email, user.id)
+
+        # Consumir verificación
+        verify_res = client.post(f"/api/auth/verify-email?token={token}")
+        assert verify_res.status_code == 200
+        assert verify_res.json().get("ok") is True
+
+        db.refresh(user)
+        assert user.email_verified is True
+        assert user.is_active is True
         db.close()

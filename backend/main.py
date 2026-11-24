@@ -99,6 +99,9 @@ from backend.auth import (
     create_password_reset_token,
     verify_password_reset_token,
     send_password_reset_email,
+    create_email_verification_token,
+    verify_email_verification_token,
+    send_email_verification,
     get_current_user,
     get_optional_current_user,
     get_current_admin_user
@@ -424,12 +427,6 @@ def get_ai_audit_stats_endpoint(
 # 🔐 ENDPOINTS DE AUTENTICACIÓN Y GESTIÓN DE CUENTAS (JWT)
 # ==============================================================================
 
-# Correos con privilegios SuperAdmin automáticos al iniciar sesión o registrarse
-AUTO_ADMIN_EMAILS = {
-    "paliyo995@gmail.com",
-    os.getenv("ADMIN_EMAIL", "").strip().lower()
-} - {""}
-
 @app.post(
     "/api/auth/register",
     response_model=TokenResponse,
@@ -453,8 +450,8 @@ def register_user(
             detail="Ya existe una cuenta registrada con este correo electrónico."
         )
 
-    # Verificar si el correo tiene asignación automática de administrador
-    is_auto_admin = normalized_email in AUTO_ADMIN_EMAILS
+    # Rol de administrador NUNCA se asigna automáticamente por correo (P0.2)
+    require_verification = os.getenv("REQUIRE_EMAIL_VERIFICATION", "false").lower() in ("true", "1", "yes")
 
     # Crear usuario con plan Gratuito (Freemium)
     new_user = User(
@@ -462,14 +459,21 @@ def register_user(
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name.strip() if payload.full_name else None,
         unit_preference="liters",
-        subscription_tier="premium" if is_auto_admin else "free",
-        is_admin=is_auto_admin,
-        is_active=True,
+        subscription_tier="free",
+        is_admin=False,
+        is_active=False if require_verification else True,
+        email_verified=False,
         created_at=datetime.utcnow()
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # Generar token de verificación de correo
+    verify_token = create_email_verification_token(new_user.email, new_user.id)
+    frontend_base = os.getenv("FRONTEND_URL", "").rstrip("/") or "http://localhost:5173"
+    verify_url = f"{frontend_base}/?verify_email_token={verify_token}"
+    send_email_verification(new_user.email, verify_url)
 
     # Crear automáticamente su primer acuario por defecto
     default_tank = Tank(
@@ -530,16 +534,17 @@ def login_user(
         )
 
     if not user.is_active:
+        if not user.email_verified and os.getenv("REQUIRE_EMAIL_VERIFICATION", "false").lower() in ("true", "1", "yes"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Debes verificar tu correo electrónico antes de activar tu cuenta. Hemos enviado un enlace a tu correo."
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."
+            detail="Esta cuenta ha sido suspendida o no está activa. Contacta a soporte."
         )
 
-    # Auto-promoción a Administrador si coincide con paliyo995@gmail.com o ADMIN_EMAIL
-    if normalized_email in AUTO_ADMIN_EMAILS and not user.is_admin:
-        user.is_admin = True
-        db.commit()
-        db.refresh(user)
+    # Rol de administrador se asigna solo en BD (P0.2)
 
     access_token = create_access_token({
         "sub": str(user.id),
@@ -746,6 +751,36 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
         ok=True,
         message="Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña."
     )
+
+@app.api_route(
+    "/api/auth/verify-email",
+    methods=["GET", "POST"],
+    summary="Verificar correo electrónico para activar la cuenta"
+)
+def verify_email(
+    token: str = Query(..., description="Token JWT de verificación de correo"),
+    db: Session = Depends(get_db)
+):
+    """Valida el token de verificación y activa la cuenta del usuario."""
+    token_data = verify_email_verification_token(token)
+    user_id = int(token_data["sub"])
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado."
+        )
+
+    user.email_verified = True
+    user.is_active = True
+    db.commit()
+
+    logger.info(f"Correo electrónico verificado exitosamente para usuario ID {user.id}")
+    return {
+        "ok": True,
+        "message": "Correo electrónico verificado exitosamente. Tu cuenta está activa y lista para usar."
+    }
 
 @app.get(
     "/api/auth/me",

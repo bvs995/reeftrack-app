@@ -39,6 +39,7 @@ class User(Base):
     subscription_tier = Column(String(50), default="free", nullable=False) # 'free', 'premium'
     is_admin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
     token_version = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
