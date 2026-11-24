@@ -4,6 +4,8 @@ import {
   setAuthToken,
   loginUser as apiLogin,
   registerUser as apiRegister,
+  refreshSession,
+  logoutUser as apiLogout,
   fetchUserProfile,
   updateUserProfile as apiUpdateProfile
 } from '../api';
@@ -17,25 +19,19 @@ export function AuthProvider({ children }) {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState('login'); // 'login' | 'register'
 
-  // Cargar usuario activo si existe token guardado
+  // Cargar usuario activo intentando recuperar sesión con cookie HttpOnly (P1.8)
   useEffect(() => {
     let isMounted = true;
 
     const initAuth = async () => {
-      const storedToken = getAuthToken();
-      if (!storedToken) {
-        if (isMounted) setLoading(false);
-        return;
-      }
-
       try {
-        const userData = await fetchUserProfile();
-        if (isMounted) {
-          setUser(userData);
+        const session = await refreshSession();
+        if (session && session.user && isMounted) {
+          setToken(session.access_token);
+          setUser(session.user);
         }
       } catch (err) {
-        console.warn('Sesión previa inválida o expirada:', err);
-        setAuthToken(null);
+        console.warn('Sin sesión previa activa:', err);
         if (isMounted) {
           setToken(null);
           setUser(null);
@@ -79,7 +75,8 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await apiLogout();
     setAuthToken(null);
     setToken(null);
     setUser(null);

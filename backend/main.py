@@ -28,6 +28,7 @@ except Exception as _e:
     logger.debug(f"Aviso en init_db de carga de módulo: {_e}")
 from backend.models import (
     User,
+    RefreshToken,
     UserDailyQuota,
     RateLimitRecord,
     Tank,
@@ -430,13 +431,14 @@ async def security_and_request_id_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
 
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; "
+        "font-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'none';"
+    )
+
     if is_production:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'unsafe-inline' https:; "
-            "style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; "
-            "font-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'none';"
-        )
 
     return response
 
@@ -611,11 +613,20 @@ def register_user(
         "email": new_user.email,
         "token_version": new_user.token_version or 1
     })
-    refresh_token = create_refresh_token(new_user.id)
+    raw_rt, rt_hash, rt_jti, rt_fam, rt_exp = create_refresh_token(new_user.id)
+    new_rf = RefreshToken(
+        user_id=new_user.id,
+        token_hash=rt_hash,
+        jti=rt_jti,
+        family_id=rt_fam,
+        expires_at=rt_exp
+    )
+    db.add(new_rf)
+    db.commit()
 
     response.set_cookie(
         key="refresh_token",
-        value=refresh_token,
+        value=raw_rt,
         httponly=True,
         secure=is_production,
         samesite="lax",
@@ -626,7 +637,7 @@ def register_user(
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        refresh_token=refresh_token,
+        refresh_token=None,
         user=UserResponse.model_validate(new_user)
     )
 
@@ -671,11 +682,20 @@ def login_user(
         "email": user.email,
         "token_version": user.token_version or 1
     })
-    refresh_token = create_refresh_token(user.id)
+    raw_rt, rt_hash, rt_jti, rt_fam, rt_exp = create_refresh_token(user.id)
+    new_rf = RefreshToken(
+        user_id=user.id,
+        token_hash=rt_hash,
+        jti=rt_jti,
+        family_id=rt_fam,
+        expires_at=rt_exp
+    )
+    db.add(new_rf)
+    db.commit()
 
     response.set_cookie(
         key="refresh_token",
-        value=refresh_token,
+        value=raw_rt,
         httponly=True,
         secure=is_production,
         samesite="lax",
@@ -686,7 +706,7 @@ def login_user(
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        refresh_token=refresh_token,
+        refresh_token=None,
         user=UserResponse.model_validate(user)
     )
 
@@ -714,9 +734,44 @@ def refresh_access_token(
 
     payload = verify_refresh_token(token_to_verify)
     user_id = int(payload["sub"])
-    user = db.query(User).filter(User.id == user_id).first()
 
+    t_hash = hashlib.sha256(token_to_verify.encode("utf-8")).hexdigest()
+    token_record = db.query(RefreshToken).filter(RefreshToken.token_hash == t_hash).first()
+
+    if not token_record:
+        response.delete_cookie(key="refresh_token", path="/api/auth")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión no encontrada o token de refresco no reconocido.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # Detección de reutilización (Token Reuse Detection)
+    if token_record.revoked_at is not None:
+        now_utc = datetime.now(timezone.utc)
+        db.query(RefreshToken).filter(
+            RefreshToken.family_id == token_record.family_id,
+            RefreshToken.revoked_at.is_(None)
+        ).update({"revoked_at": now_utc})
+
+        user = db.query(User).filter(User.id == token_record.user_id).first()
+        if user:
+            user.token_version = (user.token_version or 1) + 1
+        db.commit()
+
+        response.delete_cookie(key="refresh_token", path="/api/auth")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Alerta de seguridad: intento de reutilización de sesión. Todas las sesiones activas han sido revocadas.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # Rotar: revocar token actual
+    token_record.revoked_at = datetime.now(timezone.utc)
+
+    user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
+        db.commit()
         response.delete_cookie(key="refresh_token", path="/api/auth")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -724,16 +779,29 @@ def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+    new_raw_rt, new_hash, new_jti, fam_id, new_exp = create_refresh_token(
+        user.id,
+        family_id=token_record.family_id
+    )
+    new_record = RefreshToken(
+        user_id=user.id,
+        token_hash=new_hash,
+        jti=new_jti,
+        family_id=fam_id,
+        expires_at=new_exp
+    )
+    db.add(new_record)
+    db.commit()
+
     new_access_token = create_access_token({
         "sub": str(user.id),
         "email": user.email,
         "token_version": user.token_version or 1
     })
-    new_refresh_token = create_refresh_token(user.id)
 
     response.set_cookie(
         key="refresh_token",
-        value=new_refresh_token,
+        value=new_raw_rt,
         httponly=True,
         secure=is_production,
         samesite="lax",
@@ -744,7 +812,7 @@ def refresh_access_token(
     return TokenResponse(
         access_token=new_access_token,
         token_type="bearer",
-        refresh_token=new_refresh_token,
+        refresh_token=None,
         user=UserResponse.model_validate(user)
     )
 
@@ -752,8 +820,26 @@ def refresh_access_token(
     "/api/auth/logout",
     summary="Cerrar sesión e invalidar la cookie del refresh token"
 )
-def logout_user(response: Response):
-    """Limpia la cookie HttpOnly del refresh token."""
+def logout_user(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """Revoca el refresh token en el servidor (en BD) y limpia la cookie HttpOnly."""
+    cookie_token = request.cookies.get("refresh_token")
+    if cookie_token:
+        try:
+            t_hash = hashlib.sha256(cookie_token.encode("utf-8")).hexdigest()
+            record = db.query(RefreshToken).filter(
+                RefreshToken.token_hash == t_hash,
+                RefreshToken.revoked_at.is_(None)
+            ).first()
+            if record:
+                record.revoked_at = datetime.now(timezone.utc)
+                db.commit()
+        except Exception as e:
+            logger.warning(f"Error al revocar refresh token en logout: {e}")
+
     response.delete_cookie(key="refresh_token", path="/api/auth")
     return {"status": "success", "message": "Sesión cerrada correctamente."}
 

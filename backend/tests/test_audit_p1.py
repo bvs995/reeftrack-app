@@ -146,3 +146,149 @@ class TestAuditP1Point7:
         records_after = db.query(RateLimitRecord).count()
         assert records_after > records_before, "Los intentos de autenticación deben persistirse en RateLimitRecord"
         db.close()
+
+
+class TestAuditP1Point8:
+    """Tests para Punto 8: Sesiones en BD (familia de refresh tokens, rotación, revocación por reutilización, logout y CSP endurecida)."""
+
+    def setup_method(self):
+        auth_attempts.clear()
+        scan_quota_manager.reset_for_tests()
+        db = SessionLocal()
+        from backend.models import RefreshToken
+        db.query(RefreshToken).delete()
+
+        user = db.query(User).filter(User.email == "p1_session_user@aquapulse.io").first()
+        if user:
+            db.delete(user)
+        db.commit()
+
+        test_user = User(
+            email="p1_session_user@aquapulse.io",
+            hashed_password=hash_password("Password123!"),
+            full_name="P1 Session User",
+            is_active=True,
+            is_admin=False,
+            token_version=1
+        )
+        db.add(test_user)
+        db.commit()
+        db.refresh(test_user)
+
+        self.user_id = test_user.id
+        self.email = test_user.email
+        self.password = "Password123!"
+        db.close()
+
+    def test_refresh_token_saved_in_db_and_not_in_json(self):
+        """El refresh token debe guardarse en BD con hash y JTI, y NO devolverse en el body JSON."""
+        from backend.models import RefreshToken
+        import hashlib
+
+        res = client.post("/api/auth/login", json={"email": self.email, "password": self.password})
+        assert res.status_code == 200
+        data = res.json()
+
+        # 1. El JSON NO debe contener el secreto del refresh token
+        assert data.get("refresh_token") is None, "El refresh token NO debe devolverse en el JSON (solo en cookie HttpOnly)"
+
+        # 2. La cookie HttpOnly debe contener el refresh token
+        assert "refresh_token" in res.cookies
+        cookie_rt = res.cookies["refresh_token"]
+
+        # 3. Debe existir el registro en la BD con el hash SHA-256 del token y family_id
+        db = SessionLocal()
+        expected_hash = hashlib.sha256(cookie_rt.encode("utf-8")).hexdigest()
+        token_record = db.query(RefreshToken).filter(RefreshToken.user_id == self.user_id).first()
+        assert token_record is not None, "Debe existir un registro en la tabla refresh_tokens"
+        assert token_record.token_hash == expected_hash
+        assert token_record.family_id is not None
+        assert token_record.revoked_at is None
+        db.close()
+
+    def test_refresh_token_rotation_and_reuse_revokes_entire_family(self):
+        """Al rotar el refresh token, el anterior se revoca; si se reutiliza uno viejo, se revoca la familia completa."""
+        from backend.models import RefreshToken
+        import hashlib
+
+        # 1. Login inicial
+        res_login = client.post("/api/auth/login", json={"email": self.email, "password": self.password})
+        assert res_login.status_code == 200
+        rt_v1 = res_login.cookies["refresh_token"]
+
+        # 2. Rotación legítima (uso de rt_v1)
+        client.cookies.set("refresh_token", rt_v1)
+        res_rot = client.post("/api/auth/refresh")
+        assert res_rot.status_code == 200
+        rt_v2 = res_rot.cookies["refresh_token"]
+        assert rt_v2 != rt_v1
+
+        db = SessionLocal()
+        h1 = hashlib.sha256(rt_v1.encode("utf-8")).hexdigest()
+        h2 = hashlib.sha256(rt_v2.encode("utf-8")).hexdigest()
+        rec_v1 = db.query(RefreshToken).filter(RefreshToken.token_hash == h1).first()
+        rec_v2 = db.query(RefreshToken).filter(RefreshToken.token_hash == h2).first()
+
+        assert rec_v1.revoked_at is not None, "El refresh token usado debe quedar revocado"
+        assert rec_v2.revoked_at is None, "El nuevo refresh token debe estar activo"
+        assert rec_v1.family_id == rec_v2.family_id, "Ambos tokens deben compartir la misma family_id"
+        db.close()
+
+        # 3. ATAQUE: Reutilización de token viejo (rt_v1)
+        client.cookies.set("refresh_token", rt_v1)
+        res_attack = client.post("/api/auth/refresh")
+        # Debe ser rechazado con 401
+        assert res_attack.status_code == 401
+
+        # 4. Verificar que TODA la familia quedó revocada (incluso rt_v2) y token_version subió
+        db = SessionLocal()
+        rec_v2_after = db.query(RefreshToken).filter(RefreshToken.token_hash == h2).first()
+        assert rec_v2_after.revoked_at is not None, "Toda la familia debe quedar revocada tras detección de reutilización"
+
+        user = db.query(User).filter(User.id == self.user_id).first()
+        assert user.token_version > 1, "Debe incrementar token_version del usuario para invalidar sesiones activas"
+        db.close()
+
+        # 5. El token v2 ahora debe fallar también porque su familia fue revocada
+        client.cookies.set("refresh_token", rt_v2)
+        res_v2_failed = client.post("/api/auth/refresh")
+        assert res_v2_failed.status_code == 401
+
+    def test_logout_revokes_token_in_database(self):
+        """Logout debe revocar el refresh token en el servidor (en BD) además de borrar la cookie."""
+        from backend.models import RefreshToken
+        import hashlib
+
+        res_login = client.post("/api/auth/login", json={"email": self.email, "password": self.password})
+        assert res_login.status_code == 200
+        rt = res_login.cookies["refresh_token"]
+
+        # Logout enviando la cookie
+        client.cookies.set("refresh_token", rt)
+        res_logout = client.post("/api/auth/logout")
+        assert res_logout.status_code == 200
+
+        # En BD debe estar revocado
+        db = SessionLocal()
+        h = hashlib.sha256(rt.encode("utf-8")).hexdigest()
+        rec = db.query(RefreshToken).filter(RefreshToken.token_hash == h).first()
+        assert rec is not None
+        assert rec.revoked_at is not None, "El refresh token debe estar marcado como revocado en BD al hacer logout"
+        db.close()
+
+    def test_csp_hardened_no_unsafe_inline_or_generic_https_in_script_src(self):
+        """La cabecera Content-Security-Policy no debe tener 'unsafe-inline' ni 'https:' genérico en script-src."""
+        res = client.get("/api/marine-profiles")
+        assert res.status_code == 200
+        csp = res.headers.get("Content-Security-Policy", "")
+        assert csp != "", "Debe existir cabecera Content-Security-Policy"
+
+        # Extraer directiva script-src
+        import re
+        m = re.search(r"script-src\s+([^;]+)", csp)
+        assert m is not None, f"Debe existir script-src en CSP: {csp}"
+        script_src = m.group(1).lower()
+
+        assert "'unsafe-inline'" not in script_src, f"script-src no debe contener 'unsafe-inline': {script_src}"
+        assert "https:" not in script_src, f"script-src no debe contener 'https:' genérico: {script_src}"
+

@@ -5,20 +5,15 @@ const API_BASE = rawUrl
   ? (rawUrl.endsWith('/api') ? rawUrl : `${rawUrl.replace(/\/+$/, '')}/api`)
   : '/api';
 
-// ----------------- GESTIÓN DE TOKEN Y AUTENTICACIÓN -----------------
+// ----------------- GESTIÓN DE TOKEN Y AUTENTICACIÓN (EN MEMORIA - P1.8) -----------------
+let inMemoryAccessToken = null;
 
 export function getAuthToken() {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('aquapulse_token');
+  return inMemoryAccessToken;
 }
 
 export function setAuthToken(token) {
-  if (typeof window === 'undefined') return;
-  if (token) {
-    localStorage.setItem('aquapulse_token', token);
-  } else {
-    localStorage.removeItem('aquapulse_token');
-  }
+  inMemoryAccessToken = token || null;
 }
 
 export function getAuthHeaders(customHeaders = {}) {
@@ -30,12 +25,60 @@ export function getAuthHeaders(customHeaders = {}) {
   return headers;
 }
 
+export async function refreshSession() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      setAuthToken(null);
+      return null;
+    }
+    const data = await res.json();
+    if (data.access_token) {
+      setAuthToken(data.access_token);
+    }
+    return data;
+  } catch (err) {
+    setAuthToken(null);
+    return null;
+  }
+}
+
+export async function logoutUser() {
+  setAuthToken(null);
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch (e) {
+    // ignorar error de red al cerrar sesión
+  }
+}
+
 async function authFetch(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const headers = getAuthHeaders(options.headers || {});
-  const res = await fetch(url, { ...options, headers });
+  let res = await fetch(url, { ...options, headers, credentials: options.credentials || 'include' });
 
   if (res.status === 401) {
+    // Si no es endpoint de auth, intentar refresco transparente de sesión
+    if (!endpoint.includes('/auth/')) {
+      try {
+        const refreshed = await refreshSession();
+        if (refreshed && refreshed.access_token) {
+          const retryHeaders = getAuthHeaders(options.headers || {});
+          res = await fetch(url, { ...options, headers: retryHeaders, credentials: options.credentials || 'include' });
+          if (res.status !== 401) {
+            return res;
+          }
+        }
+      } catch (e) {
+        // Falló refresco
+      }
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('aquapulse:unauthorized'));
     }
@@ -52,6 +95,7 @@ export async function loginUser(email, password) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: cleanEmail, password }),
+    credentials: 'include',
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -70,6 +114,7 @@ export async function registerUser(email, password, fullName = null) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: cleanEmail, password, full_name: fullName ? fullName.trim() : null }),
+    credentials: 'include',
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

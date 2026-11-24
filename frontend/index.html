@@ -15,16 +15,5 @@
   <body class="bg-ocean-950 text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white antialiased font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      // Registro de Service Worker para capacidades PWA
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(
-            (reg) => console.log('AquaPulse PWA Service Worker registrado con éxito:', reg.scope),
-            (err) => console.log('Fallo al registrar Service Worker:', err)
-          );
-        });
-      }
-    </script>
   </body>
 </html>

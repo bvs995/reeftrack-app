@@ -261,6 +261,26 @@ class PasswordResetToken(Base):
     user = relationship("User")
 
 
+class RefreshToken(Base):
+    """
+    Sesiones de Refresh Tokens persistentes en BD con familias de tokens (P1.8).
+    Almacena hash SHA-256 del token, JTI único, family_id para rotación y detección de reúso,
+    fecha de expiración y fecha de revocación.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    jti = Column(String(64), nullable=False, unique=True, index=True)
+    family_id = Column(String(64), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+
+    user = relationship("User")
+
+
 class UserDailyQuota(Base):
     """
     Control de cuota diaria persistente por usuario (P1.7).

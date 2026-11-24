@@ -62,17 +62,29 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire, "iat": datetime.utcnow(), "purpose": "access"})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def create_refresh_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
-    """Genera un refresh token rotativo criptográficamente aleatorio (7 días)."""
-    expire = datetime.utcnow() + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+def create_refresh_token(
+    user_id: int,
+    family_id: Optional[str] = None,
+    expires_delta: Optional[timedelta] = None
+) -> Tuple[str, str, str, str, datetime]:
+    """
+    Genera un refresh token rotativo criptográficamente seguro (7 días) con JTI y family_id (P1.8).
+    Retorna (token_jwt, token_hash, jti, family_id, expire_datetime).
+    """
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    jti = secrets.token_hex(16)
+    fam_id = family_id or secrets.token_hex(16)
     payload = {
         "sub": str(user_id),
         "purpose": "refresh",
-        "jti": secrets.token_hex(16),
+        "jti": jti,
+        "family_id": fam_id,
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return token, token_hash, jti, fam_id, expire
 
 def verify_refresh_token(token: str) -> dict:
     """Valida un refresh token y asegura que tenga purpose='refresh'."""
