@@ -1,4 +1,5 @@
 import re
+from enum import Enum
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
@@ -526,30 +527,39 @@ class TankCreate(BaseModel):
                 data["reef_profile"] = None
         return data
 
-class TankUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    tank_type: Optional[str] = Field(None, max_length=50)
-    volume_liters: Optional[float] = Field(None, gt=0, le=100000.0)
-    reef_profile: Optional[str] = Field(None, max_length=50)
-    dosing_method: Optional[str] = Field(None, max_length=50)
-    lighting_par: Optional[int] = Field(None, ge=0, le=2000)
-    flow_profile: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = Field(None, max_length=2000)
+class TankTypeEnum(str, Enum):
+    reef = "reef"
+    freshwater = "freshwater"
+    planted = "planted"
+    fish_only = "fish_only"
+    soft_reef = "soft_reef"
+    lps_reef = "lps_reef"
+    mixed_reef = "mixed_reef"
+    sps_reef = "sps_reef"
+    freshwater_planted = "freshwater_planted"
+    freshwater_community = "freshwater_community"
+
+class ReefProfileEnum(str, Enum):
+    fish_only = "fish_only"
+    soft_reef = "soft_reef"
+    lps_reef = "lps_reef"
+    mixed_reef = "mixed_reef"
+    sps_reef = "sps_reef"
+
+class TankUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=80, description="Nombre del acuario (<= 80 car.)")
+    volume_liters: Optional[float] = Field(None, ge=1.0, le=50000.0, description="Volumen entre 1 y 50 000 litros")
+    tank_type: Optional[TankTypeEnum] = Field(None, description="Biotipo del acuario")
+    reef_profile: Optional[ReefProfileEnum] = Field(None, description="Perfil marino cerrado")
+    dosing_method: Optional[str] = Field(None, max_length=50, description="Método de dosificación")
+    lighting_par: Optional[int] = Field(None, ge=0, le=3000, description="PAR entero acotado")
+    flow_profile: Optional[str] = Field(None, max_length=50, description="Perfil de flujo")
+    notes: Optional[str] = Field(None, max_length=500, description="Notas (<= 500 car.)")
 
     model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="before")
-    @classmethod
-    def handle_type_alias(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "type" in data:
-                raw_type = data.pop("type")
-                if raw_type:
-                    data["tank_type"] = normalize_tank_type_value(raw_type)
-        return data
-
-class AquariumUpdate(TankUpdate):
-    pass
+TankUpdate = TankUpdateRequest
+AquariumUpdate = TankUpdateRequest
     
 class TankResponse(BaseModel):
     id: int

@@ -57,6 +57,38 @@ def first_not_none(*vals):
     return None
 
 
+def sanitize_prompt_text(text: Optional[str], max_len: int = 500) -> str:
+    """
+    Sanea textos libres (nombres de tanques, notas de usuario, texto de imágenes)
+    antes de incluirlos en prompts dirigidos a Gemini (P1.10).
+    Neutraliza intentos de inyección de prompt, elimina caracteres de control
+    y bloques delimitadores de markdown/JSON.
+    """
+    if not text:
+        return ""
+    val = str(text).strip()
+    # Eliminar bloques de código markdown y delimitadores que puedan confundir el parser JSON
+    val = re.sub(r"```+", "", val)
+    # Neutralizar caracteres de control preservando espacios comunes
+    val = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", val)
+    # Patrones comunes de prompt injection
+    injection_patterns = [
+        r"(?i)ignore\s+(all\s+)?(previous|prior)\s+instructions",
+        r"(?i)system\s+prompt",
+        r"(?i)system\s*:",
+        r"(?i)human\s*:",
+        r"(?i)assistant\s*:",
+        r"(?i)override\s+rules",
+        r"(?i)disregard\s+rules"
+    ]
+    for pattern in injection_patterns:
+        val = re.sub(pattern, "[UNTRUSTED_DATA]", val)
+    # Acotar longitud
+    if len(val) > max_len:
+        val = val[:max_len]
+    return val
+
+
 def get_current_month_ai_spend(db: Optional[Session]) -> float:
     """Calcula el gasto acumulado en USD en llamadas a Gemini en el mes en curso (Fase 7)."""
     if not db:
@@ -484,9 +516,12 @@ def analizar_parametros_estructurado(
             for k, v in intervals_dict.items()
         }
 
+        safe_nombre = sanitize_prompt_text(nombre, max_len=80)
+        safe_tendencia = sanitize_prompt_text(tendencia, max_len=500)
+
         user_prompt = f"""
         EVALUACIÓN CLÍNICA DETERMINÍSTICA PRE-COMPUTADA (INAPELABLE):
-        - Acuario: '{nombre}' ({volumen} L)
+        - Acuario: '{safe_nombre}' ({volumen} L)
         - Biotipo / Perfil de Arrecife: {profile_info['name']} ({profile_info['id']})
         - Método de dosificación: {DOSING_METHOD_LABELS.get(dosing_method, dosing_method or 'No especificado')}
         - Mediciones con Intervalos de Incertidumbre [v - e, v + e]: {json.dumps(intervals_summary, ensure_ascii=False)}
@@ -494,7 +529,7 @@ def analizar_parametros_estructurado(
         - Severidad máxima calculada por reglas: {rules_max_severity.upper()}
         - Antigüedad del último test: {f'{days_since_last:.1f} días' if days_since_last is not None else 'Sin fecha exacta'}
         - Correlación de mantenimiento y equipo: {json.dumps(maintenance_tasks, ensure_ascii=False) if maintenance_tasks else 'Al día'}
-        - Tendencia reciente: {tendencia}
+        - Tendencia reciente: {safe_tendencia}
 
         REGLAS DE RESPUESTA:
         1. Eres una IA: explica el contexto biológico de los datos anteriores, NO decidas nuevos límites ni anules alertas.

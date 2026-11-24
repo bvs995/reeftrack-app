@@ -42,6 +42,7 @@ from backend.models import (
     UserResponse,
     TokenResponse,
     TankCreate,
+    TankUpdateRequest,
     AquariumCreate,
     TankResponse,
     MeasurementCreate,
@@ -1388,24 +1389,14 @@ def create_aquarium_via_schema(
 @app.put("/api/tanks/{aquarium_id}", include_in_schema=False)
 def update_aquarium(
     aquarium_id: int,
-    volume_liters: Optional[int] = Query(None, description="Nuevo volumen en litros"),
-    payload: Optional[dict] = Body(None),
+    payload: TankUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Actualiza el volumen en litros y parámetros de un acuario verificando que pertenezca al usuario autenticado (Anti-IDOR).
+    Actualiza parámetros de un acuario verificando que pertenezca al usuario autenticado (Anti-IDOR).
+    Validación estricta con Pydantic TankUpdateRequest (extra='forbid', name<=80, notes<=500, volume 1..50000, Enums).
     """
-    actual_volume = volume_liters
-    if actual_volume is None and payload and "volume_liters" in payload:
-        actual_volume = payload["volume_liters"]
-    elif actual_volume is None and isinstance(payload, (int, float)):
-        actual_volume = payload
-
-    if actual_volume is None and not (payload and any(k in payload for k in ["name", "tank_type", "type", "notes", "reef_profile", "dosing_method", "lighting_par", "flow_profile"])):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Se requiere el campo 'volume_liters' o datos a actualizar")
-
-    # Validación estricta anti-IDOR: verificar pertenencia a current_user.id
     tank = db.query(Tank).filter(Tank.id == aquarium_id, Tank.user_id == current_user.id).first()
     if not tank:
         raise HTTPException(
@@ -1413,41 +1404,37 @@ def update_aquarium(
             detail="Acuario no encontrado o no pertenece a tu cuenta."
         )
 
-    if actual_volume is not None:
-        tank.volume_liters = actual_volume
-
-    if payload and isinstance(payload, dict):
-        if "name" in payload and payload["name"]:
-            tank.name = str(payload["name"]).strip()
-        if "tank_type" in payload and payload["tank_type"]:
-            tank.tank_type = str(payload["tank_type"]).strip()
-        elif "type" in payload and payload["type"]:
-            tank.tank_type = str(payload["type"]).strip()
-        if "reef_profile" in payload:
-            tank.reef_profile = payload["reef_profile"]
-        if "dosing_method" in payload:
-            tank.dosing_method = payload["dosing_method"]
-        if "lighting_par" in payload:
-            tank.lighting_par = int(payload["lighting_par"]) if payload["lighting_par"] is not None and str(payload["lighting_par"]).strip() != "" else None
-        if "flow_profile" in payload:
-            tank.flow_profile = payload["flow_profile"]
-        if "notes" in payload:
-            tank.notes = payload["notes"]
+    if payload.volume_liters is not None:
+        tank.volume_liters = payload.volume_liters
+    if payload.name is not None:
+        tank.name = payload.name.strip()
+    if payload.tank_type is not None:
+        tank.tank_type = payload.tank_type.value if hasattr(payload.tank_type, "value") else str(payload.tank_type)
+    if payload.reef_profile is not None:
+        tank.reef_profile = payload.reef_profile.value if hasattr(payload.reef_profile, "value") else str(payload.reef_profile)
+    if payload.dosing_method is not None:
+        tank.dosing_method = payload.dosing_method
+    if payload.lighting_par is not None:
+        tank.lighting_par = payload.lighting_par
+    if payload.flow_profile is not None:
+        tank.flow_profile = payload.flow_profile
+    if payload.notes is not None:
+        tank.notes = payload.notes
 
     db.commit()
     db.refresh(tank)
     return {
         "message": "Acuario actualizado",
-        "new_volume": getattr(tank, "volume_liters", actual_volume),
-        "tank_type": getattr(tank, "tank_type", None),
+        "new_volume": tank.volume_liters,
+        "tank_type": tank.tank_type,
         "id": tank.id,
-        "name": getattr(tank, "name", None) or getattr(tank, "nombre", None),
-        "volume_liters": getattr(tank, "volume_liters", actual_volume),
-        "reef_profile": getattr(tank, "reef_profile", None),
-        "dosing_method": getattr(tank, "dosing_method", None),
-        "lighting_par": getattr(tank, "lighting_par", None),
-        "flow_profile": getattr(tank, "flow_profile", None),
-        "notes": getattr(tank, "notes", None)
+        "name": tank.name,
+        "volume_liters": tank.volume_liters,
+        "reef_profile": tank.reef_profile,
+        "dosing_method": tank.dosing_method,
+        "lighting_par": tank.lighting_par,
+        "flow_profile": tank.flow_profile,
+        "notes": tank.notes
     }
 
 @app.delete(
