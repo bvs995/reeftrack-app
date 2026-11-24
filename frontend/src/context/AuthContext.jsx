@@ -7,7 +7,9 @@ import {
   refreshSession,
   logoutUser as apiLogout,
   fetchUserProfile,
-  updateUserProfile as apiUpdateProfile
+  updateUserProfile as apiUpdateProfile,
+  verifyEmailToken as apiVerifyEmail,
+  resendVerificationEmail as apiResendVerification
 } from '../api';
 
 const AuthContext = createContext(null);
@@ -88,6 +90,24 @@ export function AuthProvider({ children }) {
     return updated;
   }, []);
 
+  const verifyEmail = useCallback(async (verifyToken) => {
+    const data = await apiVerifyEmail(verifyToken);
+    if (data.access_token) {
+      setAuthToken(data.access_token);
+      setToken(data.access_token);
+    }
+    if (data.user) {
+      setUser(data.user);
+    } else {
+      setUser((prev) => (prev ? { ...prev, email_verified: true, is_active: true } : prev));
+    }
+    return data;
+  }, []);
+
+  const resendVerification = useCallback(async (targetEmail) => {
+    return await apiResendVerification(targetEmail);
+  }, []);
+
   const loginDemo = useCallback(async () => {
     return await login('demo@aquapulse.io', 'demo123');
   }, [login]);
@@ -114,6 +134,9 @@ export function AuthProvider({ children }) {
     register,
     logout,
     updateProfile,
+    verifyEmail,
+    resendVerification,
+    setUser,
     loginDemo,
     isAuthModalOpen,
     authModalTab,

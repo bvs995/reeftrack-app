@@ -465,12 +465,33 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     methods=["GET", "POST"],
     summary="Verificar correo electrónico para activar la cuenta"
 )
-def verify_email(
-    token: str = Query(..., description="Token JWT de verificación de correo"),
+async def verify_email(
+    request: Request,
+    response: Response,
+    token: Optional[str] = Query(None, description="Token JWT de verificación de correo"),
     db: Session = Depends(get_db)
 ):
-    """Valida el token de verificación y activa la cuenta del usuario."""
-    token_data = verify_email_verification_token(token)
+    """
+    Valida el token de verificación y activa la cuenta del usuario.
+    Si el token ya fue utilizado (o el usuario ya está verificado), deniega la operación con 400.
+    Genera sesión activa y cookie HttpOnly para que el usuario pueda operar de inmediato sin relogin.
+    """
+    clean_token = token
+    if not clean_token and request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                clean_token = body.get("token") or body.get("verify_email_token")
+        except Exception:
+            pass
+
+    if not clean_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Se requiere el parámetro o token de verificación."
+        )
+
+    token_data = verify_email_verification_token(clean_token)
     user_id = int(token_data["sub"])
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -480,14 +501,49 @@ def verify_email(
             detail="Usuario no encontrado."
         )
 
+    if user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este enlace de verificación ya fue utilizado o el correo ya ha sido verificado."
+        )
+
     user.email_verified = True
     user.is_active = True
     db.commit()
+    db.refresh(user)
+
+    access_token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+        "token_version": user.token_version or 1
+    })
+    raw_rt, rt_hash, rt_jti, rt_fam, rt_exp = create_refresh_token(user.id)
+    new_rf = RefreshToken(
+        user_id=user.id,
+        token_hash=rt_hash,
+        jti=rt_jti,
+        family_id=rt_fam,
+        expires_at=rt_exp
+    )
+    db.add(new_rf)
+    db.commit()
+
+    response.set_cookie(
+        key="aquapulse_refresh_token",
+        value=raw_rt,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/auth",
+    )
 
     logger.info(f"Correo electrónico verificado exitosamente para usuario ID {user.id}")
     return {
         "ok": True,
-        "message": "Correo electrónico verificado exitosamente. Tu cuenta está activa y lista para usar."
+        "message": "Correo electrónico verificado exitosamente. Tu cuenta está activa y lista para usar.",
+        "access_token": access_token,
+        "user": UserResponse.model_validate(user).model_dump()
     }
 
 

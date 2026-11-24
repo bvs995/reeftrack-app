@@ -12,6 +12,7 @@ import NotificationModal from './components/NotificationModal';
 import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/ErrorBoundary';
 import AuthModal from './components/AuthModal';
+import EmailVerificationModal from './components/EmailVerificationModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   fetchTanks,
@@ -40,8 +41,17 @@ function AppContent() {
     isAuthModalOpen,
     closeAuthModal,
     openAuthModal,
+    verifyEmail,
+    resendVerification,
     loginDemo
   } = useAuth();
+
+  const [emailVerificationState, setEmailVerificationState] = useState({
+    isOpen: false,
+    status: null, // 'verifying' | 'success' | 'error'
+    errorMessage: '',
+    email: '',
+  });
 
   const [tanks, setTanks] = useState([]);
   const [activeTank, setActiveTank] = useState(null);
@@ -95,6 +105,50 @@ function AppContent() {
       }
     }
   }, [openAuthModal]);
+
+  // Flujo completo de verificación de correo por URL (?verify_email_token=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('verify_email_token');
+
+    if (verifyToken) {
+      // 3. Borrar el token de la barra de direcciones inmediatamente con replaceState
+      params.delete('verify_email_token');
+      const newQuery = params.toString() ? `?${params.toString()}` : '';
+      const cleanUrl = window.location.pathname + newQuery + window.location.hash;
+      window.history.replaceState(null, '', cleanUrl);
+
+      // 1 y 2. Mostrar estado "Verificando..." y llamar al endpoint de verificación
+      setEmailVerificationState({
+        isOpen: true,
+        status: 'verifying',
+        errorMessage: '',
+        email: user?.email || '',
+      });
+
+      verifyEmail(verifyToken)
+        .then((res) => {
+          setEmailVerificationState((prev) => ({
+            ...prev,
+            status: 'success',
+            errorMessage: '',
+            email: res?.user?.email || user?.email || '',
+          }));
+          // 4. Tras verificar, actualizar datos para permitir registrar mediciones de inmediato
+          loadTanks();
+        })
+        .catch((err) => {
+          setEmailVerificationState((prev) => ({
+            ...prev,
+            status: 'error',
+            errorMessage: err.message || 'El enlace de verificación es inválido o ha expirado.',
+            email: user?.email || '',
+          }));
+        });
+    }
+  }, [verifyEmail]);
 
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
   const [quickLogTank, setQuickLogTank] = useState(null);
@@ -464,6 +518,21 @@ function AppContent() {
       <NotificationModal
         isOpen={isNotificationModalOpen}
         onClose={() => setIsNotificationModalOpen(false)}
+      />
+
+      {/* Email Verification Status Modal */}
+      <EmailVerificationModal
+        isOpen={emailVerificationState.isOpen}
+        status={emailVerificationState.status}
+        errorMessage={emailVerificationState.errorMessage}
+        defaultEmail={emailVerificationState.email || user?.email || ''}
+        onClose={() => setEmailVerificationState((prev) => ({ ...prev, isOpen: false }))}
+        onResend={async (emailToResend) => {
+          return await resendVerification(emailToResend);
+        }}
+        onSuccessContinue={() => {
+          loadTanks();
+        }}
       />
 
       {/* Authentication Modal (Login / Register) */}

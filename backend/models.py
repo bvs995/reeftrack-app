@@ -415,6 +415,7 @@ class UserResponse(BaseModel):
     subscription_tier: str = "free"
     is_admin: bool = False
     is_active: bool = True
+    email_verified: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

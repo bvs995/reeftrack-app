@@ -154,6 +154,39 @@ export async function confirmPasswordReset(token, newPassword) {
   return res.json();
 }
 
+export async function verifyEmailToken(token) {
+  const cleanToken = (token || '').trim();
+  const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(cleanToken)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al verificar el correo electrónico');
+  }
+  const data = await res.json();
+  if (data.access_token) {
+    setAuthToken(data.access_token);
+  }
+  return data;
+}
+
+export async function resendVerificationEmail(email) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const res = await fetch(`${API_BASE}/auth/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: cleanEmail }),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Error al reenviar correo de verificación');
+  }
+  return res.json();
+}
+
 export async function fetchUserProfile() {
   const res = await authFetch('/auth/me');
   if (!res.ok) {
