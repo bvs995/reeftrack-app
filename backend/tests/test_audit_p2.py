@@ -328,3 +328,51 @@ class TestAuditP2Point16:
         assert u.is_active is False
         assert u.deletion_scheduled_at is not None
         db.close()
+
+
+# ==============================================================================
+# P2.17 - Limpieza de código: routers modulares, sin decoradores apilados,
+#         sin utcnow(), sola función de IA y main.py acotado
+# ==============================================================================
+class TestAuditP2Point17:
+    def test_routers_package_exists_with_all_modules(self):
+        routers_dir = REPO_ROOT / "backend" / "routers"
+        assert routers_dir.exists(), "backend/routers/ must exist"
+        for mod in ["auth.py", "tanks.py", "measurements.py", "ai.py", "maintenance.py", "push.py", "admin.py"]:
+            mod_path = routers_dir / mod
+            assert mod_path.exists(), f"Router module {mod} must exist"
+            content = mod_path.read_text(encoding="utf-8")
+            assert "APIRouter(" in content, f"Router module {mod} must define an APIRouter"
+
+    def test_main_py_line_count_is_modularized(self):
+        main_path = REPO_ROOT / "backend" / "main.py"
+        lines = main_path.read_text(encoding="utf-8").splitlines()
+        # main.py previously had ~3000 lines; modularized should be under 700 lines
+        assert len(lines) < 700, f"backend/main.py must be modularized (< 700 lines, currently {len(lines)})"
+
+    def test_no_stacked_route_decorators_in_backend(self):
+        import re
+        py_files = list((REPO_ROOT / "backend").glob("*.py")) + list((REPO_ROOT / "backend" / "routers").glob("*.py"))
+        for py_file in py_files:
+            lines = py_file.read_text(encoding="utf-8").splitlines()
+            current_decorators = []
+            for i, line in enumerate(lines):
+                if re.search(r"^\s*@(app|router)\.(get|post|put|delete|patch)\(", line):
+                    current_decorators.append((i + 1, line.strip()))
+                elif current_decorators and not line.strip().startswith("@"):
+                    assert len(current_decorators) <= 1, (
+                        f"Stacked decorators found in {py_file.name} at lines {[c[0] for c in current_decorators]}: "
+                        f"{[c[1] for c in current_decorators]}"
+                    )
+                    current_decorators = []
+
+    def test_no_datetime_utcnow_in_backend(self):
+        py_files = [p for p in (REPO_ROOT / "backend").rglob("*.py") if "venv" not in str(p) and "tests" not in str(p)]
+        for py_file in py_files:
+            content = py_file.read_text(encoding="utf-8")
+            assert "datetime.utcnow" not in content, f"Found deprecated datetime.utcnow in {py_file}"
+
+    def test_single_canonical_ai_analysis_function(self):
+        import backend.services.ai_service as ai_srv
+        assert hasattr(ai_srv, "analizar_parametros_estructurado")
+        assert callable(ai_srv.analizar_parametros_estructurado)

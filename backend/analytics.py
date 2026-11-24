@@ -7,7 +7,7 @@ AquaPulse - Fase 3:
 - Nutrientes NO3/PO4 en cero se muestran como '< e' (por debajo del límite de detección).
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple, Any
 from backend.models import (
     Measurement,
@@ -370,7 +370,7 @@ def calculate_predictions(measurements: List[Measurement]) -> PredictionResponse
     - Proyecta acumulación de nitratos y fecha estimada para cambio de agua.
     - Consolida alertas biológicas activas.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     fourteen_days_ago = now - timedelta(days=14)
 
     recent_14_days = [m for m in measurements if m.timestamp >= fourteen_days_ago]

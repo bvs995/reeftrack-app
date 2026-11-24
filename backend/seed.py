@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from backend.models import User, Tank, Measurement
@@ -26,7 +26,7 @@ def seed_database_if_empty(db: Session):
                     subscription_tier="free",
                     is_admin=False,
                     is_active=True,
-                    created_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc)
                 )
                 db.add(demo_user)
                 db.commit()
@@ -73,7 +73,7 @@ def seed_database_if_empty(db: Session):
         count = db.query(Measurement).filter(Measurement.user_id == demo_user.id).count()
         if count == 0 and demo_tank:
             logger.info("🌱 Agregando 5 mediciones históricas iniciales...")
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             sample_records = [
                 Measurement(
                     user_id=demo_user.id,

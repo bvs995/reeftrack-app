@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import DashboardTrends from './components/DashboardTrends';
-import TrendsView from './components/TrendsView';
 import WaterChangesView from './components/WaterChangesView';
 import SettingsView from './components/SettingsView';
 import AdminDashboard from './components/AdminDashboard';

@@ -4,7 +4,7 @@ import json
 import time
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple, Set
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
@@ -292,7 +292,7 @@ def get_ai_audit_statistics(db: Session, sample_size: int = 100) -> Dict[str, An
     """Retorna métricas consolidadas de auditoría operativa para /api/admin y monitor /api/health (Fase 7)."""
     try:
         budget_limit = float(os.getenv("GEMINI_MONTHLY_BUDGET_USD", "25.0"))
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         first_day_of_month = datetime(now.year, now.month, 1)
 
         month_spend = db.query(func.coalesce(func.sum(DiagnosticAudit.cost_usd), 0.0)).filter(
@@ -343,7 +343,7 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     Obtiene el historial cronológico de mediciones de un acuario en las últimas 48 horas
     y lo resume en texto estructurado comprensible para la IA de AquaPulse.
     """
-    hace_48_horas = datetime.utcnow() - timedelta(hours=48)
+    hace_48_horas = datetime.now(timezone.utc) - timedelta(hours=48)
 
     registros = (
         db.query(Measurement)
@@ -543,8 +543,10 @@ def analizar_parametros_estructurado(
             m_0 = history_measurements[0]
             raw_ts = m_0.get("timestamp") or m_0.get("fecha_registro")
             if raw_ts:
-                dt_meas = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00")).replace(tzinfo=None)
-                days_since_last = (datetime.utcnow() - dt_meas).total_seconds() / 86400.0
+                dt_meas = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                if dt_meas.tzinfo is None:
+                    dt_meas = dt_meas.replace(tzinfo=timezone.utc)
+                days_since_last = (datetime.now(timezone.utc) - dt_meas).total_seconds() / 86400.0
         except Exception:
             pass
 
@@ -861,11 +863,7 @@ def analizar_parametros_estructurado(
         raise e
 
 
-# Alias de compatibilidad
-analizar_parametros_acuario = analizar_parametros_estructurado
-analizar_acuario_estructurado = analizar_parametros_estructurado
-
-
-# Alias de compatibilidad
+# Función pública canónica de análisis IA (P2.17)
+# Alias para compatibilidad con código existente
 analizar_parametros_acuario = analizar_parametros_estructurado
 analizar_acuario_estructurado = analizar_parametros_estructurado

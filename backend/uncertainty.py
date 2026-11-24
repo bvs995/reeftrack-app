@@ -12,7 +12,7 @@ AquaPulse - Fase 3:
 """
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple
 from pydantic import BaseModel, Field
 
@@ -616,7 +616,7 @@ def project_trend_with_uncertainty(
     """
     p_norm = normalize_param_key(parameter)
     n = len(points)
-    now_dt = latest_timestamp or datetime.utcnow()
+    now_dt = latest_timestamp or datetime.now(timezone.utc)
 
     # 1. Mínimo 3 mediciones obligatorias para proyectar
     if n < 3:

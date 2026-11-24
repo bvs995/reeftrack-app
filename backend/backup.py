@@ -8,7 +8,7 @@ import sys
 import sqlite3
 import subprocess
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy import create_engine, inspect, text
 
@@ -47,7 +47,7 @@ def create_database_backup(db_url: Optional[str] = None, output_file: Optional[s
     from backend.database import DATABASE_URL
     url = db_url or DATABASE_URL
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     if not output_file:
         output_file = f"/tmp/aquapulse_backup_{timestamp}.sql"
 

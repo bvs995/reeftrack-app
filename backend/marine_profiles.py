@@ -426,13 +426,15 @@ def _parse_dt(val: Any) -> Optional[datetime]:
     if isinstance(val, str):
         try:
             dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
         except Exception:
             return None
     if isinstance(val, datetime):
-        if val.tzinfo:
-            return val.astimezone(timezone.utc).replace(tzinfo=None)
-        return val
+        if val.tzinfo is None:
+            return val.replace(tzinfo=timezone.utc)
+        return val.astimezone(timezone.utc)
     return None
 
 
@@ -473,7 +475,7 @@ def evaluate_marine_alerts(
     if not isinstance(test_methods, dict):
         test_methods = {}
 
-    current_time = _parse_dt(current_data.get("timestamp")) or datetime.utcnow()
+    current_time = _parse_dt(current_data.get("timestamp")) or datetime.now(timezone.utc)
 
     # -------------------------------------------------------------
     # 1. DETECTOR DELTA 24H DE KH CON INCERTIDUMBRE METROLÓGICA (u = sqrt(e1² + e2²))

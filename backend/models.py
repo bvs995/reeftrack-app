@@ -1,6 +1,10 @@
 import re
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
+
+def utc_now() -> datetime:
+    """Retorna timestamp actual en UTC con zona horaria explícita (P2.17)."""
+    return datetime.now(timezone.utc)
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
 from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func, JSON, UniqueConstraint
@@ -43,7 +47,7 @@ class User(Base):
     email_verified = Column(Boolean, default=False, nullable=False)
     token_version = Column(Integer, default=1, nullable=False)
     deletion_scheduled_at = Column(DateTime, nullable=True) # Periodo de gracia para borrado de cuenta (P2.16)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     # Relaciones estrictas por usuario
     tanks = relationship("Tank", back_populates="owner", cascade="all, delete-orphan")
@@ -66,7 +70,7 @@ class Tank(Base):
     lighting_par = Column(Integer, nullable=True) # PAR
     flow_profile = Column(String(50), nullable=True) # "low_moderate", "moderate_indirect", "high_turbulent"
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     # Sinónimos para compatibilidad bilingüe
     nombre = synonym("name")
@@ -89,7 +93,7 @@ class Measurement(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="SET NULL"), nullable=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=utc_now, nullable=False, index=True)
     ph = Column(Float, nullable=True)
     alkalinity_dkh = Column(Float, nullable=True)
     kh = Column(Float, nullable=True)
@@ -146,7 +150,7 @@ class MaintenanceTask(Base):
     next_due_at = Column(DateTime(timezone=True), nullable=True)
     is_enabled = Column(Boolean, default=True, nullable=False)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
     # Sinónimos para interoperabilidad
     tank_id = synonym("aquarium_id")
@@ -162,7 +166,7 @@ class MaintenanceLog(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     task_id = Column(Integer, ForeignKey("maintenance_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
     aquarium_id = Column(Integer, nullable=False, index=True)
-    completed_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     linked_water_change_id = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
 
@@ -177,9 +181,9 @@ class WaterChange(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     volume_liters = Column(Float, nullable=False)
     percentage = Column(Float, nullable=True)
-    performed_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    performed_at = Column(DateTime(timezone=True), default=utc_now)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
     aquarium_id = synonym("tank_id")
 
@@ -198,7 +202,7 @@ class PushSubscription(Base):
     user_agent = Column(String(500), nullable=True)
     notify_maintenance = Column(Boolean, default=True, nullable=False)
     notify_alerts = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
     user = relationship("User", back_populates="push_subscriptions")
 
@@ -214,7 +218,7 @@ class DiagnosticFeedback(Base):
     user_comment = Column(Text, nullable=False)
     category = Column(String(50), default="incorrect_diagnosis", nullable=False)
     consent_given = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
     user = relationship("User")
     tank = relationship("Tank")
@@ -240,7 +244,7 @@ class DiagnosticAudit(Base):
     cost_usd = Column(Float, default=0.0, nullable=False)
     token_count = Column(Integer, default=0, nullable=False)
     latency_ms = Column(Float, default=0.0, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False, index=True)
 
     user = relationship("User")
     tank = relationship("Tank")
@@ -259,7 +263,7 @@ class PasswordResetToken(Base):
     jti = Column(String(64), nullable=False, unique=True, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
     user = relationship("User")
 
@@ -279,7 +283,7 @@ class RefreshToken(Base):
     family_id = Column(String(64), nullable=False, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
     user = relationship("User")
 
@@ -295,7 +299,7 @@ class UserDailyQuota(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD UTC
     count = Column(Integer, default=0, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), onupdate=utc_now, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "date", name="uq_user_daily_quota"),
@@ -315,7 +319,7 @@ class RateLimitRecord(Base):
     key = Column(String(255), nullable=False, index=True)      # e.g., 'ip:1.2.3.4', 'email:test@reef.com'
     action = Column(String(50), nullable=False, index=True)    # 'auth', 'scan_burst', 'ai_burst'
     timestamp = Column(Float, nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
 
 # ==============================================================================
