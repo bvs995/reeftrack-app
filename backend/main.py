@@ -1,6 +1,7 @@
 import os
 import uuid
 import secrets
+import hashlib
 import time
 import threading
 import logging
@@ -65,6 +66,7 @@ from backend.models import (
     PushUnsubscribeRequest,
     PushPreferencesUpdate,
     PushSubscriptionResponse,
+    PasswordResetToken,
     DiagnosticAudit,
     DiagnosticAuditResponse,
     DiagnosticAuditStatsResponse
@@ -96,6 +98,7 @@ from backend.auth import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_password_reset_token,
     verify_password_reset_token,
+    send_password_reset_email,
     get_current_user,
     get_optional_current_user,
     get_current_admin_user
@@ -479,7 +482,11 @@ def register_user(
     db.add(default_tank)
     db.commit()
 
-    access_token = create_access_token({"sub": str(new_user.id), "email": new_user.email})
+    access_token = create_access_token({
+        "sub": str(new_user.id),
+        "email": new_user.email,
+        "token_version": new_user.token_version or 1
+    })
     refresh_token = create_refresh_token(new_user.id)
 
     response.set_cookie(
@@ -534,7 +541,11 @@ def login_user(
         db.commit()
         db.refresh(user)
 
-    access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    access_token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+        "token_version": user.token_version or 1
+    })
     refresh_token = create_refresh_token(user.id)
 
     response.set_cookie(
@@ -588,7 +599,11 @@ def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
-    new_access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    new_access_token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+        "token_version": user.token_version or 1
+    })
     new_refresh_token = create_refresh_token(user.id)
 
     response.set_cookie(
@@ -630,7 +645,7 @@ def forgot_password(
     """
     Genera un token firmado temporal y emite un enlace de restablecimiento.
     Por seguridad (OWASP), siempre responde de manera neutral para evitar enumeración de correos.
-    Si no hay SMTP configurado, imprime el enlace seguro directamente en la consola para pruebas.
+    El token es de un solo uso y se envía por proveedor transaccional SMTP sin exponerlo en logs.
     """
     check_auth_rate_limit(request)
     normalized_email = payload.email.strip().lower()
@@ -639,26 +654,24 @@ def forgot_password(
     frontend_base = os.getenv("FRONTEND_URL", "").rstrip("/") or "http://localhost:5173"
 
     if user and user.is_active:
-        reset_token = create_password_reset_token(user.email, user.id)
+        reset_token, jti, expire = create_password_reset_token(user.email, user.id)
         reset_url = f"{frontend_base}/?reset_token={reset_token}"
+        token_hash = hashlib.sha256(reset_token.encode("utf-8")).hexdigest()
 
-        # Salida visual de alta visibilidad en consola para pruebas locales o desarrollo sin SMTP
-        print("\n" + "=" * 76, flush=True)
-        print("🔑 [AquaPulse Security] ENLACE DE RESTABLECIMIENTO DE CONTRASEÑA GENERADO", flush=True)
-        print(f"📧 Destinatario: {user.email} (ID: {user.id})", flush=True)
-        print(f"⏱️  Validez: 30 minutos (Token JWT con propósito específico)", flush=True)
-        print(f"🔗 Enlace seguro para pruebas locales o sin servidor SMTP:", flush=True)
-        print(f"   {reset_url}", flush=True)
-        print("=" * 76 + "\n", flush=True)
-
-        return PasswordResetResponse(
-            ok=True,
-            message="Si tu correo está registrado, recibirás un enlace seguro para restablecer tu contraseña.",
-            reset_url_dev=reset_url,
-            reset_token_dev=reset_token
+        # Guardar registro en BD de un solo uso
+        reset_record = PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            jti=jti,
+            expires_at=expire
         )
+        db.add(reset_record)
+        db.commit()
 
-    print(f"ℹ️ [AquaPulse Security] Solicitud de restablecimiento para correo no existente o inactivo: {normalized_email}", flush=True)
+        # Envío seguro por correo transaccional (no se imprime token ni URL en logs)
+        send_password_reset_email(user.email, reset_url)
+
+    logger.info("Solicitud de restablecimiento de contraseña procesada con respuesta neutral.")
     return PasswordResetResponse(
         ok=True,
         message="Si tu correo está registrado, recibirás un enlace seguro para restablecer tu contraseña."
@@ -670,7 +683,7 @@ def forgot_password(
     summary="Restablecer la contraseña usando el token seguro"
 )
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """Valida el token firmado y actualiza la contraseña con bcrypt exigiendo complejidad estricta."""
+    """Valida el token firmado de un solo uso, actualiza contraseña con bcrypt e invalida todas las sesiones previas."""
     try:
         check_password_complexity(payload.new_password)
     except ValueError as e:
@@ -681,6 +694,30 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 
     token_data = verify_password_reset_token(payload.token)
     user_id = int(token_data["sub"])
+    jti = token_data.get("jti")
+
+    # Validar un solo uso en BD
+    reset_record = db.query(PasswordResetToken).filter(
+        PasswordResetToken.jti == jti,
+        PasswordResetToken.user_id == user_id
+    ).first()
+
+    now = datetime.now(timezone.utc)
+    if not reset_record or reset_record.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este enlace de restablecimiento ya ha sido utilizado o no es válido. Solicita uno nuevo."
+        )
+
+    # Validar expiración contra BD
+    exp = reset_record.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de restablecimiento ha expirado. Por favor solicita uno nuevo."
+        )
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -695,11 +732,15 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
             detail="La cuenta se encuentra suspendida. Contacta a soporte."
         )
 
-    # Actualizar hash seguro
+    # 1. Actualizar contraseña
     user.hashed_password = hash_password(payload.new_password)
+    # 2. Invalidar todas las sesiones previas incrementando token_version
+    user.token_version = (user.token_version or 1) + 1
+    # 3. Marcar token como utilizado
+    reset_record.used_at = now
     db.commit()
 
-    print(f"✅ [AquaPulse Security] Contraseña actualizada exitosamente para el usuario: {user.email}", flush=True)
+    logger.info("Contraseña actualizada y sesiones anteriores revocadas para usuario.")
 
     return PasswordResetResponse(
         ok=True,

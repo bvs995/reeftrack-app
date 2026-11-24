@@ -117,6 +117,7 @@ def init_db():
         return
 
     try:
+        import backend.models  # Asegurar registro de modelos en metadata
         Base.metadata.create_all(bind=engine)
     except Exception as ddl_err:
         logger.info(f"Aviso durante create_all (posible creación concurrente por otro worker): {ddl_err}")
@@ -126,6 +127,7 @@ def init_db():
         with engine.connect() as conn:
             try:
                 # Columnas de perfiles marinos en tanks y acuarios
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 1;"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
@@ -312,6 +314,9 @@ def init_db():
                 if "subscription_tier" not in user_columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN subscription_tier VARCHAR(50) DEFAULT 'free';"))
                     logger.info("Auto-migración: Columna subscription_tier añadida a users.")
+                if "token_version" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;"))
+                    logger.info("Auto-migración: Columna token_version añadida a users.")
 
                 # Saneamiento de posibles valores nulos preexistentes para evitar IntegrityError
                 try:

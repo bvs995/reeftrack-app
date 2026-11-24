@@ -39,6 +39,7 @@ class User(Base):
     subscription_tier = Column(String(50), default="free", nullable=False) # 'free', 'premium'
     is_admin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    token_version = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relaciones estrictas por usuario
@@ -241,6 +242,24 @@ class DiagnosticAudit(Base):
     tank = relationship("Tank")
 
 
+class PasswordResetToken(Base):
+    """
+    Token de restablecimiento de contraseña de un solo uso (Auditoría P0).
+    Almacena hash SHA-256 del token, JTI único, expiración y marca de uso.
+    """
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    jti = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+
+    user = relationship("User")
+
+
 # ==============================================================================
 # MODELOS SQLALCHEMY ORM OFICIALES EN ESPAÑOL (acuarios y mediciones)
 # ==============================================================================
@@ -376,9 +395,7 @@ class ResetPasswordRequest(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     ok: bool = True
-    message: str
-    reset_url_dev: Optional[str] = None
-    reset_token_dev: Optional[str] = None
+    message: str = "Si tu correo está registrado, recibirás un enlace seguro para restablecer tu contraseña."
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)

@@ -1,8 +1,12 @@
 import os
 import logging
 import secrets
-from datetime import datetime, timedelta
-from typing import Optional
+import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
 import jwt
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -93,20 +97,26 @@ def verify_refresh_token(token: str) -> dict:
 
     return payload
 
-def create_password_reset_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
-    """Genera un token criptográfico firmado temporal (30 min) para restablecimiento de contraseña."""
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=30))
+def create_password_reset_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> Tuple[str, str, datetime]:
+    """
+    Genera un token criptográfico firmado temporal (30 min) para restablecimiento de contraseña.
+    Retorna (token_jwt, jti, expire_datetime).
+    """
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=30))
+    jti = secrets.token_hex(16)
     payload = {
         "sub": str(user_id),
         "email": email.strip().lower(),
         "purpose": "password_reset",
+        "jti": jti,
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return token, jti, expire
 
 def verify_password_reset_token(token: str) -> dict:
-    """Valida estrictamente un token de restablecimiento de contraseña."""
+    """Valida estrictamente la firma, expiración y estructura de un token de restablecimiento de contraseña."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
@@ -120,13 +130,57 @@ def verify_password_reset_token(token: str) -> dict:
             detail="El enlace de restablecimiento es inválido o está corrupto."
         )
 
-    if payload.get("purpose") != "password_reset" or "sub" not in payload:
+    if payload.get("purpose") != "password_reset" or "sub" not in payload or "jti" not in payload:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El token proporcionado no es válido para restablecimiento de contraseña."
         )
 
     return payload
+
+def send_password_reset_email(to_email: str, reset_url: str) -> bool:
+    """
+    Envía enlace seguro de reseteo mediante SMTP transaccional configurado por variables de entorno.
+    Si no hay SMTP configurado, no expone el token ni la URL en logs (cumplimiento auditoría P0).
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", "noreply@aquapulse.io")
+    smtp_tls = os.getenv("SMTP_TLS", "true").lower() in ("true", "1", "yes")
+
+    if not smtp_host:
+        logger.info(f"Proveedor SMTP no configurado; notificación procesada de forma segura para usuario registrado.")
+        return False
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "AquaPulse - Restablecimiento de contraseña"
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+
+        text_content = (
+            f"Hola,\n\n"
+            f"Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en AquaPulse.\n"
+            f"Por favor ingresa al siguiente enlace seguro para actualizar tu contraseña:\n"
+            f"{reset_url}\n\n"
+            f"Este enlace es de un solo uso y expirará en 30 minutos.\n"
+            f"Si tú no realizaste esta solicitud, puedes ignorar este mensaje.\n\n"
+            f"— El equipo de AquaPulse"
+        )
+        msg.attach(MIMEText(text_content, "plain"))
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            if smtp_tls:
+                server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        logger.error(f"Error enviando correo transaccional de reseteo: {type(e).__name__}")
+        return False
 
 def decode_access_token(token: str) -> Optional[dict]:
     """Decodifica y valida la firma y expiración de un token JWT."""
@@ -192,6 +246,15 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."
         )
+
+    # Verificación de invalidación de sesiones (token_version)
+    if payload.get("token_version") is not None and user.token_version is not None:
+        if payload.get("token_version") != user.token_version:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sesión revocada debido a un cambio de credenciales. Por favor inicia sesión nuevamente.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
 
     # Auto-promoción a Administrador si coincide con paliyo995@gmail.com o ADMIN_EMAIL
     auto_admin_emails = {
