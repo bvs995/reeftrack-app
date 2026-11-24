@@ -87,3 +87,30 @@ class TestAuditP3Point19:
         assert "pago" in priv_text or "comercial" in priv_text or "no se utilizan para entrenar" in priv_text or "entrenar" in priv_text, (
             "PRIVACY.md debe confirmar explícitamente que la API de Gemini es de nivel de pago donde los datos no se usan para entrenar modelos"
         )
+
+
+# ==============================================================================
+# P3.20 - Backups automáticos con restauración probada y hosting sin pausa
+# ==============================================================================
+class TestAuditP3Point20:
+    def test_backup_module_has_cli_and_automated_drill(self):
+        import backend.backup as bkp
+        assert hasattr(bkp, "run_backup_drill"), "backend.backup debe definir run_backup_drill"
+        result = bkp.run_backup_drill()
+        assert result.get("is_parity") is True, f"El simulacro de respaldo y restauración debe tener paridad total: {result}"
+
+    def test_automated_backup_workflow_exists(self):
+        wf_path = REPO_ROOT / ".github" / "workflows" / "backup.yml"
+        assert wf_path.exists(), ".github/workflows/backup.yml debe existir para backups automáticos"
+        content = wf_path.read_text(encoding="utf-8")
+        assert "schedule" in content or "cron" in content, "El workflow de backup debe tener programación cron recurrente"
+        assert "python -m backend.backup" in content or "run_backup_drill" in content or "backup" in content.lower()
+
+    def test_deployment_guide_specifies_no_sleep_hosting(self):
+        deploy_md = REPO_ROOT / "DEPLOYMENT.md"
+        assert deploy_md.exists(), "DEPLOYMENT.md debe existir en la raíz del repositorio"
+        content = deploy_md.read_text(encoding="utf-8").lower()
+        assert "inactividad" in content or "sleep" in content or "starter" in content or "pausa" in content, (
+            "DEPLOYMENT.md debe especificar un plan de hosting sin pausa por inactividad"
+        )
+        assert "backup" in content or "respaldo" in content, "DEPLOYMENT.md debe documentar backups y restauración"

@@ -176,3 +176,77 @@ def verify_backup_and_restore_parity(
         "is_parity": is_parity,
         "tables": comparison
     }
+
+
+def run_backup_drill(source_db_url: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Ejecuta un simulacro completo de respaldo y restauración en base de datos aislada
+    y verifica que la paridad de datos sea del 100% (P3.20).
+    """
+    from backend.database import DATABASE_URL
+    src_url = source_db_url or DATABASE_URL
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    temp_backup = f"/tmp/aquapulse_drill_{timestamp}.sql"
+    temp_restored_db = f"/tmp/aquapulse_drill_restored_{timestamp}.db"
+
+    try:
+        if os.path.exists(temp_backup):
+            os.remove(temp_backup)
+        if os.path.exists(temp_restored_db):
+            os.remove(temp_restored_db)
+
+        # 1. Crear respaldo
+        backup_file = create_database_backup(db_url=src_url, output_file=temp_backup)
+
+        # 2. Restaurar en destino temporal
+        target_url = f"sqlite:///{temp_restored_db}"
+        restore_database_backup(backup_file, target_url)
+
+        # 3. Comprobar paridad absoluta
+        parity_res = verify_backup_and_restore_parity(src_url, target_url)
+        return parity_res
+    finally:
+        if os.path.exists(temp_backup):
+            try:
+                os.remove(temp_backup)
+            except Exception:
+                pass
+        if os.path.exists(temp_restored_db):
+            try:
+                os.remove(temp_restored_db)
+            except Exception:
+                pass
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="AquaPulse Backup & Disaster Recovery CLI (P3.20)")
+    parser.add_argument("--drill", action="store_true", help="Ejecutar simulacro de backup y restauración con verificación de paridad")
+    parser.add_argument("--backup", type=str, nargs="?", const="default", help="Crear respaldo en ruta opcional")
+    parser.add_argument("--restore", type=str, help="Restaurar archivo SQL")
+    parser.add_argument("--target", type=str, help="URL de base de datos destino para restauración")
+    args = parser.parse_args()
+
+    if args.drill:
+        res = run_backup_drill()
+        if res.get("is_parity"):
+            print("SIMULACRO EXITOSO: Paridad 100% confirmada entre base original y restaurada.")
+            sys.exit(0)
+        else:
+            print("FALLO EN SIMULACRO: Discrepancia en tablas:", res.get("tables"))
+            sys.exit(1)
+    elif args.backup:
+        out_path = None if args.backup == "default" else args.backup
+        f = create_database_backup(output_file=out_path)
+        print(f"Respaldo generado en: {f}")
+        sys.exit(0)
+    elif args.restore:
+        if not args.target:
+            print("Error: Se requiere --target <db_url> para restaurar.")
+            sys.exit(1)
+        restore_database_backup(args.restore, args.target)
+        print("Restauración completada.")
+        sys.exit(0)
+    else:
+        parser.print_help()
