@@ -83,7 +83,7 @@ Implementamos medidas técnicas y organizativas de nivel de producción:
 Como usuario de AquaPulse, tienes derecho a:
 1. **Acceso y Portabilidad**: Puedes solicitar y descargar una copia completa de tus acuarios, mediciones y configuraciones en formato estructurado JSON en cualquier momento mediante las opciones de perfil o exportación.
 2. **Rectificación**: Puedes editar o corregir cualquier medición o acuario directamente desde la interfaz.
-3. **Borrado y Eliminación Total ("Derecho al Olvido")**: Puedes solicitar en cualquier momento la supresión completa, inmediata e irreversible de tu cuenta y todos tus datos asociados mediante el endpoint seguro `/api/user/account` (con confirmación de contraseña y periodo de gracia opcional de 7 días).
+3. **Borrado y Eliminación Total ("Derecho al Olvido")**: Puedes solicitar en cualquier momento la supresión completa, inmediata e irreversible de tu cuenta y todos tus datos asociados mediante el endpoint seguro `DELETE /api/user/account` (con confirmación de contraseña y periodo de gracia opcional de 7 días).
 4. **Revocación del Consentimiento**: Puedes revocar el permiso de notificaciones push o de escaneo por cámara en cualquier momento en las preferencias de tu perfil.
 
 ---
