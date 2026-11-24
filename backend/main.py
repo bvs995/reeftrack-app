@@ -42,9 +42,6 @@ from backend.models import (
     AdminUserListItem,
     check_password_complexity,
     PASSWORD_REQUIREMENTS_ERROR,
-    DosisRecomendada,
-    AnalisisAcuarioSchema,
-    AnalisisAcuarioResponse,
     AquariumDataRequest,
     AquariumAnalysisResponse,
     PredictiveAnalysisJsonResponse,
@@ -1659,6 +1656,9 @@ def obtener_analisis_json(
             detail="Lectura de cámara en estado borrador (sin confirmar): toda lectura por visión es un borrador que el usuario debe confirmar o corregir antes de usarse en un diagnóstico."
         )
 
+    # Consumir cuota diaria de IA del usuario
+    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin)
+
     try:
         data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
         target_id = data.acuario_id or data.tank_id
@@ -1791,6 +1791,16 @@ def endpoint_tendencia_48h(
     return {"status": "success", "acuario_id": target_id, "tendencia": resumen}
 
 @router.post(
+    "/api/acuarios/{acuario_id}/analisis",
+    response_model=PredictiveAnalysisJsonResponse,
+    summary="Análisis con IA inyectando historial de 48h desde base de datos (alias legacy)"
+)
+@router.post(
+    "/api/tanks/{tank_id}/analisis",
+    response_model=PredictiveAnalysisJsonResponse,
+    summary="Análisis con IA inyectando historial de 48h desde base de datos (alias tanks)"
+)
+@router.post(
     "/api/acuarios/{acuario_id}/analisis-predictivo",
     response_model=PredictiveAnalysisJsonResponse,
     summary="Análisis predictivo con IA inyectando historial de 48h desde base de datos"
@@ -1806,6 +1816,7 @@ def endpoint_analisis_con_historial(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin)
     target_id = acuario_id or tank_id
     if not target_id:
         raise HTTPException(status_code=400, detail="Debe especificarse el ID del acuario.")
@@ -1909,7 +1920,12 @@ def endpoint_analisis_con_historial(
         }
 
         # 4. Llamar a la función de IA estructurada con verificación y fallback
-        resultado_ia = analizar_acuario_estructurado(datos_para_ia)
+        resultado_ia = analizar_parametros_estructurado(
+            datos_para_ia,
+            db=db,
+            user_id=current_user.id,
+            tank_id=target_id
+        )
 
         return {"status": "success", "data": resultado_ia}
     except HTTPException:
@@ -1934,36 +1950,45 @@ app.include_router(router)
 )
 def endpoint_analizar_acuario(
     data: AquariumDataRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini)
-    con Structured Outputs (AnalisisAcuarioSchema).
-    Devuelve diagnóstico estructurado de estado, riesgo potencial predictivo y lista de dosis recomendadas.
+    con Structured Outputs (AIDiagnosisOutput).
+    Devuelve diagnóstico estructurado de estado, riesgo potencial predictivo y acciones recomendadas del catálogo seguro.
     """
-    try:
-        resultado_ia = analizar_parametros_estructurado(data.model_dump())
-        return AquariumAnalysisResponse(status="success", analisis=resultado_ia)
-    except Exception as e:
-        logger.error(f"Error en endpoint_analizar_acuario: {e}")
+    if data.is_draft:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al generar análisis con IA: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lectura de cámara en estado borrador (sin confirmar): toda lectura por visión es un borrador que el usuario debe confirmar o corregir antes de usarse en un diagnóstico."
         )
-    """
-    Analiza la telemetría actual de un acuario utilizando el modelo clínico preventivo de Google GenAI (Gemini)
-    con Structured Outputs (AnalisisAcuarioSchema).
-    Devuelve diagnóstico estructurado de estado, riesgo potencial predictivo y lista de dosis recomendadas.
-    """
+
+    # Consumir cuota diaria de IA del usuario
+    scan_quota_manager.check_and_consume(current_user.id, current_user.subscription_tier, current_user.is_admin)
+
     try:
-        resultado_ia = analizar_parametros_estructurado(data.model_dump())
-        return AquariumAnalysisResponse(status="success", analisis=resultado_ia)
-    except Exception as e:
-        logger.error(f"Error en endpoint_analizar_acuario: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al generar análisis con IA: {str(e)}"
+        data_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+        target_id = data.tank_id or data.acuario_id
+        resultado_ia = analizar_parametros_estructurado(
+            data_dict,
+            db=db,
+            user_id=current_user.id,
+            tank_id=target_id
         )
+        return AquariumAnalysisResponse(status="success", analisis=resultado_ia)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en endpoint_analizar_acuario: {e}. Activando fallback determinístico sin error 500.")
+        from backend.ai_validator import generate_rules_deterministic_diagnosis
+        fallback_res = generate_rules_deterministic_diagnosis(
+            aquarium_name=data.nombre_acuario or "Principal",
+            biotope=data.tipo or "mixto",
+            rules_alerts=[{"parameter": "diagnóstico", "status": "safe", "severity": "watch", "message": "Diagnóstico de respaldo determinístico por reglas de seguridad."}],
+            measured_intervals=[]
+        )
+        return AquariumAnalysisResponse(status="success", analisis=fallback_res)
 
 
 # ==============================================================================

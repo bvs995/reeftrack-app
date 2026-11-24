@@ -19,9 +19,6 @@ from backend.ai_validator import (
     generate_rules_deterministic_diagnosis
 )
 from backend.models import (
-    DosisRecomendada,
-    AnalisisAcuarioSchema,
-    AnalisisAcuarioResponse,
     AquariumAnalysisResponse,
     AquariumDataRequest,
     PredictiveAnalysisJsonResponse,
@@ -43,9 +40,6 @@ __all__ = [
     "validate_and_sanitize_ai_diagnosis",
     "execute_double_pass_verification",
     "generate_rules_deterministic_diagnosis",
-    "DosisRecomendada",
-    "AnalisisAcuarioSchema",
-    "AnalisisAcuarioResponse",
     "AquariumAnalysisResponse",
     "AquariumDataRequest",
     "PredictiveAnalysisJsonResponse",

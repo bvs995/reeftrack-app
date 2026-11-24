@@ -355,3 +355,150 @@ class TestAuditP0Point5:
         res_dict = resultado.model_dump() if hasattr(resultado, "model_dump") else resultado
         ammonia_findings = [f for f in res_dict.get("findings", []) if f.get("parameter") in ("ammonia", "nitrite") and f.get("severity") in ("watch", "warning", "critical")]
         assert len(ammonia_findings) == 0, f"Amoníaco en 0.0 nunca debe disparar alertas de peligro: {ammonia_findings}"
+
+
+class TestAuditP0Point6:
+    """Tests para Punto 6: Endpoints de IA legacy protegidos con auditoría, cuota y sin DosisRecomendada."""
+
+    def setup_method(self):
+        from backend.main import auth_attempts, scan_quota_manager
+        auth_attempts.clear()
+        scan_quota_manager.reset_for_tests()
+        db = SessionLocal()
+        from backend.models import DiagnosticAudit, Tank, Measurement
+        db.query(DiagnosticAudit).delete()
+        user = db.query(User).filter(User.email == "p0_legacy_ai_user@aquapulse.io").first()
+        if user:
+            db.delete(user)
+        db.commit()
+
+        # Crear usuario de prueba
+        test_user = User(
+            email="p0_legacy_ai_user@aquapulse.io",
+            hashed_password=hash_password("Password123!"),
+            full_name="P0 AI User",
+            subscription_tier="free",
+            is_active=True,
+            is_admin=False,
+            token_version=1
+        )
+        db.add(test_user)
+        db.commit()
+        db.refresh(test_user)
+
+        # Crear tanque y medicion
+        test_tank = Tank(
+            user_id=test_user.id,
+            name="Tanque Legacy IA",
+            tank_type="sps_reef",
+            volume_liters=300.0
+        )
+        db.add(test_tank)
+        db.commit()
+        db.refresh(test_tank)
+
+        test_meas = Measurement(
+            tank_id=test_tank.id,
+            user_id=test_user.id,
+            kh=8.0,
+            calcium=420.0,
+            magnesium=1300.0,
+            nitrate=5.0,
+            phosphate=0.04,
+            salinity=35.0,
+            temperature=25.0,
+            ph=8.2,
+            is_draft=False
+        )
+        db.add(test_meas)
+        db.commit()
+
+        self.user_id = test_user.id
+        self.tank_id = test_tank.id
+        self.token = create_access_token({"sub": str(test_user.id), "user_id": test_user.id, "email": test_user.email, "token_version": 1})
+        self.headers = {"Authorization": f"Bearer {self.token}"}
+        db.close()
+
+    def test_legacy_dosis_recomendada_schema_is_eliminated(self):
+        """DosisRecomendada y AnalisisAcuarioSchema deben haber sido eliminados de backend.models."""
+        import backend.models as bm
+        assert not hasattr(bm, "DosisRecomendada"), "DosisRecomendada debe eliminarse por completo"
+        assert not hasattr(bm, "AnalisisAcuarioSchema"), "AnalisisAcuarioSchema legacy debe eliminarse por completo"
+
+    def test_analizar_ia_requires_auth_and_records_audit_and_consumes_quota(self):
+        """/api/analizar-ia debe requerir auth, registrar auditoría con user_id y respetar cuota diaria."""
+        from backend.models import DiagnosticAudit
+        payload = {
+            "nombre_acuario": "Tanque Legacy IA",
+            "volumen_litros": 300.0,
+            "tipo": "sps_reef",
+            "kh": 8.0,
+            "calcio": 420.0,
+            "magnesio": 1300.0,
+            "nitrato": 5.0,
+            "fosfato": 0.04,
+            "ph": 8.2,
+            "temperatura": 25.0
+        }
+
+        # 1. Sin auth debe fallar 401
+        res_unauth = client.post("/api/analizar-ia", json=payload)
+        assert res_unauth.status_code == 401
+
+        # 2. Con auth debe responder 200 y registrar DiagnosticAudit con user_id
+        db = SessionLocal()
+        initial_audits = db.query(DiagnosticAudit).filter(DiagnosticAudit.user_id == self.user_id).count()
+        res = client.post("/api/analizar-ia", json=payload, headers=self.headers)
+        assert res.status_code == 200
+        data = res.json()
+        assert data.get("status") == "success"
+        assert "analisis" in data
+
+        # Verificar auditoría persistida en DB
+        audits_after = db.query(DiagnosticAudit).filter(DiagnosticAudit.user_id == self.user_id).count()
+        assert audits_after > initial_audits, "Debe registrar DiagnosticAudit asociado al user_id"
+
+        # 3. Consumo de cuota: plan free tiene límite de 5 escaneos/diagnósticos
+        for _ in range(4):
+            r = client.post("/api/analizar-ia", json=payload, headers=self.headers)
+            assert r.status_code in (200, 429)
+
+        # La 6ta llamada debe ser bloqueada por cuota diaria excedida (429)
+        res_exhausted = client.post("/api/analizar-ia", json=payload, headers=self.headers)
+        assert res_exhausted.status_code == 429, f"Debe bloquear con 429 al superar cuota diaria: {res_exhausted.text}"
+        db.close()
+
+    def test_tanks_and_acuarios_analisis_endpoints_exist_and_record_audit(self):
+        """Endpoints /api/tanks/{id}/analisis y /api/acuarios/{id}/analisis deben existir, auditar y no dar 404."""
+        from backend.models import DiagnosticAudit
+        # Probar alias /api/tanks/{id}/analisis
+        res_tanks = client.post(f"/api/tanks/{self.tank_id}/analisis", headers=self.headers)
+        assert res_tanks.status_code == 200, f"Endpoint /api/tanks/{self.tank_id}/analisis debe existir y devolver 200: {res_tanks.text}"
+        data_tanks = res_tanks.json()
+        assert data_tanks.get("status") == "success"
+
+        # Probar alias /api/acuarios/{id}/analisis
+        res_acuarios = client.post(f"/api/acuarios/{self.tank_id}/analisis", headers=self.headers)
+        assert res_acuarios.status_code == 200, f"Endpoint /api/acuarios/{self.tank_id}/analisis debe existir y devolver 200: {res_acuarios.text}"
+
+        # Verificar que se registró la auditoría con tank_id y user_id
+        db = SessionLocal()
+        audit_record = db.query(DiagnosticAudit).filter(
+            DiagnosticAudit.user_id == self.user_id,
+            DiagnosticAudit.tank_id == self.tank_id
+        ).first()
+        assert audit_record is not None, "Debe registrar DiagnosticAudit con user_id y tank_id"
+        db.close()
+
+    def test_no_str_e_returned_to_client_on_error(self):
+        """Ningún endpoint de IA debe filtrar excepciones crudas str(e) al cliente."""
+        import unittest.mock as mock
+        with mock.patch("backend.services.ai_service.analizar_parametros_estructurado", side_effect=Exception("DatabaseSecretInternalKeyException")):
+            res = client.post(
+                "/api/analizar-ia",
+                json={"nombre_acuario": "Tanque Error", "volumen_litros": 100.0, "tipo": "mixto", "kh": 8.0},
+                headers=self.headers
+            )
+            # Debe caer en fallback determinístico sin 500 y nunca contener el str(e) interno
+            assert res.status_code == 200 or res.status_code == 400
+            assert "DatabaseSecretInternalKeyException" not in res.text

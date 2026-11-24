@@ -21,7 +21,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List, Set, Tuple, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from backend.models import DosisRecomendada
 
 logger = logging.getLogger("aquapulse.ai_validator")
 
@@ -91,7 +90,6 @@ class AIDiagnosisOutput(BaseModel):
     diagnostico_general: Optional[str] = None
     nivel_riesgo: Optional[str] = None
     alerta_predictiva: Optional[str] = None
-    acciones_correctoras: List[DosisRecomendada] = Field(default_factory=list)
 
     # Metadatos del pipeline de verificación
     verification_status: str = Field(default="validated", description="validated, double_pass_adjusted, rules_fallback")
@@ -137,23 +135,6 @@ class AIDiagnosisOutput(BaseModel):
             else:
                 self.alerta_predictiva = "Condiciones estables en las próximas 48 horas bajo la rutina actual."
 
-        if not self.acciones_correctoras and self.recommended_actions:
-            action_labels = {
-                "retest_parameter": ("Verificación Metrológica", "Repetir test con kit calibrado en 1–2 h"),
-                "monitor_24h": ("Monitoreo Continuo", "Observar evolución química en las próximas 24 horas"),
-                "pause_dosing": ("Suspensión Preventiva", "Pausar dosificación automática o manual"),
-                "water_change_small": ("Dilución Segura", "Cambio parcial de agua pequeño (10-15%)"),
-                "check_equipment": ("Inspección Mecánica", "Revisar skimmer, bombas, sondas y dosificadoras"),
-                "consult_expert": ("Soporte Especializado", "Consultar con especialista en química marina")
-            }
-            self.acciones_correctoras = [
-                DosisRecomendada(
-                    parametro=act,
-                    producto=action_labels.get(act, (act, ""))[0],
-                    cantidad_sugerida=action_labels.get(act, ("", act))[1]
-                )
-                for act in self.recommended_actions
-            ]
         return self
 
 
