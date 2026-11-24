@@ -5,7 +5,12 @@ from backend.services.ai_service import (
     analizar_acuario_estructurado,
     obtener_tendencia_ultimas_48h,
     PRIMARY_MODEL,
-    FALLBACK_MODELS
+    FALLBACK_MODELS,
+    SUPPORTED_GEMINI_MODELS,
+    DEPRECATED_MODELS,
+    validate_gemini_model,
+    AI_GENERATION_MAX_OUTPUT_TOKENS,
+    AI_GENERATION_THINKING_BUDGET
 )
 from backend.ai_validator import (
     AIDiagnosisOutput,
@@ -42,5 +47,10 @@ __all__ = [
     "AquariumDataRequest",
     "PredictiveAnalysisJsonResponse",
     "PRIMARY_MODEL",
-    "FALLBACK_MODELS"
+    "FALLBACK_MODELS",
+    "SUPPORTED_GEMINI_MODELS",
+    "DEPRECATED_MODELS",
+    "validate_gemini_model",
+    "AI_GENERATION_MAX_OUTPUT_TOKENS",
+    "AI_GENERATION_THINKING_BUDGET"
 ]

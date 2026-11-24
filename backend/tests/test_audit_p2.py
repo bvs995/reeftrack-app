@@ -135,3 +135,43 @@ class TestAuditP2Point13:
         assert res_admin.status_code == 200
         data = res_admin.json()
         assert "total_cost_usd" in data or "budget_status" in data
+
+
+# ==============================================================================
+# P2.14 - Modelos de Gemini, validación oficial, max_output_tokens y thinking
+# ==============================================================================
+class TestAuditP2Point14:
+    def test_gemini_model_missing_raises_error(self):
+        from backend.services.ai_service import validate_gemini_model
+        with pytest.raises(ValueError) as exc:
+            validate_gemini_model("")
+        assert "GEMINI_MODEL" in str(exc.value)
+        assert "obligatoria" in str(exc.value).lower()
+
+    def test_gemini_model_invalid_or_deprecated_raises_clear_error(self):
+        from backend.services.ai_service import validate_gemini_model
+        # Modelo inventado/inexistente
+        with pytest.raises(ValueError) as exc_nonexistent:
+            validate_gemini_model("gemini-super-fake-model")
+        assert "no existe" in str(exc_nonexistent.value).lower() or "no es válido" in str(exc_nonexistent.value).lower()
+
+        # Modelo deprecado
+        with pytest.raises(ValueError) as exc_deprec:
+            validate_gemini_model("gemini-2.5-flash")
+        assert "deprecado" in str(exc_deprec.value).lower() or "obsoleto" in str(exc_deprec.value).lower()
+
+    def test_gemini_model_valid_official_models(self):
+        from backend.services.ai_service import validate_gemini_model
+        for valid_model in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
+            assert validate_gemini_model(valid_model) == valid_model
+
+    def test_fallback_models_only_contain_official_active_models(self):
+        from backend.services.ai_service import FALLBACK_MODELS, DEPRECATED_MODELS
+        for model in FALLBACK_MODELS:
+            assert model not in DEPRECATED_MODELS, f"Modelo fallback '{model}' no debe ser deprecado"
+            assert "2.5" not in model, f"Modelo '{model}' es de la familia 2.5 en retiro"
+
+    def test_generation_config_has_higher_max_tokens_and_disabled_thinking(self):
+        from backend.services.ai_service import AI_GENERATION_MAX_OUTPUT_TOKENS, AI_GENERATION_THINKING_BUDGET
+        assert AI_GENERATION_MAX_OUTPUT_TOKENS >= 2048, "max_output_tokens debe aumentarse (al menos 2048) para evitar truncado de JSON"
+        assert AI_GENERATION_THINKING_BUDGET == 0, "thinking_budget debe ser 0 para desactivar razonamiento extendido y no truncar la salida"

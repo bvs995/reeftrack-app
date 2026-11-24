@@ -41,9 +41,53 @@ load_dotenv()
 
 logger = logging.getLogger("aquapulse.ai_service")
 
-# Modelos recomendados: usuario solicita gemini-2.5-flash, con fallback a gemini-3.1-flash-lite y 3.8-flash
-PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
+# Modelos de Gemini oficiales vigentes y catálogo de obsolescencia (P2.14)
+SUPPORTED_GEMINI_MODELS = {
+    "gemini-3.8-flash": {"status": "active", "recommended": True},
+    "gemini-3.6-flash": {"status": "active", "recommended": False},
+    "gemini-3.5-flash-lite": {"status": "active", "recommended": True, "light": True},
+    "gemini-3.1-flash-lite": {"status": "active", "recommended": True, "light": True},
+}
+
+DEPRECATED_MODELS = {
+    "gemini-2.5-flash": "Deprecado oficialmente (reemplazado por gemini-3.5-flash-lite / gemini-3.8-flash, retiro 1 dic 2026)",
+    "gemini-2.5-pro": "Deprecado oficialmente (reemplazado por gemini-3.8-flash, retiro 1 dic 2026)",
+    "gemini-1.5-flash": "Retirado de servicio",
+    "gemini-1.5-pro": "Retirado de servicio",
+}
+
+AI_GENERATION_MAX_OUTPUT_TOKENS = 4096
+AI_GENERATION_THINKING_BUDGET = 0
+
+def validate_gemini_model(model_name: Optional[str]) -> str:
+    """
+    Verifica que el modelo de Gemini sea obligatorio por variable de entorno
+    y exista dentro del catálogo oficial vigente (P2.14).
+    """
+    if not model_name or not str(model_name).strip():
+        raise ValueError(
+            "La variable de entorno 'GEMINI_MODEL' es obligatoria. "
+            f"Modelos oficiales vigentes: {list(SUPPORTED_GEMINI_MODELS.keys())}."
+        )
+    clean_model = str(model_name).strip()
+    if clean_model.startswith("gemini-mock"):
+        return clean_model
+
+    if clean_model in DEPRECATED_MODELS:
+        raise ValueError(
+            f"El modelo '{clean_model}' está obsoleto/deprecado: {DEPRECATED_MODELS[clean_model]}. "
+            f"Por favor actualiza a uno vigente: {list(SUPPORTED_GEMINI_MODELS.keys())}."
+        )
+    if clean_model not in SUPPORTED_GEMINI_MODELS:
+        raise ValueError(
+            f"El modelo '{clean_model}' no existe o no es un modelo oficial soportado. "
+            f"Modelos oficiales vigentes: {list(SUPPORTED_GEMINI_MODELS.keys())}."
+        )
+    return clean_model
+
+RAW_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+PRIMARY_MODEL = validate_gemini_model(RAW_GEMINI_MODEL)
+FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
 
 
 def first_not_none(*vals):
@@ -552,7 +596,8 @@ def analizar_parametros_estructurado(
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
                         temperature=0.1,  # temperature <= 0.2
-                        max_output_tokens=1024,
+                        max_output_tokens=AI_GENERATION_MAX_OUTPUT_TOKENS,
+                        thinking_config=types.ThinkingConfig(thinking_budget=AI_GENERATION_THINKING_BUDGET),
                         response_mime_type="application/json",
                         response_schema=AIDiagnosisOutput,
                     ),
@@ -593,7 +638,8 @@ def analizar_parametros_estructurado(
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     temperature=0.1,
-                    max_output_tokens=1024,
+                    max_output_tokens=AI_GENERATION_MAX_OUTPUT_TOKENS,
+                    thinking_config=types.ThinkingConfig(thinking_budget=AI_GENERATION_THINKING_BUDGET),
                     response_mime_type="application/json",
                     response_schema=AIDiagnosisOutput,
                 ),
