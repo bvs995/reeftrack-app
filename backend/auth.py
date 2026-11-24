@@ -151,48 +151,9 @@ def verify_password_reset_token(token: str) -> dict:
     return payload
 
 def send_password_reset_email(to_email: str, reset_url: str) -> bool:
-    """
-    Envía enlace seguro de reseteo mediante SMTP transaccional configurado por variables de entorno.
-    Si no hay SMTP configurado, no expone el token ni la URL en logs (cumplimiento auditoría P0).
-    """
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", "noreply@aquapulse.io")
-    smtp_tls = os.getenv("SMTP_TLS", "true").lower() in ("true", "1", "yes")
-
-    if not smtp_host:
-        logger.info(f"Proveedor SMTP no configurado; notificación procesada de forma segura para usuario registrado.")
-        return False
-
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "AquaPulse - Restablecimiento de contraseña"
-        msg["From"] = smtp_from
-        msg["To"] = to_email
-
-        text_content = (
-            f"Hola,\n\n"
-            f"Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en AquaPulse.\n"
-            f"Por favor ingresa al siguiente enlace seguro para actualizar tu contraseña:\n"
-            f"{reset_url}\n\n"
-            f"Este enlace es de un solo uso y expirará en 30 minutos.\n"
-            f"Si tú no realizaste esta solicitud, puedes ignorar este mensaje.\n\n"
-            f"— El equipo de AquaPulse"
-        )
-        msg.attach(MIMEText(text_content, "plain"))
-
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            if smtp_tls:
-                server.starttls()
-            if smtp_user and smtp_pass:
-                server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_from, [to_email], msg.as_string())
-        return True
-    except Exception as e:
-        logger.error(f"Error enviando correo transaccional de reseteo: {type(e).__name__}")
-        return False
+    """Envía enlace seguro de reseteo mediante el proveedor transaccional configurado."""
+    from backend.services.email_service import send_password_reset_email as _send
+    return _send(to_email, reset_url)
 
 def create_email_verification_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
     """Genera token JWT firmado (24h) para verificación de correo electrónico."""
@@ -230,41 +191,9 @@ def verify_email_verification_token(token: str) -> dict:
     return payload
 
 def send_email_verification(to_email: str, verify_url: str) -> bool:
-    """Envía correo transaccional de verificación mediante SMTP si está configurado."""
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", "noreply@aquapulse.io")
-    smtp_tls = os.getenv("SMTP_TLS", "true").lower() in ("true", "1", "yes")
-
-    if not smtp_host:
-        logger.info("Proveedor SMTP no configurado; notificación de verificación registrada de forma segura.")
-        return False
-
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "AquaPulse - Verifica tu correo electrónico"
-        msg["From"] = smtp_from
-        msg["To"] = to_email
-        text_content = (
-            f"Hola,\n\n"
-            f"Gracias por registrarte en AquaPulse. Para activar tu cuenta, por favor verifica tu correo:\n"
-            f"{verify_url}\n\n"
-            f"Este enlace expirará en 24 horas.\n\n"
-            f"— El equipo de AquaPulse"
-        )
-        msg.attach(MIMEText(text_content, "plain"))
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            if smtp_tls:
-                server.starttls()
-            if smtp_user and smtp_pass:
-                server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_from, [to_email], msg.as_string())
-        return True
-    except Exception as e:
-        logger.error(f"Error enviando correo de verificación: {type(e).__name__}")
-        return False
+    """Envía correo transaccional de verificación mediante el proveedor configurado."""
+    from backend.services.email_service import send_verification_email as _send
+    return _send(to_email, verify_url)
 
 def decode_access_token(token: str) -> Optional[dict]:
     """Decodifica y valida la firma y expiración de un token JWT."""
@@ -326,6 +255,11 @@ def get_current_user(
         )
 
     if not user.is_active:
+        if not getattr(user, "email_verified", True) and os.getenv("REQUIRE_EMAIL_VERIFICATION", "false").lower() in ("true", "1", "yes"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Debes verificar tu correo electrónico antes de acceder a esta función. Revisa tu bandeja de entrada o solicita un nuevo enlace."
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."

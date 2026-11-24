@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db, init_db, check_db_connection
 from backend.seed import seed_database_if_empty
 from backend.marine_profiles import MARINE_PROFILES
+from backend.services.email_service import validate_email_configuration
 
 # Routers modulares (P2.17)
 from backend.routers import (
@@ -49,6 +50,8 @@ except Exception as _e:
     logger.debug(f"Aviso en init_db de carga de módulo: {_e}")
 
 is_production = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+if is_production:
+    validate_email_configuration()
 
 # Inicialización de la aplicación FastAPI (/docs deshabilitado en producción)
 app = FastAPI(

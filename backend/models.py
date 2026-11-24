@@ -370,6 +370,16 @@ class ForgotPasswordRequest(BaseModel):
     def normalize_email(cls, v: str) -> str:
         return v.strip().lower() if isinstance(v, str) else v
 
+class ResendVerificationRequest(BaseModel):
+    email: str = Field(..., max_length=255, example="acuarista@reef.com", description="Correo para reenviar verificación")
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower() if isinstance(v, str) else v
+
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., max_length=512, description="Token seguro de restablecimiento")
     new_password: str = Field(

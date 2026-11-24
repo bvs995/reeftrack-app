@@ -31,6 +31,7 @@ from backend.models import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     PasswordResetResponse,
+    ResendVerificationRequest,
     AccountDeleteRequest,
     check_password_complexity,
 )
@@ -487,6 +488,35 @@ def verify_email(
     return {
         "ok": True,
         "message": "Correo electrónico verificado exitosamente. Tu cuenta está activa y lista para usar."
+    }
+
+
+@router.post(
+    "/api/auth/resend-verification",
+    summary="Reenviar correo de verificación de cuenta"
+)
+def resend_verification_email(
+    payload: ResendVerificationRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Reenvía un correo con un nuevo enlace de activación si la cuenta existe y no está verificada.
+    La respuesta es siempre neutra para evitar enumeración de usuarios.
+    """
+    check_auth_rate_limit(request, email=payload.email)
+    normalized_email = payload.email.strip().lower()
+    user = db.query(User).filter(User.email == normalized_email).first()
+
+    if user and not user.email_verified:
+        verify_token = create_email_verification_token(user.email, user.id)
+        frontend_base = os.getenv("FRONTEND_URL", "").rstrip("/") or "http://localhost:5173"
+        verify_url = f"{frontend_base}/?verify_email_token={verify_token}"
+        send_email_verification(user.email, verify_url)
+
+    return {
+        "ok": True,
+        "message": "Si la cuenta existe y está pendiente de verificación, recibirás un nuevo enlace de activación."
     }
 
 
