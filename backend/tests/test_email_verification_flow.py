@@ -42,6 +42,8 @@ def clean_test_environment():
             "used_token_user@aquapulse.io",
             "expired_token_user@aquapulse.io",
             "console_flow_user@aquapulse.io",
+            "resend_test_user@aquapulse.io",
+            "unverified_gate_user@aquapulse.io",
         ]
         for em in test_emails:
             u = db.query(User).filter(User.email == em).first()
@@ -222,3 +224,109 @@ class TestConsoleEmailProviderIntegration:
             verify_res = client.post(f"/api/auth/verify-email?token={token}")
             assert verify_res.status_code == 200
             assert verify_res.json()["user"]["email_verified"] is True
+
+
+class TestUnverifiedGateAndResendBehavior:
+    """
+    Verifica el comportamiento de la compuerta de cuentas no verificadas y el reenvío de correo:
+    - POST /api/auth/resend-verification envía correo real/simulado y maneja errores / rate-limit.
+    - Endpoints de datos (/api/tanks, /api/measurements) devuelven 403 si la cuenta no está verificada.
+    - Al verificarse la cuenta, los datos se desbloquean inmediatamente y el perfil refleja email_verified=True.
+    """
+
+    def test_resend_verification_endpoint_and_rate_limit(self, clean_test_environment):
+        mock_provider = clean_test_environment
+        email = "resend_test_user@aquapulse.io"
+
+        db = SessionLocal()
+        user = User(
+            email=email,
+            hashed_password=hash_password("Pass123!"),
+            is_active=False,
+            email_verified=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.close()
+
+        # 1. Reenvío exitoso
+        res = client.post("/api/auth/resend-verification", json={"email": email})
+        assert res.status_code == 200
+        data = res.json()
+        assert data.get("ok") is True
+        assert len(mock_provider.sent_emails) == 1
+        assert mock_provider.sent_emails[0].to_email == email
+        assert "verify_email_token=" in mock_provider.sent_emails[0].text_body
+
+        # 2. Exceso de tasa / rate limiting para verificar mensaje claro de error
+        with patch("backend.rate_limits.AUTH_RATE_LIMIT_IP_MAX", 2):
+            # Limpiar intentos previos para esta prueba
+            auth_attempts.clear()
+            # 2 llamadas permitidas
+            r1 = client.post("/api/auth/resend-verification", json={"email": email})
+            r2 = client.post("/api/auth/resend-verification", json={"email": email})
+            assert r1.status_code == 200
+            assert r2.status_code == 200
+
+            # 3ra llamada: bloqueada con 429 Too Many Requests y mensaje claro
+            r3 = client.post("/api/auth/resend-verification", json={"email": email})
+            assert r3.status_code == 429
+            detail = r3.json().get("detail", "")
+            assert "Demasiad" in detail or "espera" in detail.lower()
+
+    def test_unverified_account_data_endpoints_blocked_and_activated(self, clean_test_environment):
+        email = "unverified_gate_user@aquapulse.io"
+
+        with patch.dict(os.environ, {"REQUIRE_EMAIL_VERIFICATION": "true", "FRONTEND_URL": "http://localhost:5173"}):
+            # Registrar usuario (email_verified=False, is_active=False)
+            reg_res = client.post(
+                "/api/auth/register",
+                json={"email": email, "password": "GatePassword123!", "full_name": "Gate User"},
+            )
+            assert reg_res.status_code == 201
+            reg_data = reg_res.json()
+            assert reg_data["user"]["email_verified"] is False
+            token = reg_data["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+
+            # Pantallas de datos: /api/tanks bloqueado con 403
+            tanks_res = client.get("/api/tanks", headers=headers)
+            assert tanks_res.status_code == 403
+            assert "Debes verificar tu correo" in tanks_res.json().get("detail", "")
+
+            # Pantalla de datos: /api/measurements bloqueado con 403
+            meas_res = client.post(
+                "/api/measurements",
+                headers=headers,
+                json={"tank_id": 1, "parameter_code": "ph", "value": 8.2},
+            )
+            assert meas_res.status_code == 403
+            assert "Debes verificar tu correo" in meas_res.json().get("detail", "")
+
+            # Obtener token de verificación emitido durante registro
+            mock_provider = clean_test_environment
+            assert len(mock_provider.sent_emails) >= 1
+            last_email = mock_provider.sent_emails[-1]
+            token_match = re.search(r"verify_email_token=([A-Za-z0-9\-_\.]+)", last_email.text_body)
+            assert token_match is not None
+            verify_token = token_match.group(1)
+
+            # Verificar la cuenta usando el token
+            verify_res = client.post(f"/api/auth/verify-email?token={verify_token}")
+            assert verify_res.status_code == 200
+            verified_data = verify_res.json()
+            assert verified_data["user"]["email_verified"] is True
+            new_token = verified_data["access_token"]
+            new_headers = {"Authorization": f"Bearer {new_token}"}
+
+            # Ahora los endpoints de datos responden 200 sin 403
+            tanks_ok = client.get("/api/tanks", headers=new_headers)
+            assert tanks_ok.status_code == 200
+            assert isinstance(tanks_ok.json(), list)
+
+            # Perfil de usuario refleja estado verificado
+            me_ok = client.get("/api/auth/me", headers=new_headers)
+            assert me_ok.status_code == 200
+            assert me_ok.json()["email_verified"] is True
+

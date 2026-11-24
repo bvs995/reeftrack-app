@@ -22,6 +22,12 @@
     "danger": "Peligro",
     "view": "Ver",
     "active": "Activo",
+    "unverifiedEmail": "Correo sin verificar",
+    "verifyEmailNotice": "Verifica tu correo para usar AquaPulse",
+    "resendEmailBtn": "Reenviar correo",
+    "resendingEmail": "Reenviando...",
+    "emailResentSuccess": "Correo de activación reenviado con éxito. Revisa tu bandeja de entrada.",
+    "emailResendError": "Error al reenviar correo",
     "close": "Cerrar",
     "free": "FREE"
   },

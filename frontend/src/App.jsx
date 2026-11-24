@@ -13,6 +13,8 @@ import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/ErrorBoundary';
 import AuthModal from './components/AuthModal';
 import EmailVerificationModal from './components/EmailVerificationModal';
+import UnverifiedBanner from './components/UnverifiedBanner';
+import UnverifiedAccountView from './components/UnverifiedAccountView';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   fetchTanks,
@@ -184,10 +186,12 @@ function AppContent() {
     };
   }, []);
 
+  const isEmailVerified = Boolean(user?.email_verified);
+
   // Recargar datos cuando cambia el usuario autenticado
   useEffect(() => {
     if (authLoading) return;
-    if (isAuthenticated) {
+    if (isAuthenticated && isEmailVerified) {
       loadTanks();
     } else {
       setTanks([]);
@@ -196,15 +200,16 @@ function AppContent() {
       setAnalytics(null);
       setLoading(false);
     }
-  }, [isAuthenticated, user?.id, authLoading]);
+  }, [isAuthenticated, isEmailVerified, user?.id, authLoading]);
 
   useEffect(() => {
-    if (activeTank && isAuthenticated) {
+    if (activeTank && isAuthenticated && isEmailVerified) {
       loadTankDetails(activeTank.id);
     }
-  }, [activeTank?.id, isAuthenticated]);
+  }, [activeTank?.id, isAuthenticated, isEmailVerified]);
 
   const loadTanks = async () => {
+    if (!isAuthenticated || !isEmailVerified) return;
     setLoading(true);
     try {
       const data = await fetchTanks();
@@ -222,6 +227,7 @@ function AppContent() {
   };
 
   const loadTankDetails = async (tankId) => {
+    if (!isAuthenticated || !isEmailVerified || !tankId) return;
     setLoading(true);
     try {
       const [paramsData, analyticsData] = await Promise.all([
@@ -244,6 +250,9 @@ function AppContent() {
     triggerHaptic();
     if (!isAuthenticated) {
       openAuthModal('login');
+      return;
+    }
+    if (!isEmailVerified) {
       return;
     }
     setPreselectedCode(code);
@@ -278,7 +287,7 @@ function AppContent() {
   };
 
   const handleDataUpdated = () => {
-    if (activeTank) {
+    if (isAuthenticated && isEmailVerified && activeTank) {
       loadTankDetails(activeTank.id);
     }
   };
@@ -292,6 +301,9 @@ function AppContent() {
           <span>{t('app.offlineBanner')}</span>
         </div>
       )}
+
+      {/* Aviso visible y fijo de correo sin verificar */}
+      <UnverifiedBanner />
 
       {/* Main Top Navigation */}
       <Navbar
@@ -429,6 +441,8 @@ function AppContent() {
                 </div>
               </div>
             </div>
+          ) : !isEmailVerified && activeTab !== 'settings' && activeTab !== 'admin' ? (
+            <UnverifiedAccountView onOpenSettings={() => handleSelectTab('settings')} />
           ) : (
             <>
               {activeTab === 'dashboard' && (
