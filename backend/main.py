@@ -5,6 +5,8 @@ import hashlib
 import time
 import threading
 import logging
+import urllib.parse
+from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
@@ -2811,17 +2813,27 @@ def cron_send_reminders(
 # 🌐 SERVICIO DE LA PWA (SPA FALLBACK)
 # ==============================================================================
 
-DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+DIST_DIR = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))).resolve()
 
-if os.path.exists(DIST_DIR):
-    app.mount("/assets", StaticFiles(directory=os.path.join(DIST_DIR, "assets")), name="assets")
+if DIST_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        potential_file = os.path.join(DIST_DIR, full_path)
-        if full_path and os.path.isfile(potential_file):
-            return FileResponse(potential_file)
-        index_file = os.path.join(DIST_DIR, "index.html")
-        if os.path.exists(index_file):
-            return FileResponse(index_file)
+        # Prevención estricta de Path Traversal (P0.3):
+        # Decodificar URL y resolver ruta canónica con Path.resolve()
+        decoded_path = urllib.parse.unquote(full_path).lstrip("/")
+        index_file = DIST_DIR / "index.html"
+
+        if decoded_path:
+            try:
+                target_file = (DIST_DIR / decoded_path).resolve()
+                # Verificar estrictamente que quede dentro de DIST_DIR
+                if target_file.is_relative_to(DIST_DIR) and target_file.is_file():
+                    return FileResponse(str(target_file))
+            except Exception:
+                pass
+
+        if index_file.exists():
+            return FileResponse(str(index_file))
         return {"status": "AquaPulse API is active"}

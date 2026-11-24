@@ -207,3 +207,24 @@ class TestAuditP0Point2:
         assert user.email_verified is True
         assert user.is_active is True
         db.close()
+
+
+class TestAuditP0Point3:
+    """Tests para Punto 3: Prevención de Path Traversal en serve_spa."""
+
+    def test_serve_spa_prevents_path_traversal(self):
+        """Verifica que intentos de path traversal sirvan index.html y nunca archivos fuera de dist."""
+        # 1. /../backend/main.py
+        res1 = client.get("/../backend/main.py")
+        assert "from fastapi import" not in res1.text, "Path traversal detectado con /../backend/main.py"
+        assert res1.status_code == 200
+
+        # 2. /%2e%2e/%2e%2e/backend/.env
+        res2 = client.get("/%2e%2e/%2e%2e/backend/.env")
+        assert "SECRET_KEY" not in res2.text, "Path traversal detectado con encoded .env"
+        assert res2.status_code == 200
+
+        # 3. /..%2fbackend%2fmain.py
+        res3 = client.get("/..%2fbackend%2fmain.py")
+        assert "from fastapi import" not in res3.text, "Path traversal detectado con URL-encoded slash"
+        assert res3.status_code == 200
