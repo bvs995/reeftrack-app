@@ -69,6 +69,7 @@ class Tank(Base):
     # Sinónimos para compatibilidad bilingüe
     nombre = synonym("name")
     volumen = synonym("volume_liters")
+    volumen_litros = synonym("volume_liters")
     tipo = synonym("tank_type")
 
     owner = relationship("User", back_populates="tanks")
@@ -313,74 +314,6 @@ class RateLimitRecord(Base):
     action = Column(String(50), nullable=False, index=True)    # 'auth', 'scan_burst', 'ai_burst'
     timestamp = Column(Float, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
-
-
-# ==============================================================================
-# MODELOS SQLALCHEMY ORM OFICIALES EN ESPAÑOL (acuarios y mediciones)
-# ==============================================================================
-
-class Acuario(Base):
-    __tablename__ = "acuarios"
-
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    nombre = Column(String(100), nullable=False)
-    volumen_litros = Column(Float, nullable=False)
-    usuario_id = Column(String(100), nullable=False, default="1", index=True)
-    reef_profile = Column(String(50), nullable=True)
-    dosing_method = Column(String(50), nullable=True)
-    lighting_par = Column(Integer, nullable=True)
-    flow_profile = Column(String(50), nullable=True)
-    creado_en = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
-
-    # Sinónimos para interoperabilidad total
-    volumen = synonym("volumen_litros")
-    name = synonym("nombre")
-    volume_liters = synonym("volumen_litros")
-    user_id = synonym("usuario_id")
-    created_at = synonym("creado_en")
-
-    mediciones = relationship("MedicionAcuario", back_populates="acuario", cascade="all, delete-orphan")
-
-
-class MedicionAcuario(Base):
-    __tablename__ = "mediciones"
-
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    acuario_id = Column(Integer, ForeignKey("acuarios.id", ondelete="CASCADE"), nullable=False, index=True)
-    ph = Column(Float, nullable=True)
-    kh = Column(Float, nullable=True)
-    calcio = Column(Float, nullable=True)
-    calcium = Column(Float, nullable=True)
-    magnesio = Column(Float, nullable=True)
-    magnesium = Column(Float, nullable=True)
-    nitrato = Column(Float, nullable=True)
-    nitrate = Column(Float, nullable=True)
-    fosfato = Column(Float, nullable=True)
-    phosphate = Column(Float, nullable=True)
-    salinity = Column(Float, nullable=True)
-    temperature = Column(Float, nullable=True)
-    temperatura = Column(Float, nullable=True)
-    ammonia = Column(Float, nullable=True)
-    nitrite = Column(Float, nullable=True)
-    trace_elements = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
-    test_methods = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
-    fecha_registro = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
-
-    # Sinónimos para interoperabilidad total
-    tank_id = synonym("acuario_id")
-    alkalinity_dkh = synonym("kh")
-    calcium_ppm = synonym("calcio")
-    magnesium_ppm = synonym("magnesio")
-    nitrate_ppm = synonym("nitrato")
-    phosphate_ppm = synonym("fosfato")
-    temperature_c = synonym("temperature")
-    timestamp = synonym("fecha_registro")
-
-    acuario = relationship("Acuario", back_populates="mediciones")
-    tank = synonym("acuario")
-
-# Alias canónicos para modelos de base de datos
-Medicion = MedicionAcuario
 
 
 # ==============================================================================

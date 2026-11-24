@@ -292,3 +292,26 @@ class TestAuditP1Point8:
         assert "'unsafe-inline'" not in script_src, f"script-src no debe contener 'unsafe-inline': {script_src}"
         assert "https:" not in script_src, f"script-src no debe contener 'https:' genérico: {script_src}"
 
+
+class TestAuditP1Point9:
+    """Tests para Punto 9: Eliminación de tablas duplicadas (acuarios/mediciones) y clases Acuario/MedicionAcuario."""
+
+    def test_no_duplicate_classes_nor_tables_in_models(self):
+        """No deben existir clases Acuario ni MedicionAcuario como modelos separados, ni tablas 'acuarios'/'mediciones' en metadata."""
+        import backend.models as bm
+        from backend.database import Base
+
+        assert not hasattr(bm, "Acuario"), "La clase Acuario debe ser eliminada de backend.models"
+        assert not hasattr(bm, "MedicionAcuario"), "La clase MedicionAcuario debe ser eliminada de backend.models"
+        assert "acuarios" not in Base.metadata.tables, "La tabla 'acuarios' no debe existir en metadata de SQLAlchemy"
+        assert "mediciones" not in Base.metadata.tables, "La tabla 'mediciones' no debe existir en metadata de SQLAlchemy"
+
+    def test_update_aquarium_does_not_have_insecure_sync_block(self):
+        """update_aquarium no debe sincronizar con tablas duplicadas ni modificar registros de otros usuarios."""
+        import inspect
+        from backend.main import update_aquarium
+        source = inspect.getsource(update_aquarium)
+        assert "acuario_record" not in source, "El bloque 'sincronización entre tablas' con acuario_record debe eliminarse"
+        assert "isinstance(tank, Acuario)" not in source, "No debe haber chequeos de instancias de Acuario"
+
+

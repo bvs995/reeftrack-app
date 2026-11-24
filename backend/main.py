@@ -54,8 +54,6 @@ from backend.models import (
     AquariumDataRequest,
     AquariumAnalysisResponse,
     PredictiveAnalysisJsonResponse,
-    MedicionAcuario,
-    Acuario,
     Aquarium,
     MaintenanceTask,
     MaintenanceLog,
@@ -1379,23 +1377,6 @@ def create_aquarium_via_schema(
     except Exception as e:
         logger.warning(f"Aviso al sembrar tareas de mantenimiento para tanque {new_tank.id}: {e}")
 
-    # Sincronización en tabla acuarios
-    try:
-        nuevo_acuario = Acuario(
-            id=new_tank.id,
-            nombre=new_tank.name,
-            volumen_litros=new_tank.volume_liters,
-            usuario_id=str(user_id),
-            reef_profile=new_tank.reef_profile,
-            dosing_method=new_tank.dosing_method,
-            lighting_par=new_tank.lighting_par,
-            flow_profile=new_tank.flow_profile
-        )
-        db.add(nuevo_acuario)
-        db.commit()
-    except Exception:
-        db.rollback()
-
     return TankResponse.model_validate(new_tank)
 
 @app.put(
@@ -1425,15 +1406,7 @@ def update_aquarium(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Se requiere el campo 'volume_liters' o datos a actualizar")
 
     # Validación estricta anti-IDOR: verificar pertenencia a current_user.id
-    tank = db.query(Aquarium).filter(Aquarium.id == aquarium_id, Aquarium.user_id == current_user.id).first()
-    if not tank:
-        try:
-            legacy_acuario = db.query(Acuario).filter(Acuario.id == aquarium_id, Acuario.usuario_id == str(current_user.id)).first()
-            if legacy_acuario:
-                tank = legacy_acuario
-        except Exception:
-            db.rollback()
-
+    tank = db.query(Tank).filter(Tank.id == aquarium_id, Tank.user_id == current_user.id).first()
     if not tank:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1460,30 +1433,6 @@ def update_aquarium(
             tank.flow_profile = payload["flow_profile"]
         if "notes" in payload:
             tank.notes = payload["notes"]
-
-    # Sincronización entre tablas tanks y acuarios si coexisten
-    if isinstance(tank, Tank):
-        acuario_record = db.query(Acuario).filter(Acuario.id == aquarium_id).first()
-        if acuario_record:
-            if actual_volume is not None:
-                acuario_record.volumen_litros = actual_volume
-            if hasattr(tank, "name"):
-                acuario_record.nombre = tank.name
-            acuario_record.reef_profile = getattr(tank, "reef_profile", None)
-            acuario_record.dosing_method = getattr(tank, "dosing_method", None)
-            acuario_record.lighting_par = getattr(tank, "lighting_par", None)
-            acuario_record.flow_profile = getattr(tank, "flow_profile", None)
-    elif isinstance(tank, Acuario):
-        tank_record = db.query(Tank).filter(Tank.id == aquarium_id).first()
-        if tank_record:
-            if actual_volume is not None:
-                tank_record.volume_liters = actual_volume
-            if hasattr(tank, "nombre"):
-                tank_record.name = tank.nombre
-            tank_record.reef_profile = getattr(tank, "reef_profile", None)
-            tank_record.dosing_method = getattr(tank, "dosing_method", None)
-            tank_record.lighting_par = getattr(tank, "lighting_par", None)
-            tank_record.flow_profile = getattr(tank, "flow_profile", None)
 
     db.commit()
     db.refresh(tank)
@@ -1875,14 +1824,6 @@ def obtener_analisis_json(
         if target_id:
             tank_obj = db.query(Tank).filter(Tank.id == target_id, Tank.user_id == current_user.id).first()
             if not tank_obj:
-                try:
-                    legacy_acuario = db.query(Acuario).filter(Acuario.id == target_id, Acuario.usuario_id == str(current_user.id)).first()
-                    if legacy_acuario:
-                        tank_obj = legacy_acuario
-                except Exception:
-                    db.rollback()
-
-            if not tank_obj:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Acuario no encontrado o no pertenece a tu cuenta."
@@ -1984,14 +1925,6 @@ def endpoint_tendencia_48h(
 
     tank = db.query(Tank).filter(Tank.id == target_id, Tank.user_id == current_user.id).first()
     if not tank:
-        try:
-            legacy_acuario = db.query(Acuario).filter(Acuario.id == target_id, Acuario.usuario_id == str(current_user.id)).first()
-            if legacy_acuario:
-                tank = legacy_acuario
-        except Exception:
-            db.rollback()
-
-    if not tank:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Acuario no encontrado o no pertenece a tu cuenta."
@@ -2034,14 +1967,6 @@ def endpoint_analisis_con_historial(
 
     tank_obj = db.query(Tank).filter(Tank.id == target_id, Tank.user_id == current_user.id).first()
     if not tank_obj:
-        try:
-            legacy_acuario = db.query(Acuario).filter(Acuario.id == target_id, Acuario.usuario_id == str(current_user.id)).first()
-            if legacy_acuario:
-                tank_obj = legacy_acuario
-        except Exception:
-            db.rollback()
-
-    if not tank_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Acuario no encontrado o no pertenece a tu cuenta."
@@ -2055,14 +1980,6 @@ def endpoint_analisis_con_historial(
             .order_by(Measurement.timestamp.desc())
             .first()
         )
-
-        if not ultima_medicion:
-            ultima_medicion = (
-                db.query(MedicionAcuario)
-                .filter(MedicionAcuario.acuario_id == target_id)
-                .order_by(MedicionAcuario.fecha_registro.desc())
-                .first()
-            )
 
         if not ultima_medicion:
             raise HTTPException(status_code=404, detail="No se encontraron mediciones para este acuario.")

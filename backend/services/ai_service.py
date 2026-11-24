@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.models import (
-    MedicionAcuario,
     Measurement,
     DiagnosticAudit
 )
@@ -208,24 +207,12 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     hace_48_horas = datetime.utcnow() - timedelta(hours=48)
 
     registros = (
-        db.query(MedicionAcuario)
-        .filter(MedicionAcuario.acuario_id == acuario_id)
-        .filter(MedicionAcuario.fecha_registro >= hace_48_horas)
-        .order_by(MedicionAcuario.fecha_registro.asc())
+        db.query(Measurement)
+        .filter(Measurement.tank_id == acuario_id)
+        .filter(Measurement.timestamp >= hace_48_horas)
+        .order_by(Measurement.timestamp.asc())
         .all()
     )
-
-    if not registros:
-        try:
-            registros = (
-                db.query(Measurement)
-                .filter(Measurement.tank_id == acuario_id)
-                .filter(Measurement.timestamp >= hace_48_horas)
-                .order_by(Measurement.timestamp.asc())
-                .all()
-            )
-        except Exception:
-            pass
 
     if not registros:
         return "No hay registros en las últimas 48 horas. Estado inicial o estable."

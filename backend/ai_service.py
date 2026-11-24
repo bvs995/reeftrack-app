@@ -21,9 +21,7 @@ from backend.ai_validator import (
 from backend.models import (
     AquariumAnalysisResponse,
     AquariumDataRequest,
-    PredictiveAnalysisJsonResponse,
-    MedicionAcuario,
-    Acuario
+    PredictiveAnalysisJsonResponse
 )
 
 __all__ = [
@@ -43,8 +41,6 @@ __all__ = [
     "AquariumAnalysisResponse",
     "AquariumDataRequest",
     "PredictiveAnalysisJsonResponse",
-    "MedicionAcuario",
-    "Acuario",
     "PRIMARY_MODEL",
     "FALLBACK_MODELS"
 ]
