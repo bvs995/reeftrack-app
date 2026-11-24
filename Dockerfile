@@ -37,8 +37,11 @@ COPY --from=builder /install /usr/local
 RUN groupadd -g 10001 appgroup && \
     useradd -u 10001 -g appgroup -s /bin/sh -m appuser
 
-# Copiar código del backend
+# Copiar código del backend y configuración de migraciones Alembic (P1.11)
 COPY backend /app/backend
+COPY alembic.ini /app/alembic.ini
+COPY alembic /app/alembic
+COPY migrations /app/migrations
 
 # Permisos para el usuario no-root
 RUN chown -R appuser:appgroup /app
@@ -59,5 +62,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/health || exit 1
 
-# Comando de arranque para producción con workers de Uvicorn
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT} --workers 2"]
+# Comando de arranque para producción con migraciones automáticas y workers de Uvicorn
+CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT} --workers 2"]

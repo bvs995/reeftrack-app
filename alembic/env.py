@@ -25,38 +25,41 @@ sys.modules["models"] = backend.models
 
 # Importa la Base de donde heredan tus modelos (ej. from database import Base)
 from database import Base
-from models import User, Tank, Measurement, Acuario, Medicion
+from models import User, Tank, Measurement
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Sobrescribir sqlalchemy.url con la variable de entorno de Render (DATABASE_URL o alias DATEBASE_URL)
-database_url = os.getenv("DATABASE_URL") or os.getenv("DATEBASE_URL")
-if database_url:
-    database_url = database_url.strip().strip("'\"")
-    import re
-    import urllib.parse
-    url_match = re.match(
-        r"^(?P<proto>postgresql(?:\+[a-zA-Z0-9_]+)?://|postgres://)(?P<user>[^:]+):(?P<pass>.+?)@(?P<rest>[^@]+)$",
-        database_url
-    )
-    if url_match:
-        proto = url_match.group("proto")
-        user = url_match.group("user")
-        pwd = url_match.group("pass")
-        rest = url_match.group("rest")
-        if pwd.startswith("[") and pwd.endswith("]"):
-            pwd = pwd[1:-1]
-        pwd = urllib.parse.quote_plus(urllib.parse.unquote_plus(pwd))
-        database_url = f"{proto}{user}:{pwd}@{rest}"
+# Sobrescribir sqlalchemy.url con la variable de entorno solo si no se configuró una URL explícita programáticamente (P1.11)
+current_ini_url = config.get_main_option("sqlalchemy.url")
+is_placeholder = not current_ini_url or "usuario:password@localhost" in current_ini_url or "driver://user" in current_ini_url
+if is_placeholder:
+    database_url = os.getenv("DATABASE_URL") or os.getenv("DATEBASE_URL")
+    if database_url:
+        database_url = database_url.strip().strip("'\"")
+        import re
+        import urllib.parse
+        url_match = re.match(
+            r"^(?P<proto>postgresql(?:\+[a-zA-Z0-9_]+)?://|postgres://)(?P<user>[^:]+):(?P<pass>.+?)@(?P<rest>[^@]+)$",
+            database_url
+        )
+        if url_match:
+            proto = url_match.group("proto")
+            user = url_match.group("user")
+            pwd = url_match.group("pass")
+            rest = url_match.group("rest")
+            if pwd.startswith("[") and pwd.endswith("]"):
+                pwd = pwd[1:-1]
+            pwd = urllib.parse.quote_plus(urllib.parse.unquote_plus(pwd))
+            database_url = f"{proto}{user}:{pwd}@{rest}"
 
-    # Render a veces usa 'postgres://' pero SQLAlchemy requiere 'postgresql://'
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-    if database_url.startswith("postgresql://") and not database_url.startswith("postgresql+"):
-        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-    config.set_main_option("sqlalchemy.url", database_url)
+        # Render a veces usa 'postgres://' pero SQLAlchemy requiere 'postgresql://'
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        if database_url.startswith("postgresql://") and not database_url.startswith("postgresql+"):
+            database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

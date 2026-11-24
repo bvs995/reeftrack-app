@@ -420,4 +420,66 @@ class TestAuditP1Point10:
         assert len(sanitized) <= 500
 
 
+class TestAuditP1Point11:
+    """Tests para Punto 11: Configuración de Alembic, Dockerfile con migraciones y base nueva completa."""
+
+    def test_alembic_files_and_dockerfile_configuration(self):
+        """Verifica que existan alembic.ini y migrations/, que Dockerfile los copie y corra alembic upgrade head."""
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent.parent
+
+        alembic_ini = root / "alembic.ini"
+        migrations_dir = root / "migrations"
+        dockerfile = root / "Dockerfile"
+
+        assert alembic_ini.exists(), "alembic.ini debe existir en la raíz"
+        assert migrations_dir.exists(), "migrations/ debe existir en la raíz"
+        assert dockerfile.exists(), "Dockerfile debe existir en la raíz"
+
+        content = dockerfile.read_text()
+        assert "alembic.ini" in content, "Dockerfile debe copiar alembic.ini"
+        assert "alembic upgrade head" in content, "Dockerfile debe ejecutar 'alembic upgrade head' en el arranque"
+
+    def test_fresh_database_fully_migrated_with_alembic_only(self, tmp_path):
+        """Una base de datos completamente nueva debe quedar 100% creada únicamente ejecutando alembic upgrade head."""
+        from alembic.config import Config
+        from alembic import command
+        from sqlalchemy import create_engine, inspect
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent.parent
+        db_file = tmp_path / "fresh_migrated.db"
+        test_db_url = f"sqlite:///{db_file}"
+
+        alembic_cfg = Config(str(root / "alembic.ini"))
+        alembic_cfg.set_main_option("sqlalchemy.url", test_db_url)
+
+        # Ejecutar migraciones completas desde cero
+        command.upgrade(alembic_cfg, "head")
+
+        # Verificar tablas creadas
+        engine = create_engine(test_db_url)
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+
+        required_tables = {
+            "users",
+            "tanks",
+            "measurements",
+            "maintenance_tasks",
+            "maintenance_logs",
+            "water_changes",
+            "push_subscriptions",
+            "diagnostic_feedback",
+            "diagnostic_audits",
+            "password_reset_tokens",
+            "refresh_tokens",
+            "user_daily_quotas",
+            "rate_limit_records"
+        }
+        missing = required_tables - tables
+        assert not missing, f"Faltan tablas creadas por Alembic en base nueva: {missing}"
+
+
+
 
