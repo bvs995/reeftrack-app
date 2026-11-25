@@ -156,6 +156,13 @@ export default function AuthModal({ isOpen, onClose }) {
       if (tokenFromUrl) {
         setResetToken(tokenFromUrl);
         setAuthModalTab('reset');
+
+        // Limpiar inmediatamente el token de la URL sin recargar para no exponerlo en historial ni cabeceras
+        params.delete('reset_token');
+        params.delete('token');
+        const newQuery = params.toString() ? `?${params.toString()}` : '';
+        const cleanUrl = window.location.pathname + newQuery + window.location.hash;
+        window.history.replaceState(null, '', cleanUrl);
       }
     }
   }, [setAuthModalTab]);

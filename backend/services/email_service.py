@@ -60,6 +60,10 @@ class ResendEmailProvider(BaseEmailProvider):
         self.endpoint = "https://api.resend.com/emails"
 
     def send_email(self, to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+        if not self.api_key:
+            logger.error(f"Fallo al enviar correo a {mask_email(to_email)}: API key de Resend no está configurada.")
+            return False
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -77,24 +81,30 @@ class ResendEmailProvider(BaseEmailProvider):
                 if resp.status_code in (200, 201):
                     logger.info(f"Correo enviado exitosamente vía Resend a {mask_email(to_email)}")
                     return True
-                logger.error(f"Fallo en envío Resend (status {resp.status_code}): {resp.text[:120]}")
+                logger.error(f"Fallo en envío de correo a {mask_email(to_email)} vía Resend (HTTP {resp.status_code}): error del proveedor o clave API inválida.")
                 return False
             else:
                 import json
                 import urllib.request
+                import urllib.error
                 req = urllib.request.Request(
                     self.endpoint,
                     data=json.dumps(payload).encode("utf-8"),
                     headers=headers,
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    if resp.status in (200, 201):
-                        logger.info(f"Correo enviado exitosamente vía Resend a {mask_email(to_email)}")
-                        return True
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        if resp.status in (200, 201):
+                            logger.info(f"Correo enviado exitosamente vía Resend a {mask_email(to_email)}")
+                            return True
+                        logger.error(f"Fallo en envío de correo a {mask_email(to_email)} vía Resend (HTTP {resp.status}): error del proveedor.")
+                        return False
+                except urllib.error.HTTPError as he:
+                    logger.error(f"Fallo en envío de correo a {mask_email(to_email)} vía Resend (HTTP {he.code}): clave API inválida o error del proveedor.")
                     return False
         except Exception as e:
-            logger.error(f"Error comunicando con Resend API para {mask_email(to_email)}: {type(e).__name__}")
+            logger.error(f"Error de conexión comunicando con Resend API para {mask_email(to_email)}: {type(e).__name__}")
             return False
 
 
@@ -107,6 +117,10 @@ class BrevoEmailProvider(BaseEmailProvider):
         self.endpoint = "https://api.brevo.com/v3/smtp/email"
 
     def send_email(self, to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+        if not self.api_key:
+            logger.error(f"Fallo al enviar correo a {mask_email(to_email)}: API key de Brevo no está configurada.")
+            return False
+
         headers = {
             "api-key": self.api_key,
             "Content-Type": "application/json",
@@ -125,24 +139,30 @@ class BrevoEmailProvider(BaseEmailProvider):
                 if resp.status_code in (200, 201):
                     logger.info(f"Correo enviado exitosamente vía Brevo a {mask_email(to_email)}")
                     return True
-                logger.error(f"Fallo en envío Brevo (status {resp.status_code}): {resp.text[:120]}")
+                logger.error(f"Fallo en envío de correo a {mask_email(to_email)} vía Brevo (HTTP {resp.status_code}): error del proveedor o clave API inválida.")
                 return False
             else:
                 import json
                 import urllib.request
+                import urllib.error
                 req = urllib.request.Request(
                     self.endpoint,
                     data=json.dumps(payload).encode("utf-8"),
                     headers=headers,
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    if resp.status in (200, 201):
-                        logger.info(f"Correo enviado exitosamente vía Brevo a {mask_email(to_email)}")
-                        return True
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        if resp.status in (200, 201):
+                            logger.info(f"Correo enviado exitosamente vía Brevo a {mask_email(to_email)}")
+                            return True
+                        logger.error(f"Fallo en envío de correo a {mask_email(to_email)} vía Brevo (HTTP {resp.status}): error del proveedor.")
+                        return False
+                except urllib.error.HTTPError as he:
+                    logger.error(f"Fallo en envío de correo a {mask_email(to_email)} vía Brevo (HTTP {he.code}): clave API inválida o error del proveedor.")
                     return False
         except Exception as e:
-            logger.error(f"Error comunicando con Brevo API para {mask_email(to_email)}: {type(e).__name__}")
+            logger.error(f"Error de conexión comunicando con Brevo API para {mask_email(to_email)}: {type(e).__name__}")
             return False
 
 
@@ -167,7 +187,7 @@ class SMTPEmailProvider(BaseEmailProvider):
 
     def send_email(self, to_email: str, subject: str, html_body: str, text_body: str) -> bool:
         if not self.host:
-            logger.warning("Intento de envío SMTP sin servidor host configurado.")
+            logger.error(f"Fallo al enviar correo a {mask_email(to_email)}: Servidor SMTP host no configurado.")
             return False
         try:
             msg = MIMEMultipart("alternative")
@@ -190,7 +210,7 @@ class SMTPEmailProvider(BaseEmailProvider):
             logger.info(f"Correo enviado exitosamente vía SMTP a {mask_email(to_email)}")
             return True
         except Exception as e:
-            logger.error(f"Error en servidor SMTP al enviar a {mask_email(to_email)}: {type(e).__name__}")
+            logger.error(f"Error en servidor SMTP al enviar correo a {mask_email(to_email)}: {type(e).__name__} (fallo de conexión o credenciales inválidas).")
             return False
 
 
@@ -221,12 +241,24 @@ class MockEmailProvider(BaseEmailProvider):
 
 
 class ConsoleEmailProvider(BaseEmailProvider):
-    """Proveedor para desarrollo local seguro: notifica en consola sin exponer tokens ni enlaces."""
+    """Proveedor para desarrollo local: imprime visiblemente el correo en terminal y registra evento sin tokens en logs."""
 
     def __init__(self, from_email: str = "noreply@aquapulse.io"):
         self.from_email = from_email
 
     def send_email(self, to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+        banner = (
+            f"\n"
+            f"======================== 📧 AQUAPULSE EMAIL (CONSOLE) ========================\n"
+            f"Para:      {to_email}\n"
+            f"De:        {self.from_email}\n"
+            f"Asunto:    {subject}\n"
+            f"------------------------------------------------------------------------------\n"
+            f"{text_body.strip()}\n"
+            f"==============================================================================\n"
+        )
+        print(banner, flush=True)
+
         logger.info(
             f"[ConsoleEmail] Notificación generada de forma segura para {mask_email(to_email)} "
             f"(Asunto: {subject}). Los enlaces confidenciales no se muestran en logs de consola."
@@ -272,11 +304,72 @@ def get_email_provider() -> BaseEmailProvider:
         )
     elif provider_name == "mock":
         _active_provider = MockEmailProvider(from_email=from_email)
-    else:
+    elif provider_name in ("console", ""):
         # Por defecto en desarrollo local: Console
+        _active_provider = ConsoleEmailProvider(from_email=from_email)
+    else:
+        logger.error(
+            f"Fallo en configuración de correo: proveedor '{provider_name}' no reconocido. "
+            "Se utilizará ConsoleEmailProvider por seguridad."
+        )
         _active_provider = ConsoleEmailProvider(from_email=from_email)
 
     return _active_provider
+
+
+def check_email_configuration_on_startup() -> bool:
+    """
+    Verifica la configuración del servicio de correo al arrancar la aplicación.
+    - En producción: Si falta configuración crítica, detiene el arranque arrojando RuntimeError.
+    - En desarrollo: Emite advertencias y avisos claros en la terminal sobre el estado del proveedor.
+    """
+    is_prod = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+    if is_prod:
+        return validate_email_configuration()
+
+    provider = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+    from_email = os.getenv("EMAIL_FROM", "").strip() or "noreply@aquapulse.io"
+    api_key = os.getenv("EMAIL_API_KEY", "").strip()
+    frontend_url = os.getenv("FRONTEND_URL", "").strip()
+
+    if not provider or provider == "console":
+        logger.warning(
+            "⚠️  [EMAIL CONFIG] EMAIL_PROVIDER está configurado en modo 'console' o no está definido. "
+            "Los correos transaccionales (activación, reseteo) se imprimirán visiblemente en la terminal "
+            "y no se enviarán a buzones reales."
+        )
+    elif provider in ("resend", "brevo"):
+        if not api_key:
+            logger.error(
+                f"🚨 [EMAIL CONFIG] EMAIL_PROVIDER está configurado como '{provider}', pero falta la variable "
+                "EMAIL_API_KEY en el entorno. Los envíos de correo fallarán con error."
+            )
+        else:
+            logger.info(f"✅ [EMAIL CONFIG] Proveedor transaccional '{provider}' configurado con remitente {from_email}.")
+    elif provider == "smtp":
+        host = os.getenv("SMTP_HOST", "").strip()
+        if not host:
+            logger.error(
+                "🚨 [EMAIL CONFIG] EMAIL_PROVIDER está configurado como 'smtp', pero falta la variable "
+                "SMTP_HOST en el entorno. Los envíos de correo fallarán con error."
+            )
+        else:
+            logger.info(f"✅ [EMAIL CONFIG] Proveedor SMTP '{host}' configurado con remitente {from_email}.")
+    elif provider == "mock":
+        logger.info("ℹ️  [EMAIL CONFIG] Proveedor 'mock' en memoria activo (modo pruebas).")
+    else:
+        logger.error(
+            f"🚨 [EMAIL CONFIG] Proveedor EMAIL_PROVIDER='{provider}' desconocido. "
+            "Los envíos usarán la consola por defecto."
+        )
+
+    if not frontend_url:
+        logger.warning(
+            "⚠️  [EMAIL CONFIG] Variable FRONTEND_URL no definida. "
+            "Se usará 'http://localhost:5173' como base predeterminada para los enlaces."
+        )
+
+    return True
 
 
 def validate_email_configuration() -> bool:
@@ -393,7 +486,10 @@ def send_verification_email(to_email: str, verify_url: str) -> bool:
     """
 
     provider = get_email_provider()
-    return provider.send_email(to_email=to_email, subject=subject, html_body=html_body, text_body=text_body)
+    success = provider.send_email(to_email=to_email, subject=subject, html_body=html_body, text_body=text_body)
+    if not success:
+        logger.error(f"Fallo al enviar correo de verificación a {mask_email(to_email)}: el proveedor no completó el envío.")
+    return success
 
 
 def send_password_reset_email(to_email: str, reset_url: str) -> bool:
@@ -442,4 +538,7 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
     """
 
     provider = get_email_provider()
-    return provider.send_email(to_email=to_email, subject=subject, html_body=html_body, text_body=text_body)
+    success = provider.send_email(to_email=to_email, subject=subject, html_body=html_body, text_body=text_body)
+    if not success:
+        logger.error(f"Fallo al enviar correo de restablecimiento de contraseña a {mask_email(to_email)}: el proveedor no completó el envío.")
+    return success

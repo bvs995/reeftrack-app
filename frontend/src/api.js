@@ -156,9 +156,10 @@ export async function confirmPasswordReset(token, newPassword) {
 
 export async function verifyEmailToken(token) {
   const cleanToken = (token || '').trim();
-  const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(cleanToken)}`, {
+  const res = await fetch(`${API_BASE}/auth/verify-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: cleanToken }),
     credentials: 'include',
   });
   if (!res.ok) {
@@ -182,6 +183,9 @@ export async function resendVerificationEmail(email) {
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(errData.detail || 'Has agotado el límite de intentos para este correo. Por favor espera unos minutos antes de volver a solicitar un enlace.');
+    }
     throw new Error(errData.detail || 'Error al reenviar correo de verificación');
   }
   return res.json();

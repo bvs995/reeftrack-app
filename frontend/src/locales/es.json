@@ -28,6 +28,7 @@
     "resendingEmail": "Reenviando...",
     "emailResentSuccess": "Correo de activación reenviado con éxito. Revisa tu bandeja de entrada.",
     "emailResendError": "Error al reenviar correo",
+    "emailRateLimitExhausted": "Has alcanzado el límite de reenvíos para este correo. Por favor espera un momento antes de solicitar otro.",
     "close": "Cerrar",
     "free": "FREE"
   },

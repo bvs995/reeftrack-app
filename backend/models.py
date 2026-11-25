@@ -380,6 +380,11 @@ class ResendVerificationRequest(BaseModel):
     def normalize_email(cls, v: str) -> str:
         return v.strip().lower() if isinstance(v, str) else v
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., max_length=1024, description="Token seguro de verificación de cuenta")
+
+    model_config = ConfigDict(extra="forbid")
+
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., max_length=512, description="Token seguro de restablecimiento")
     new_password: str = Field(

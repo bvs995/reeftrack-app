@@ -32,9 +32,11 @@ from backend.models import (
     ResetPasswordRequest,
     PasswordResetResponse,
     ResendVerificationRequest,
+    VerifyEmailRequest,
     AccountDeleteRequest,
     check_password_complexity,
 )
+from backend.services.email_service import mask_email
 from backend.auth import (
     hash_password,
     verify_password,
@@ -101,7 +103,9 @@ def register_user(
     verify_token = create_email_verification_token(new_user.email, new_user.id)
     frontend_base = os.getenv("FRONTEND_URL", "").rstrip("/") or "http://localhost:5173"
     verify_url = f"{frontend_base}/?verify_email_token={verify_token}"
-    send_email_verification(new_user.email, verify_url)
+    sent = send_email_verification(new_user.email, verify_url)
+    if not sent:
+        logger.error(f"Fallo al enviar correo de verificación inicial al registrar usuario {mask_email(new_user.email)}")
 
     default_tank = Tank(
         user_id=new_user.id,
@@ -385,7 +389,9 @@ def forgot_password(
         db.add(reset_record)
         db.commit()
 
-        send_password_reset_email(user.email, reset_url)
+        sent = send_password_reset_email(user.email, reset_url)
+        if not sent:
+            logger.error(f"Fallo al enviar correo de restablecimiento de contraseña a {mask_email(user.email)}")
 
     logger.info("Solicitud de restablecimiento de contraseña procesada con respuesta neutral.")
     return PasswordResetResponse(
@@ -399,8 +405,25 @@ def forgot_password(
     response_model=PasswordResetResponse,
     summary="Restablecer la contraseña usando el token seguro"
 )
-def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """Valida el token firmado de un solo uso, actualiza contraseña con bcrypt e invalida todas las sesiones previas."""
+def reset_password(
+    request: Request,
+    payload: Optional[ResetPasswordRequest] = None,
+    db: Session = Depends(get_db)
+):
+    """Valida el token firmado de un solo uso en el cuerpo JSON, actualiza contraseña con bcrypt e invalida todas las sesiones previas."""
+    if request.query_params.get("token") or request.query_params.get("reset_token"):
+        logger.warning("Intento de restablecimiento rechazado: token transmitido en query string en lugar del cuerpo JSON.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Por motivos de seguridad, el token de restablecimiento no debe enviarse en la URL. Envíalo en el cuerpo JSON de la petición."
+        )
+
+    if not payload or not payload.token or not payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token de restablecimiento y la nueva contraseña deben enviarse en el cuerpo JSON de la petición."
+        )
+
     try:
         check_password_complexity(payload.new_password)
     except ValueError as e:
@@ -460,36 +483,35 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     )
 
 
-@router.api_route(
+@router.post(
     "/api/auth/verify-email",
-    methods=["GET", "POST"],
     summary="Verificar correo electrónico para activar la cuenta"
 )
-async def verify_email(
+def verify_email(
     request: Request,
     response: Response,
-    token: Optional[str] = Query(None, description="Token JWT de verificación de correo"),
+    payload: Optional[VerifyEmailRequest] = None,
     db: Session = Depends(get_db)
 ):
     """
     Valida el token de verificación y activa la cuenta del usuario.
-    Si el token ya fue utilizado (o el usuario ya está verificado), deniega la operación con 400.
-    Genera sesión activa y cookie HttpOnly para que el usuario pueda operar de inmediato sin relogin.
+    El token DEBE enviarse en el cuerpo JSON de la petición para evitar que quede registrado en los logs de acceso.
+    Si el token se envía en la URL (?token=...), se rechaza de inmediato con HTTP 400.
     """
-    clean_token = token
-    if not clean_token and request.method == "POST":
-        try:
-            body = await request.json()
-            if isinstance(body, dict):
-                clean_token = body.get("token") or body.get("verify_email_token")
-        except Exception:
-            pass
-
-    if not clean_token:
+    if request.query_params.get("token") or request.query_params.get("verify_email_token"):
+        logger.warning("Intento de verificación rechazado: token transmitido en query string en lugar del cuerpo JSON.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Se requiere el parámetro o token de verificación."
+            detail="Por motivos de seguridad, el token de verificación no debe enviarse en la URL. Envíalo en el cuerpo JSON de la petición."
         )
+
+    if not payload or not payload.token or not payload.token.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token de verificación debe enviarse en el cuerpo JSON de la petición."
+        )
+
+    clean_token = payload.token.strip()
 
     token_data = verify_email_verification_token(clean_token)
     user_id = int(token_data["sub"])
@@ -558,7 +580,8 @@ def resend_verification_email(
 ):
     """
     Reenvía un correo con un nuevo enlace de activación si la cuenta existe y no está verificada.
-    La respuesta es siempre neutra para evitar enumeración de usuarios.
+    La respuesta es siempre neutra para evitar enumeración de usuarios, pero si el envío falla o se supera el límite de intentos,
+    se registra un ERROR claro y no se bloquea en silencio.
     """
     check_auth_rate_limit(request, email=payload.email)
     normalized_email = payload.email.strip().lower()
@@ -568,7 +591,13 @@ def resend_verification_email(
         verify_token = create_email_verification_token(user.email, user.id)
         frontend_base = os.getenv("FRONTEND_URL", "").rstrip("/") or "http://localhost:5173"
         verify_url = f"{frontend_base}/?verify_email_token={verify_token}"
-        send_email_verification(user.email, verify_url)
+        sent = send_email_verification(user.email, verify_url)
+        if not sent:
+            logger.error(f"Fallo al reenviar correo de verificación a {mask_email(user.email)}: el proveedor rechazó el envío o no está configurado.")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No se pudo enviar el correo de verificación en este momento por un fallo en el servicio de correo. Por favor contacta a soporte o intenta más tarde."
+            )
 
     return {
         "ok": True,

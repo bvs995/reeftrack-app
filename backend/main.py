@@ -2,10 +2,23 @@
 AquaPulse - Commercial Multi-User API Gateway (P2.17 Modularized)
 """
 import os
+import sys
 import uuid
 import logging
 import urllib.parse
 from pathlib import Path
+
+# Configuración central de logging para asegurar visibilidad en la terminal
+logging_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=logging_format, stream=sys.stdout, force=True)
+
+app_logger = logging.getLogger("aquapulse")
+app_logger.setLevel(logging.INFO)
+if not app_logger.handlers:
+    _sh = logging.StreamHandler(sys.stdout)
+    _sh.setFormatter(logging.Formatter(logging_format))
+    app_logger.addHandler(_sh)
+    app_logger.propagate = False
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.exceptions import RequestValidationError
@@ -17,7 +30,10 @@ from sqlalchemy.orm import Session
 from backend.database import get_db, init_db, check_db_connection
 from backend.seed import seed_database_if_empty
 from backend.marine_profiles import MARINE_PROFILES
-from backend.services.email_service import validate_email_configuration
+from backend.services.email_service import (
+    validate_email_configuration,
+    check_email_configuration_on_startup,
+)
 
 # Routers modulares (P2.17)
 from backend.routers import (
@@ -149,6 +165,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.on_event("startup")
 def startup_event():
+    # Aviso claro del estado de configuración de correo al arrancar
+    try:
+        check_email_configuration_on_startup()
+    except Exception as e:
+        logger.error(f"Fallo al validar configuración de correo en startup: {e}")
+        if is_production:
+            raise
+
     try:
         init_db()
     except Exception as e:

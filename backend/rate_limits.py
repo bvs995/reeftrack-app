@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from fastapi import Request, HTTPException, status
 from backend.database import SessionLocal
 from backend.models import UserDailyQuota, RateLimitRecord
+from backend.services.email_service import mask_email
 
 logger = logging.getLogger("aquapulse.rate_limits")
 
@@ -79,7 +80,7 @@ def check_auth_rate_limit(request: Request, email: Optional[str] = None):
         ).count()
 
         if ip_count >= AUTH_RATE_LIMIT_IP_MAX:
-            logger.warning(f"Rate limit de autenticación excedido para IP {client_ip} ({ip_count} intentos)")
+            logger.error(f"Límite de intentos de autenticación excedido para IP {client_ip} ({ip_count} intentos). Operación bloqueada.")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Demasiadas solicitudes: Demasiados intentos de acceso desde esta dirección IP. Por favor espera un minuto antes de reintentar.",
@@ -95,10 +96,10 @@ def check_auth_rate_limit(request: Request, email: Optional[str] = None):
             ).count()
 
             if email_count >= AUTH_RATE_LIMIT_EMAIL_MAX:
-                logger.warning(f"Rate limit de autenticación excedido para cuenta {email} ({email_count} intentos)")
+                logger.error(f"Límite de intentos de autenticación excedido para la cuenta {mask_email(email)} ({email_count} intentos). Operación bloqueada.")
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Demasiadas solicitudes: Demasiados intentos fallidos para esta cuenta. Por favor espera un minuto antes de reintentar.",
+                    detail="Has agotado el límite de intentos permitidos para esta cuenta de correo. Por favor espera un minuto antes de volver a intentarlo.",
                     headers={"Retry-After": str(int(AUTH_RATE_LIMIT_WINDOW_SECONDS))}
                 )
 

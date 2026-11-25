@@ -371,7 +371,7 @@ class TestUnverifiedAccountBehavior:
             verify_token = match.group(1)
 
             # 6. Activar la cuenta mediante el endpoint de verificación
-            verify_res = client.post(f"/api/auth/verify-email?token={verify_token}")
+            verify_res = client.post("/api/auth/verify-email", json={"token": verify_token})
             assert verify_res.status_code == 200
             assert verify_res.json().get("ok") is True
 

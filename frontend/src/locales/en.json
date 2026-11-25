@@ -28,6 +28,7 @@
     "resendingEmail": "Resending...",
     "emailResentSuccess": "Activation email resent successfully. Please check your inbox.",
     "emailResendError": "Error resending email",
+    "emailRateLimitExhausted": "You have reached the maximum resend attempts for this email. Please wait a moment before trying again.",
     "close": "Close",
     "free": "FREE"
   },

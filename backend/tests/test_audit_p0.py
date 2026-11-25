@@ -199,7 +199,7 @@ class TestAuditP0Point2:
         token = create_email_verification_token(user.email, user.id)
 
         # Consumir verificación
-        verify_res = client.post(f"/api/auth/verify-email?token={token}")
+        verify_res = client.post("/api/auth/verify-email", json={"token": token})
         assert verify_res.status_code == 200
         assert verify_res.json().get("ok") is True
 
