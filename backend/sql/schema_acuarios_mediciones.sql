@@ -1,5 +1,5 @@
 -- ==============================================================================
--- AquaPulse — Esquema Oficial PostgreSQL para Acuarios y Mediciones
+-- AquaReef — Esquema Oficial PostgreSQL para Acuarios y Mediciones
 -- ==============================================================================
 
 -- 1. Tabla principal de Acuarios

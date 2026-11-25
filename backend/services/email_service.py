@@ -1,5 +1,5 @@
 """
-AquaPulse - Servicio Transaccional de Correos Electrónicos (Email Service)
+AquaReef - Servicio Transaccional de Correos Electrónicos (Email Service)
 Provee una arquitectura basada en proveedor abstracto (Resend, Brevo, SMTP, Console, Mock)
 para el envío seguro de correos transaccionales (verificación de cuenta y restablecimiento de contraseña).
 """
@@ -127,7 +127,7 @@ class BrevoEmailProvider(BaseEmailProvider):
             "Accept": "application/json",
         }
         payload = {
-            "sender": {"email": self.from_email, "name": "AquaPulse"},
+            "sender": {"email": self.from_email, "name": "AquaReef"},
             "to": [{"email": to_email}],
             "subject": subject,
             "htmlContent": html_body,
@@ -175,7 +175,7 @@ class SMTPEmailProvider(BaseEmailProvider):
         port: int = 587,
         user: Optional[str] = None,
         password: Optional[str] = None,
-        from_email: str = "noreply@aquapulse.io",
+        from_email: str = "no-reply@aquareef.app",
         use_tls: bool = True,
     ):
         self.host = host
@@ -217,7 +217,7 @@ class SMTPEmailProvider(BaseEmailProvider):
 class MockEmailProvider(BaseEmailProvider):
     """Proveedor en memoria para pruebas automáticas y validaciones de testing."""
 
-    def __init__(self, from_email: str = "noreply@aquapulse.io"):
+    def __init__(self, from_email: str = "no-reply@aquareef.app"):
         self.from_email = from_email
         self.sent_emails: List[SentEmailRecord] = []
 
@@ -243,7 +243,7 @@ class MockEmailProvider(BaseEmailProvider):
 class ConsoleEmailProvider(BaseEmailProvider):
     """Proveedor para desarrollo local: imprime visiblemente el correo en terminal y registra evento sin tokens en logs."""
 
-    def __init__(self, from_email: str = "noreply@aquapulse.io"):
+    def __init__(self, from_email: str = "no-reply@aquareef.app"):
         self.from_email = from_email
 
     def send_email(self, to_email: str, subject: str, html_body: str, text_body: str) -> bool:
@@ -286,7 +286,7 @@ def get_email_provider() -> BaseEmailProvider:
         return _active_provider
 
     provider_name = os.getenv("EMAIL_PROVIDER", "").strip().lower()
-    from_email = os.getenv("EMAIL_FROM", "noreply@aquapulse.io").strip()
+    from_email = os.getenv("EMAIL_FROM", "no-reply@aquareef.app").strip()
     api_key = os.getenv("EMAIL_API_KEY", "").strip()
 
     if provider_name == "resend":
@@ -328,7 +328,7 @@ def check_email_configuration_on_startup() -> bool:
         return validate_email_configuration()
 
     provider = os.getenv("EMAIL_PROVIDER", "").strip().lower()
-    from_email = os.getenv("EMAIL_FROM", "").strip() or "noreply@aquapulse.io"
+    from_email = os.getenv("EMAIL_FROM", "").strip() or "no-reply@aquareef.app"
     api_key = os.getenv("EMAIL_API_KEY", "").strip()
     frontend_url = os.getenv("FRONTEND_URL", "").strip()
 
@@ -389,7 +389,7 @@ def validate_email_configuration() -> bool:
         critical_msg = (
             "🚨 ERROR CRÍTICO DE CONFIGURACIÓN EN PRODUCCIÓN: La variable EMAIL_PROVIDER debe estar configurada "
             f"con uno de los proveedores transaccionales admitidos: {allowed_providers}.\n"
-            "AquaPulse se niega a arrancar en producción sin un proveedor de correo transaccional activo "
+            "AquaReef se niega a arrancar en producción sin un proveedor de correo transaccional activo "
             "para garantizar la verificación de cuentas y el restablecimiento seguro de contraseñas."
         )
         logger.critical(critical_msg)
@@ -399,7 +399,7 @@ def validate_email_configuration() -> bool:
     if not from_email or "@" not in from_email:
         critical_msg = (
             "🚨 ERROR CRÍTICO DE CONFIGURACIÓN EN PRODUCCIÓN: La variable EMAIL_FROM debe estar configurada "
-            "con una dirección de correo válida para el remitente (ej. noreply@aquapulse.io)."
+            "con una dirección de correo válida para el remitente (ej. no-reply@aquareef.app)."
         )
         logger.critical(critical_msg)
         raise RuntimeError(critical_msg)
@@ -428,7 +428,7 @@ def validate_email_configuration() -> bool:
     if not frontend_url or not (frontend_url.startswith("http://") or frontend_url.startswith("https://")):
         critical_msg = (
             "🚨 ERROR CRÍTICO DE CONFIGURACIÓN EN PRODUCCIÓN: La variable FRONTEND_URL es obligatoria "
-            "y debe contener una URL absoluta (ej. https://aquapulse.io) para generar los enlaces seguros de correo."
+            "y debe contener una URL absoluta (ej. https://www.aquareef.app) para generar los enlaces seguros de correo."
         )
         logger.critical(critical_msg)
         raise RuntimeError(critical_msg)
@@ -445,16 +445,16 @@ def send_verification_email(to_email: str, verify_url: str) -> bool:
     Envía correo transaccional de verificación de cuenta.
     NUNCA imprime en los logs el token ni el enlace completo.
     """
-    subject = "AquaPulse - Verifica tu cuenta"
+    subject = "AquaReef - Verifica tu cuenta"
 
     text_body = (
         f"Hola,\n\n"
-        f"¡Gracias por unirte a AquaPulse! Para activar tu cuenta y comenzar a monitorear tus acuarios,\n"
+        f"¡Gracias por unirte a AquaReef! Para activar tu cuenta y comenzar a monitorear tus acuarios,\n"
         f"por favor confirma tu dirección de correo electrónico ingresando al siguiente enlace seguro:\n\n"
         f"{verify_url}\n\n"
         f"Este enlace expirará en 24 horas.\n"
         f"Si no creaste esta cuenta, puedes desestimar este mensaje con total seguridad.\n\n"
-        f"— El equipo de AquaPulse"
+        f"— El equipo de AquaReef"
     )
 
     html_body = f"""
@@ -463,9 +463,9 @@ def send_verification_email(to_email: str, verify_url: str) -> bool:
     <head><meta charset="utf-8"></head>
     <body style="font-family: Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px;">
       <div style="max-width: 560px; margin: 0 auto; background-color: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155;">
-        <h1 style="color: #38bdf8; font-size: 24px; margin-bottom: 16px;">Verifica tu cuenta en AquaPulse</h1>
+        <h1 style="color: #38bdf8; font-size: 24px; margin-bottom: 16px;">Verifica tu cuenta en AquaReef</h1>
         <p style="font-size: 15px; line-height: 1.6; color: #cbd5e1;">
-          ¡Gracias por unirte a AquaPulse! Para activar tu cuenta y acceder al panel de control de tus acuarios, confirma tu dirección de correo:
+          ¡Gracias por unirte a AquaReef! Para activar tu cuenta y acceder al panel de control de tus acuarios, confirma tu dirección de correo:
         </p>
         <div style="text-align: center; margin: 32px 0;">
           <a href="{verify_url}" style="background-color: #0284c7; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">
@@ -497,16 +497,16 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
     Envía correo transaccional de restablecimiento de contraseña.
     NUNCA imprime en los logs el token ni el enlace completo.
     """
-    subject = "AquaPulse - Restablecimiento de contraseña"
+    subject = "AquaReef - Restablecimiento de contraseña"
 
     text_body = (
         f"Hola,\n\n"
-        f"Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en AquaPulse.\n"
+        f"Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en AquaReef.\n"
         f"Por favor ingresa al siguiente enlace seguro para crear tu nueva contraseña:\n\n"
         f"{reset_url}\n\n"
         f"Este enlace es de un solo uso y expirará en 30 minutos.\n"
         f"Si tú no solicitaste este cambio, puedes ignorar este mensaje; tu cuenta permanece segura.\n\n"
-        f"— El equipo de AquaPulse"
+        f"— El equipo de AquaReef"
     )
 
     html_body = f"""
@@ -517,7 +517,7 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
       <div style="max-width: 560px; margin: 0 auto; background-color: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155;">
         <h1 style="color: #38bdf8; font-size: 24px; margin-bottom: 16px;">Restablecer contraseña</h1>
         <p style="font-size: 15px; line-height: 1.6; color: #cbd5e1;">
-          Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en AquaPulse. Haz clic en el botón siguiente para definir una nueva contraseña:
+          Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en AquaReef. Haz clic en el botón siguiente para definir una nueva contraseña:
         </p>
         <div style="text-align: center; margin: 32px 0;">
           <a href="{reset_url}" style="background-color: #0284c7; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">

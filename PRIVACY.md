@@ -1,17 +1,17 @@
-# 🔒 Política de Privacidad de AquaPulse (Privacy Policy)
+# 🔒 Política de Privacidad de AquaReef (Privacy Policy)
 
 **Fecha de entrada en vigor**: 23 de noviembre de 2026  
 **Versión**: 1.0 (Alineada con directrices de Google Play Store, GDPR y CCPA)
 
-AquaPulse ("la Aplicación", "nosotros", "nuestro") respeta y protege la privacidad de sus usuarios. Esta Política de Privacidad describe de manera transparente qué datos recopilamos, cómo los procesamos, cómo los protegemos y cómo puedes ejercer tus derechos sobre tu información personal.
+AquaReef ("la Aplicación", "nosotros", "nuestro") respeta y protege la privacidad de sus usuarios. Esta Política de Privacidad describe de manera transparente qué datos recopilamos, cómo los procesamos, cómo los protegemos y cómo puedes ejercer tus derechos sobre tu información personal.
 
 ---
 
 ## 1. Responsable del Tratamiento de Datos
 
-* **Responsable**: Equipo de Desarrollo AquaPulse
-* **Contacto de Privacidad**: `privacy@aquapulse.io` o `paliyo995@gmail.com`
-* **Sitio Web / Aplicación**: AquaPulse PWA (Arrecifes y Acuarios)
+* **Responsable**: Equipo de Desarrollo AquaReef
+* **Contacto de Privacidad**: `privacy@aquareef.app` o `paliyo995@gmail.com`
+* **Sitio Web / Aplicación**: AquaReef PWA (Arrecifes y Acuarios)
 
 ---
 
@@ -80,7 +80,7 @@ Implementamos medidas técnicas y organizativas de nivel de producción:
 
 ## 7. Derechos del Usuario (Acceso, Rectificación y Borrado - GDPR / CCPA)
 
-Como usuario de AquaPulse, tienes derecho a:
+Como usuario de AquaReef, tienes derecho a:
 1. **Acceso y Portabilidad**: Puedes solicitar y descargar una copia completa de tus acuarios, mediciones y configuraciones en formato estructurado JSON en cualquier momento mediante las opciones de perfil o exportación.
 2. **Rectificación**: Puedes editar o corregir cualquier medición o acuario directamente desde la interfaz.
 3. **Borrado y Eliminación Total ("Derecho al Olvido")**: Puedes solicitar en cualquier momento la supresión completa, inmediata e irreversible de tu cuenta y todos tus datos asociados mediante el endpoint seguro `DELETE /api/user/account` (con confirmación de contraseña y periodo de gracia opcional de 7 días).
@@ -90,7 +90,7 @@ Como usuario de AquaPulse, tienes derecho a:
 
 ## 8. Privacidad de Menores (COPPA)
 
-AquaPulse no está dirigida a menores de 13 años. No recopilamos conscientemente información personal de niños. Si detectamos que un menor de 13 años nos ha proporcionado información personal, procederemos a eliminarla de inmediato.
+AquaReef no está dirigida a menores de 13 años. No recopilamos conscientemente información personal de niños. Si detectamos que un menor de 13 años nos ha proporcionado información personal, procederemos a eliminarla de inmediato.
 
 ---
 
@@ -103,5 +103,5 @@ Nos reservamos el derecho de actualizar esta Política de Privacidad para reflej
 ## 10. Contacto
 
 Para ejercer tus derechos o realizar cualquier consulta relacionada con el tratamiento de tus datos, contáctanos en:
-* **Correo electrónico**: `privacy@aquapulse.io`
+* **Correo electrónico**: `privacy@aquareef.app`
 * **Soporte técnico**: `paliyo995@gmail.com`

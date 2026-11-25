@@ -1,4 +1,4 @@
-# 🚀 Guía de Despliegue y Operación en Producción (AquaPulse)
+# 🚀 Guía de Despliegue y Operación en Producción (AquaReef)
 
 **Versión**: 1.0 (Hardening para Play Store y SaaS Multi-usuario)
 
@@ -7,7 +7,7 @@
 ## 1. Requisitos Críticos de Hosting (Sin Pausa por Inactividad)
 
 > [!IMPORTANT]
-> **Plan de Hosting Sin Pausa Obligatorio**: AquaPulse **no debe** desplegarse en planes gratuitos con suspensión por inactividad (como Render Free Web Service).
+> **Plan de Hosting Sin Pausa Obligatorio**: AquaReef **no debe** desplegarse en planes gratuitos con suspensión por inactividad (como Render Free Web Service).
 
 ### 1.1 Razón Técnica y de Bioseguridad
 * **Arranques en frío (Cold Starts)**: Los planes gratuitos pausan los contenedores tras 15 minutos sin tráfico, ocasionando retardos de arranque de más de 50 segundos. Esto provoca errores de timeout en la cola offline de la PWA móvil y degradación del servicio.
@@ -30,7 +30,7 @@
 
 ## 3. Backups Automáticos y Recuperación ante Desastres (Disaster Recovery)
 
-AquaPulse implementa un protocolo riguroso de respaldos con paridad comprobada al 100%:
+AquaReef implementa un protocolo riguroso de respaldos con paridad comprobada al 100%:
 
 ### 3.1 Backups Diarios Automatizados
 * El workflow `.github/workflows/backup.yml` se ejecuta diariamente a las **03:00 UTC**.

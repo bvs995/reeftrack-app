@@ -1,6 +1,6 @@
 """
 Motor de Análisis Predictivo Bioquímico para Acuarios.
-AquaPulse - Fase 3:
+AquaReef - Fase 3:
 - Exige mínimo 3 mediciones para proyectar.
 - Regresión lineal con cálculo de R² y bandas de incertidumbre ±.
 - Si R² < 0.50 o banda incluye ambos lados del límite -> 'tendencia no concluyente', sin 'días al límite'.

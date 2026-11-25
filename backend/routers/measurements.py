@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Mediciones y Visión Artificial (P2.17)
+AquaReef - Router de Mediciones y Visión Artificial (P2.17)
 """
 import os
 import logging

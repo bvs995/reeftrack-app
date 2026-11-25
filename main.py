@@ -1,5 +1,5 @@
 """
-AquaPulse Root Entrypoint Shim.
+AquaReef Root Entrypoint Shim.
 Allows running `uvicorn main:app` or `uvicorn backend.main:app` from the project root.
 """
 import os

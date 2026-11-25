@@ -1,5 +1,5 @@
 """
-AquaPulse - Módulos de Routers FastAPI (P2.17)
+AquaReef - Módulos de Routers FastAPI (P2.17)
 """
 from backend.routers.auth import router as auth_router
 from backend.routers.tanks import router as tanks_router

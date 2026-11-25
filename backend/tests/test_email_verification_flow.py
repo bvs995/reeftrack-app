@@ -1,5 +1,5 @@
 """
-AquaPulse - Pruebas de Integración del Flujo de Verificación de Correo
+AquaReef - Pruebas de Integración del Flujo de Verificación de Correo
 Cubre:
 1. Token válido: activa la cuenta, emite credenciales y habilita operaciones sin relogin.
 2. Token ya usado: deniega con HTTP 400 avisando que ya fue utilizado.
@@ -57,7 +57,7 @@ def clean_test_environment():
     finally:
         db.close()
 
-    mock_prov = MockEmailProvider(from_email="noreply@aquapulse.io")
+    mock_prov = MockEmailProvider(from_email="no-reply@aquareef.app")
     set_email_provider(mock_prov)
     yield mock_prov
     mock_prov.clear()
@@ -196,7 +196,7 @@ class TestConsoleEmailProviderIntegration:
 
     def test_flow_with_console_provider_does_not_leak_tokens_in_logs(self):
         from backend.services.email_service import logger as email_logger, ConsoleEmailProvider
-        console_prov = ConsoleEmailProvider(from_email="noreply@aquapulse.io")
+        console_prov = ConsoleEmailProvider(from_email="no-reply@aquareef.app")
         set_email_provider(console_prov)
 
         with patch.object(email_logger, "info") as mock_info:
@@ -510,7 +510,7 @@ class TestEmailSecurityAndReliability:
 
     def test_console_email_provider_prints_visible_banner_to_stdout(self, capsys):
         from backend.services.email_service import ConsoleEmailProvider
-        prov = ConsoleEmailProvider(from_email="noreply@aquapulse.io")
+        prov = ConsoleEmailProvider(from_email="no-reply@aquareef.app")
 
         ok = prov.send_email(
             to_email="dev@aquapulse.io",

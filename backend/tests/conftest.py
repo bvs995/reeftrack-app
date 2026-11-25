@@ -1,5 +1,5 @@
 """
-Configuración común de pytest para AquaPulse.
+Configuración común de pytest para AquaReef.
 
 Los módulos de la app llaman a load_dotenv() al importarse, y load_dotenv NO pisa las
 variables que ya existen en el entorno. Fijarlas aquí, antes de importar la app, hace que
@@ -42,5 +42,5 @@ from pathlib import Path
 
 _dist = Path(tempfile.mkdtemp(prefix="aquapulse-dist-"))
 (_dist / "assets").mkdir()
-(_dist / "index.html").write_text("<!doctype html><title>AquaPulse test</title>", encoding="utf-8")
+(_dist / "index.html").write_text("<!doctype html><title>AquaReef test</title>", encoding="utf-8")
 os.environ["FRONTEND_DIST_DIR"] = str(_dist)

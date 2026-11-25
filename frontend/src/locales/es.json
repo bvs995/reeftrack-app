@@ -23,7 +23,7 @@
     "view": "Ver",
     "active": "Activo",
     "unverifiedEmail": "Correo sin verificar",
-    "verifyEmailNotice": "Verifica tu correo para usar AquaPulse",
+    "verifyEmailNotice": "Verifica tu correo para usar AquaReef",
     "resendEmailBtn": "Reenviar correo",
     "resendingEmail": "Reenviando...",
     "emailResentSuccess": "Correo de activación reenviado con éxito. Revisa tu bandeja de entrada.",
@@ -33,7 +33,7 @@
     "free": "FREE"
   },
   "nav": {
-    "brand": "AquaPulse",
+    "brand": "AquaReef",
     "pwa": "PWA",
     "subtitle": "Gestión Predictiva Multi-Usuario para Acuarios de Arrecife",
     "newTank": "Nuevo Acuario",
@@ -84,7 +84,7 @@
   },
   "app": {
     "offlineBanner": "Modo Sin Conexión activo. Las lecturas se conservan en caché local.",
-    "welcomeTitle": "Bienvenido a AquaPulse Commercial",
+    "welcomeTitle": "Bienvenido a AquaReef",
     "welcomeDesc": "La plataforma predictiva para acuaristas de arrecife y agua dulce. Para acceder a tus telemetrías y proyecciones de consumo coralino, inicia sesión o ingresa como usuario de prueba.",
     "loginBtn": "Iniciar Sesión",
     "registerBtn": "Crear Cuenta Free",
@@ -201,7 +201,7 @@
     "incAI": "Escáner de tests con Inteligencia Artificial",
     "incPush": "Recordatorios locales con Web Notifications",
     "incCloud": "Persistencia en la nube PostgreSQL",
-    "proTitle": "Beneficios AquaPulse Pro",
+    "proTitle": "Beneficios AquaReef Pro",
     "phase2": "Fase 2",
     "proTanks": "Acuarios y Sumps Ilimitados en una sola cuenta",
     "proReports": "Exportación de informes a PDF y CSV para concursos",
@@ -214,12 +214,12 @@
     "activeSession": "Sesión Activa",
     "sessionDesc": "Conectado como {{email}}. Todos los datos están aislados bajo tu cuenta.",
     "logoutBtn": "Cerrar Sesión",
-    "confirmLogout": "¿Seguro que deseas cerrar la sesión en AquaPulse?",
+    "confirmLogout": "¿Seguro que deseas cerrar la sesión en AquaReef?",
     "sessionRequiredTitle": "Sesión Requerida",
     "sessionRequiredDesc": "Inicia sesión o crea tu cuenta gratuita para personalizar tus unidades de medida, gestionar tu perfil y acceder a tu suscripción."
   },
   "auth": {
-    "headerTitle": "AquaPulse Commercial Cloud",
+    "headerTitle": "AquaReef",
     "headerSubtitle": "Gestión predictiva y biometría para acuarios de arrecife",
     "loginTab": "Iniciar Sesión",
     "registerTab": "Crear Cuenta",
@@ -236,7 +236,7 @@
     "errorEmpty": "Por favor ingresa tu correo y contraseña.",
     "errorFields": "Por favor completa los campos requeridos.",
     "errorShortPass": "La contraseña debe tener al menos 6 caracteres.",
-    "registerSuccess": "¡Cuenta creada exitosamente! Bienvenido a AquaPulse.",
+    "registerSuccess": "¡Cuenta creada exitosamente! Bienvenido a AquaReef.",
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "forgotTitle": "Recuperar Contraseña",
     "forgotSubtitle": "Ingresa tu correo y te enviaremos un enlace seguro para restablecer tu acceso.",
@@ -245,7 +245,7 @@
     "devLinkNotice": "Enlace de prueba (Modo Local sin SMTP):",
     "devLinkAction": "Restablecer Contraseña Ahora",
     "resetTitle": "Restablecer Contraseña",
-    "resetSubtitle": "Define una nueva contraseña segura para tu cuenta de AquaPulse.",
+    "resetSubtitle": "Define una nueva contraseña segura para tu cuenta de AquaReef.",
     "newPassLabel": "Nueva Contraseña",
     "confirmPassLabel": "Confirmar Contraseña",
     "btnResetPassword": "Actualizar Contraseña",
@@ -296,7 +296,7 @@
     "subtitle": "Supervisión global de usuarios registrados, acuarios y límites de planes Freemium.",
     "adminBadge": "MODO ADMINISTRADOR",
     "accessDeniedTitle": "Acceso Restringido",
-    "accessDeniedDesc": "Esta sección está reservada exclusivamente para administradores autorizados de AquaPulse. Si consideras que deberías tener acceso, solicita la elevación a través del CLI make_admin.py.",
+    "accessDeniedDesc": "Esta sección está reservada exclusivamente para administradores autorizados de AquaReef. Si consideras que deberías tener acceso, solicita la elevación a través del CLI make_admin.py.",
     "backToDashboard": "Volver al Dashboard",
     "stats": {
       "totalUsers": "Usuarios Totales",
@@ -366,7 +366,7 @@
     "testSuccess": "¡Notificación de prueba enviada con éxito a tu dispositivo!",
     "testSending": "Enviando prueba...",
     "iosNoticeTitle": "Aviso para iPhone / iOS Safari",
-    "iosNoticeDesc": "Para habilitar notificaciones push en iOS, pulsa el botón Compartir de Safari y selecciona 'Agregar a pantalla de inicio'. Luego abre AquaPulse desde el icono instalado.",
+    "iosNoticeDesc": "Para habilitar notificaciones push en iOS, pulsa el botón Compartir de Safari y selecciona 'Agregar a pantalla de inicio'. Luego abre AquaReef desde el icono instalado.",
     "permissionDenied": "Permiso denegado por el navegador. Habilita las notificaciones en la configuración del sitio.",
     "blockedHint": "Las notificaciones están bloqueadas en tu navegador. Puedes desbloquearlas desde la barra de direcciones del navegador."
   }

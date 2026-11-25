@@ -26,10 +26,10 @@ def get_vapid_private_key() -> str:
     return os.environ.get("VAPID_PRIVATE_KEY", "").strip()
 
 def get_vapid_claim_email() -> str:
-    email = os.environ.get("VAPID_CLAIM_EMAIL", "support@aquapulse.io").strip()
+    email = os.environ.get("VAPID_CLAIM_EMAIL", "support@aquareef.app").strip()
     if email and not email.startswith("mailto:"):
         return f"mailto:{email}"
-    return email or "mailto:support@aquapulse.io"
+    return email or "mailto:support@aquareef.app"
 
 def get_cron_secret() -> str:
     return os.environ.get("CRON_SECRET", "").strip()
@@ -303,7 +303,7 @@ def process_daily_maintenance_reminders(db: Session) -> Dict[str, Any]:
         else:
             body = f"Tienes {today_count} tarea(s) programadas para hoy ({sample_str})."
 
-        title = "🔧 AquaPulse: Mantenimiento Pendiente"
+        title = "🔧 AquaReef: Mantenimiento Pendiente"
         sent = send_push_to_user(
             db=db,
             user_id=uid,

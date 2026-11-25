@@ -23,7 +23,7 @@
     "view": "View",
     "active": "Active",
     "unverifiedEmail": "Unverified email",
-    "verifyEmailNotice": "Verify your email to use AquaPulse",
+    "verifyEmailNotice": "Verify your email to use AquaReef",
     "resendEmailBtn": "Resend email",
     "resendingEmail": "Resending...",
     "emailResentSuccess": "Activation email resent successfully. Please check your inbox.",
@@ -33,7 +33,7 @@
     "free": "FREE"
   },
   "nav": {
-    "brand": "AquaPulse",
+    "brand": "AquaReef",
     "pwa": "PWA",
     "subtitle": "Predictive Multi-User Management for Reef & Marine Aquariums",
     "newTank": "New Tank",
@@ -84,7 +84,7 @@
   },
   "app": {
     "offlineBanner": "Offline Mode active. Readings are cached locally.",
-    "welcomeTitle": "Welcome to AquaPulse Commercial",
+    "welcomeTitle": "Welcome to AquaReef",
     "welcomeDesc": "The predictive telemetry platform for reef and freshwater aquarists. To access your data and coral consumption projections, log in or explore with a demo account.",
     "loginBtn": "Log In",
     "registerBtn": "Create Free Account",
@@ -201,7 +201,7 @@
     "incAI": "AI-powered test kit image scanner",
     "incPush": "Local browser notifications & alerts",
     "incCloud": "PostgreSQL cloud persistence",
-    "proTitle": "AquaPulse Pro Benefits",
+    "proTitle": "AquaReef Pro Benefits",
     "phase2": "Phase 2",
     "proTanks": "Unlimited Aquariums & Sumps on one account",
     "proReports": "PDF & CSV report export for clubs and shops",
@@ -214,12 +214,12 @@
     "activeSession": "Active Session",
     "sessionDesc": "Logged in as {{email}}. All telemetry is strictly isolated under your account.",
     "logoutBtn": "Log Out",
-    "confirmLogout": "Are you sure you want to log out of AquaPulse?",
+    "confirmLogout": "Are you sure you want to log out of AquaReef?",
     "sessionRequiredTitle": "Session Required",
     "sessionRequiredDesc": "Log in or create your free account to configure units, manage your profile, and view your subscription."
   },
   "auth": {
-    "headerTitle": "AquaPulse Commercial Cloud",
+    "headerTitle": "AquaReef",
     "headerSubtitle": "Predictive biometrics & telemetry for reef aquariums",
     "loginTab": "Log In",
     "registerTab": "Create Account",
@@ -236,7 +236,7 @@
     "errorEmpty": "Please enter your email and password.",
     "errorFields": "Please fill out all required fields.",
     "errorShortPass": "Password must be at least 6 characters long.",
-    "registerSuccess": "Account created successfully! Welcome to AquaPulse.",
+    "registerSuccess": "Account created successfully! Welcome to AquaReef.",
     "forgotPassword": "Forgot your password?",
     "forgotTitle": "Reset Password",
     "forgotSubtitle": "Enter your email address to receive a secure password recovery link.",
@@ -245,7 +245,7 @@
     "devLinkNotice": "Test link (Local Mode without SMTP):",
     "devLinkAction": "Reset Password Now",
     "resetTitle": "Reset Password",
-    "resetSubtitle": "Enter a new secure password for your AquaPulse account.",
+    "resetSubtitle": "Enter a new secure password for your AquaReef account.",
     "newPassLabel": "New Password",
     "confirmPassLabel": "Confirm Password",
     "btnResetPassword": "Update Password",
@@ -296,7 +296,7 @@
     "subtitle": "Global oversight of registered users, aquariums, and Freemium tier quotas.",
     "adminBadge": "ADMINISTRATOR MODE",
     "accessDeniedTitle": "Access Restricted",
-    "accessDeniedDesc": "This section is exclusively reserved for authorized AquaPulse administrators. If you require access, request privilege escalation via the make_admin.py CLI.",
+    "accessDeniedDesc": "This section is exclusively reserved for authorized AquaReef administrators. If you require access, request privilege escalation via the make_admin.py CLI.",
     "backToDashboard": "Back to Dashboard",
     "stats": {
       "totalUsers": "Total Users",
@@ -366,7 +366,7 @@
     "testSuccess": "Test notification sent successfully to your device!",
     "testSending": "Sending test...",
     "iosNoticeTitle": "Note for iPhone / iOS Safari",
-    "iosNoticeDesc": "To enable Web Push on iOS, tap the Share icon in Safari and select 'Add to Home Screen'. Then launch AquaPulse from your Home Screen.",
+    "iosNoticeDesc": "To enable Web Push on iOS, tap the Share icon in Safari and select 'Add to Home Screen'. Then launch AquaReef from your Home Screen.",
     "permissionDenied": "Notification permission was denied. Please allow notifications in your browser settings.",
     "blockedHint": "Notifications are blocked in your browser. You can unblock them from your browser address bar settings."
   }

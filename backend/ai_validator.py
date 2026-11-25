@@ -1,6 +1,6 @@
 """
 Validador de Diagnósticos IA y Fallback Determinístico Anti-Alucinación.
-AquaPulse - Fase 4:
+AquaReef - Fase 4:
 - 4.1 Arquitectura: Reglas determinísticas con intervalos -> Gemini (explica, no decide) -> Validador -> UI.
 - 4.2 System prompt versionado cargado desde backend/prompts/diagnostic_v1.txt.
 - 4.3 Salida estructurada con severidad, findings, confidence, recommended_actions (catálogo cerrado) y needs_retest.

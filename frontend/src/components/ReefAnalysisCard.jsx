@@ -185,10 +185,10 @@ const ReefAnalysisCard = forwardRef(function ReefAnalysisCard({ aquariumData = {
         <h3 className="text-xl font-bold text-white flex items-center">
           <img 
             src="/robot-fish.jpg" 
-            alt="AquaPulse AI" 
+            alt="AquaReef AI" 
             className="w-8 h-8 mr-3 rounded-lg shadow-lg border border-cyan-500/30 object-cover" 
           />
-          Diagnóstico y Verificación AquaPulse
+          Diagnóstico y Verificación AquaReef
         </h3>
         <button
           onClick={fetchAiAnalysis}
@@ -367,7 +367,7 @@ const ReefAnalysisCard = forwardRef(function ReefAnalysisCard({ aquariumData = {
               <div className="p-4 bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 rounded-lg text-sm text-center space-y-1">
                 <CheckCircle className="w-8 h-8 mx-auto text-emerald-400 mb-2" />
                 <p className="font-semibold">¡Reporte recibido!</p>
-                <p className="text-xs text-emerald-400/90">Gracias por colaborar con la seguridad y precisión de AquaPulse.</p>
+                <p className="text-xs text-emerald-400/90">Gracias por colaborar con la seguridad y precisión de AquaReef.</p>
               </div>
             ) : (
               <form onSubmit={handleSendFeedback} className="space-y-4">

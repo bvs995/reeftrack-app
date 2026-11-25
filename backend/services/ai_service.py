@@ -100,7 +100,7 @@ def validate_gemini_tier() -> bool:
             "POLÍTICA DE PRIVACIDAD: En entorno de producción (ENVIRONMENT=production) "
             "la API de Google Gemini debe ser de nivel de pago (GEMINI_TIER=pay-as-you-go o paid). "
             "En el nivel gratuito de Google AI Studio los datos de los usuarios pueden ser utilizados "
-            "para entrenar modelos de IA, lo que infringe la política de privacidad y protección de datos de AquaPulse."
+            "para entrenar modelos de IA, lo que infringe la política de privacidad y protección de datos de AquaReef."
         )
     return True
 
@@ -359,7 +359,7 @@ def get_ai_audit_statistics(db: Session, sample_size: int = 100) -> Dict[str, An
 def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     """
     Obtiene el historial cronológico de mediciones de un acuario en las últimas 48 horas
-    y lo resume en texto estructurado comprensible para la IA de AquaPulse.
+    y lo resume en texto estructurado comprensible para la IA de AquaReef.
     """
     hace_48_horas = datetime.now(timezone.utc) - timedelta(hours=48)
 

@@ -967,7 +967,7 @@ export default function DashboardTrends({
   }, [measurements, currentParam.key, activeParam]);
 
   // Tendencia por regresión lineal con R². Solo es "concluyente" con al menos 3 mediciones,
-  // un lapso mayor a ~2 horas entre la primera y la última, y R² >= 0.5 (criterio de AquaPulse).
+  // un lapso mayor a ~2 horas entre la primera y la última, y R² >= 0.5 (criterio de AquaReef).
   // Si no se cumple, NO se dibuja proyección: una línea plana con un solo punto engaña al usuario.
   const trend = useMemo(() => {
     if (validReadings.length < 3) return { conclusive: false, slope: 0, r2: null, reason: 'insufficient' };

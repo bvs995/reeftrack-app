@@ -25,7 +25,7 @@ RAW_SECRET = os.environ.get("SECRET_KEY") or os.environ.get("JWT_SECRET")
 if not RAW_SECRET or not RAW_SECRET.strip():
     critical_msg = (
         "🚨 ERROR CRÍTICO DE SEGURIDAD: La variable de entorno SECRET_KEY no está configurada o está vacía.\n"
-        "AquaPulse se niega a arrancar sin una clave secreta configurada explícitamente en el entorno.\n"
+        "AquaReef se niega a arrancar sin una clave secreta configurada explícitamente en el entorno.\n"
         "Configura SECRET_KEY en tu archivo .env o en el panel de variables de entorno de tu servidor."
     )
     logger.critical(critical_msg)

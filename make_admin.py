@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script de Utilidad CLI - AquaPulse
+Script de Utilidad CLI - AquaReef
 Convierte un usuario existente en Administrador (is_admin = True)
 o crea uno nuevo con privilegios administrativos.
 
@@ -29,7 +29,7 @@ def promote_or_create_admin(target_email: str):
         print(f"❌ Error: '{email}' no parece ser un correo electrónico válido.")
         sys.exit(1)
 
-    print(f"\n🌊 AquaPulse Admin Provisioner")
+    print(f"\n🌊 AquaReef Admin Provisioner")
     print(f"================================")
     print(f"🔍 Buscando usuario con correo: {email} ...")
 

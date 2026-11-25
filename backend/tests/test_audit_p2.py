@@ -1,5 +1,5 @@
 """
-AquaPulse - Tests de Auditoría P2 (Prioridad Media)
+AquaReef - Tests de Auditoría P2 (Prioridad Media)
 P2.12 - Dockerfile, requirements.txt, requirements-dev.txt, workers y CI
 """
 import os

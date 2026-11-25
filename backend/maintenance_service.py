@@ -1,5 +1,5 @@
 """
-Servicio y catálogo oficial de Mantenimiento Mecánico y Equipo para AquaPulse.
+Servicio y catálogo oficial de Mantenimiento Mecánico y Equipo para AquaReef.
 Genera tareas predeterminadas según el biotipo/perfil del acuario y calcula
 el estado de vencimiento con semáforo técnico.
 """

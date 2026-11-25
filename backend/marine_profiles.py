@@ -1,5 +1,5 @@
 """
-Perfiles bioquímicos y motor de evaluación para acuarios marinos y de arrecife en AquaPulse.
+Perfiles bioquímicos y motor de evaluación para acuarios marinos y de arrecife en AquaReef.
 Soporta exactamente 5 perfiles marinos:
 1. fish_only: Solo Peces / FOWLR
 2. soft_reef: Corales Blandos

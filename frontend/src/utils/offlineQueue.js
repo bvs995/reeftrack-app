@@ -1,5 +1,5 @@
 /**
- * Gestor de Cola Offline con IndexedDB, IDs Idempotentes y Background Sync para AquaPulse PWA (Fase 5).
+ * Gestor de Cola Offline con IndexedDB, IDs Idempotentes y Background Sync para AquaReef PWA (Fase 5).
  */
 
 const DB_NAME = 'aquapulse_pwa_offline_v1';
@@ -73,7 +73,7 @@ export async function enqueueOfflineMeasurement(tankId, measurementData) {
       req.onerror = () => reject(req.error);
     });
 
-    console.info(`[AquaPulse PWA] Medición encolada offline (ID: ${clientUuid})`);
+    console.info(`[AquaReef PWA] Medición encolada offline (ID: ${clientUuid})`);
 
     // Intentar registrar Background Sync en el Service Worker si está soportado. Sin await:
     // serviceWorker.ready no se resuelve nunca si no hay SW registrado (primera visita,
@@ -82,14 +82,14 @@ export async function enqueueOfflineMeasurement(tankId, measurementData) {
       navigator.serviceWorker.ready
         .then((reg) => (reg && reg.sync ? reg.sync.register('sync-offline-measurements') : null))
         .catch((syncErr) => {
-          console.debug('[AquaPulse PWA] Background Sync no registrado (fallback a evento online):', syncErr);
+          console.debug('[AquaReef PWA] Background Sync no registrado (fallback a evento online):', syncErr);
         });
     }
 
     notifyQueueUpdated();
     return record;
   } catch (err) {
-    console.error('[AquaPulse PWA] Error al encolar medición offline:', err);
+    console.error('[AquaReef PWA] Error al encolar medición offline:', err);
     throw err;
   }
 }
@@ -108,7 +108,7 @@ export async function getPendingOfflineMeasurements() {
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
-    console.error('[AquaPulse PWA] Error al leer cola offline:', err);
+    console.error('[AquaReef PWA] Error al leer cola offline:', err);
     return [];
   }
 }
@@ -128,7 +128,7 @@ export async function removeOfflineMeasurement(clientUuid) {
     });
     notifyQueueUpdated();
   } catch (err) {
-    console.error(`[AquaPulse PWA] Error al eliminar medición de cola (${clientUuid}):`, err);
+    console.error(`[AquaReef PWA] Error al eliminar medición de cola (${clientUuid}):`, err);
   }
 }
 
@@ -145,7 +145,7 @@ async function saveQueueRecord(record) {
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
-    console.error(`[AquaPulse PWA] Error al actualizar medición en cola (${record.client_uuid}):`, err);
+    console.error(`[AquaReef PWA] Error al actualizar medición en cola (${record.client_uuid}):`, err);
   }
 }
 
@@ -164,14 +164,14 @@ async function notifyQueueUpdated() {
  */
 export async function flushOfflineQueue(sendFn) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    console.debug('[AquaPulse PWA] Sin conexión a internet. Postergando vaciado de cola offline.');
+    console.debug('[AquaReef PWA] Sin conexión a internet. Postergando vaciado de cola offline.');
     return { synced: 0, pending: (await getPendingOfflineMeasurements()).length };
   }
 
   const queue = await getPendingOfflineMeasurements();
   if (!queue.length) return { synced: 0, pending: 0 };
 
-  console.info(`[AquaPulse PWA] Vaciando cola offline (${queue.length} mediciones pendientes)...`);
+  console.info(`[AquaReef PWA] Vaciando cola offline (${queue.length} mediciones pendientes)...`);
   let syncedCount = 0;
 
   // Importación dinámica para evitar ciclos de import. sendQueuedMeasurement no vuelve a
@@ -184,9 +184,9 @@ export async function flushOfflineQueue(sendFn) {
       await send(item.tank_id, item.payload);
       await removeOfflineMeasurement(item.client_uuid);
       syncedCount++;
-      console.info(`[AquaPulse PWA] Medición sincronizada con éxito (${item.client_uuid})`);
+      console.info(`[AquaReef PWA] Medición sincronizada con éxito (${item.client_uuid})`);
     } catch (err) {
-      console.warn(`[AquaPulse PWA] Error al sincronizar medición ${item.client_uuid}:`, err);
+      console.warn(`[AquaReef PWA] Error al sincronizar medición ${item.client_uuid}:`, err);
       // Sin red o sesión vencida: detener y reintentar en el próximo evento online / login.
       if (isNetworkError(err) || err.status === 401) {
         break;
@@ -195,7 +195,7 @@ export async function flushOfflineQueue(sendFn) {
       // descartarla tras 5 para no bloquear el resto de la cola.
       item.retry_count = (item.retry_count || 0) + 1;
       if (item.retry_count > 5) {
-        console.error(`[AquaPulse PWA] Descartando medición rechazada tras 5 reintentos (${item.client_uuid})`);
+        console.error(`[AquaReef PWA] Descartando medición rechazada tras 5 reintentos (${item.client_uuid})`);
         await removeOfflineMeasurement(item.client_uuid);
       } else {
         await saveQueueRecord(item);
@@ -210,7 +210,7 @@ export async function flushOfflineQueue(sendFn) {
 // Escuchar evento online del navegador para auto-sincronizar
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    console.info('[AquaPulse PWA] Conexión restaurada. Auto-sincronizando mediciones encoladas...');
+    console.info('[AquaReef PWA] Conexión restaurada. Auto-sincronizando mediciones encoladas...');
     flushOfflineQueue();
   });
 

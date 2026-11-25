@@ -1,5 +1,5 @@
 # ==============================================================================
-# 🌊 AquaPulse Backend - Production Multi-Stage Dockerfile
+# 🌊 AquaReef Backend - Production Multi-Stage Dockerfile
 # ==============================================================================
 
 # Build Stage

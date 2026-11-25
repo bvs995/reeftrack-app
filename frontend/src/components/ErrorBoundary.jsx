@@ -12,7 +12,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('🌊 [AquaPulse ErrorBoundary] Excepción capturada en componente:', error, errorInfo);
+    console.error('🌊 [AquaReef ErrorBoundary] Excepción capturada en componente:', error, errorInfo);
     this.setState({ errorInfo });
   }
 

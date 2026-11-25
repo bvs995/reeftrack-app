@@ -316,7 +316,7 @@ export default function AuthModal({ isOpen, onClose }) {
         <div className="flex justify-center mb-6 relative">
           <img 
             src="/logo-reef-icon.png" 
-            alt="AquaPulse Logo" 
+            alt="AquaReef Logo" 
             onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
             className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
           />
@@ -327,7 +327,7 @@ export default function AuthModal({ isOpen, onClose }) {
             ? t('auth.forgotTitle')
             : authModalTab === 'reset'
             ? t('auth.resetTitle')
-            : 'AquaPulse Commercial Cloud'}
+            : 'AquaReef'}
         </h1>
         <p className="text-xs text-slate-400 text-center mb-6 max-w-xs mx-auto">
           {authModalTab === 'forgot'

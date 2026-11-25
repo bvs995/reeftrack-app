@@ -1,6 +1,6 @@
 services:
   # ============================================================================
-  # 🌊 AquaPulse Backend - FastAPI Predictive Service
+  # 🌊 AquaReef Backend - FastAPI Predictive Service
   # ============================================================================
   - type: web
     name: aquapulse-backend
@@ -20,7 +20,7 @@ services:
       - key: DATABASE_URL
         sync: false # O enlazado a tu base de datos PostgreSQL en Render
       - key: ALLOWED_ORIGINS
-        value: "*" # Configura aquí la URL de tu frontend en Vercel (ej: https://aquapulse.vercel.app)
+        value: "*" # Configura aquí la URL de tu frontend en Vercel (ej: https://www.aquareef.app)
       - key: GEMINI_API_KEY
         sync: false # Pega aquí tu API Key de Gemini en el panel de Render
       - key: VISION_MODEL

@@ -17,7 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(
-      (reg) => console.log('AquaPulse PWA Service Worker registrado con éxito:', reg.scope),
+      (reg) => console.log('AquaReef PWA Service Worker registrado con éxito:', reg.scope),
       (err) => console.log('Fallo al registrar Service Worker:', err)
     );
   });

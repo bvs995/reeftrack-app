@@ -1,5 +1,5 @@
 """
-AquaPulse - Tests de Auditoría y Verificación P3 (Antes de publicar en tienda)
+AquaReef - Tests de Auditoría y Verificación P3 (Antes de publicar en tienda)
 """
 import pytest
 from pathlib import Path

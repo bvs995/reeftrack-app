@@ -1,17 +1,17 @@
-# 🛡️ Política de Seguridad de AquaPulse
+# 🛡️ Política de Seguridad de AquaReef
 
 Fecha de última actualización: 23 de noviembre de 2026  
 Versión: 1.0.0 (Fases 1 a 7)
 
-AquaPulse es una plataforma progresiva (PWA) y motor analítico diseñado para el monitoreo biológico y físico-químico de ecosistemas acuáticos y arrecifes de coral. Dado que una falla de software o una recomendación errónea puede comprometer la vida de organismos vivos, la seguridad, la confidencialidad de los datos y la robustez de los cálculos metrológicos son prioritarios en nuestra arquitectura.
+AquaReef es una plataforma progresiva (PWA) y motor analítico diseñado para el monitoreo biológico y físico-químico de ecosistemas acuáticos y arrecifes de coral. Dado que una falla de software o una recomendación errónea puede comprometer la vida de organismos vivos, la seguridad, la confidencialidad de los datos y la robustez de los cálculos metrológicos son prioritarios en nuestra arquitectura.
 
 ---
 
 ## 1. Notificación Responsable de Vulnerabilidades
 
-Si descubres una vulnerabilidad de seguridad en AquaPulse, te agradecemos que nos la comuniques de manera responsable y confidencial:
+Si descubres una vulnerabilidad de seguridad en AquaReef, te agradecemos que nos la comuniques de manera responsable y confidencial:
 
-* **Correo de Seguridad**: `security@aquapulse.io` o `paliyo995@gmail.com`
+* **Correo de Seguridad**: `security@aquareef.app` o `paliyo995@gmail.com`
 * **Tiempo de Respuesta Inicial**: Menos de 24 horas.
 * **Proceso**:
   1. Envía un reporte detallado con los pasos para reproducir la vulnerabilidad (PoC).
@@ -22,7 +22,7 @@ Si descubres una vulnerabilidad de seguridad en AquaPulse, te agradecemos que no
 
 ## 2. Arquitectura de Defensa en Profundidad
 
-AquaPulse implementa un modelo de seguridad por capas en todas las etapas del ciclo de vida del software:
+AquaReef implementa un modelo de seguridad por capas en todas las etapas del ciclo de vida del software:
 
 ### 2.1 Gestión Estricta de Secretos
 * **Sin Secretos en el Repositorio**: El código fuente en Git está libre de credenciales, contraseñas o claves privadas. El archivo `.env.example` incluye únicamente plantillas documentadas sin valores reales.
