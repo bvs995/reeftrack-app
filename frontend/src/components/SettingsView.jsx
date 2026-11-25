@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import PushNotificationSettings from './PushNotificationSettings';
 import { exportUserData, deleteUserAccount } from '../api';
+import { buildReportMailto } from '../utils/reportProblem';
 import {
   User,
   Mail,
@@ -353,6 +354,16 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
             <span className="flex items-center">🔒 Privacidad y Términos de Uso</span>
             <span className="text-gray-400">{'>'}</span>
           </button>
+
+          {/* Reportar un problema (fase de prueba) */}
+          <a
+            href={buildReportMailto({ userId: user?.id })}
+            onClick={() => triggerHaptic()}
+            className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+          >
+            <span className="flex items-center">🐞 Reportar un problema</span>
+            <span className="text-gray-400">Beta {'>'}</span>
+          </a>
 
           {isAuthenticated && (
             <>
