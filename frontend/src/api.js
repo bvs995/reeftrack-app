@@ -215,17 +215,10 @@ export async function updateUserProfile(profileData) {
 
 // ----------------- ENDPOINTS DIRECTOS SOLICITADOS -----------------
 
+// Usa el mismo camino que recordMeasurement para que la pestaña de tarjetas también
+// funcione sin conexión (cola en IndexedDB con client_uuid idempotente).
 export async function saveMeasurement(data) {
-  const res = await authFetch('/measurements', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || 'Error al guardar medición');
-  }
-  return res.json();
+  return recordMeasurement(data?.tank_id, data);
 }
 
 export async function fetchMeasurements(limit = 100, order = 'desc') {
@@ -414,6 +407,34 @@ export async function fetchChartData(tankId, parameterCode = null) {
   return res.json();
 }
 
+// fetch() lanza TypeError cuando no hay red (el texto varía: "Failed to fetch",
+// "Load failed", "NetworkError when attempting to fetch resource").
+export function isNetworkError(err) {
+  if (!err) return false;
+  if (err.name === 'TypeError') return true;
+  const msg = String(err.message || '');
+  return msg.includes('fetch') || msg.includes('Network') || msg.includes('Load failed');
+}
+
+// Envía una medición al backend SIN caer a la cola offline: la usa la propia cola al
+// sincronizar. Lanza TypeError si no hay red, o Error con .status si el servidor la rechaza.
+export async function sendQueuedMeasurement(tankId, payload) {
+  const targetUrl = tankId ? `/tanks/${tankId}/measurements` : '/measurements';
+  const res = await authFetch(targetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const detail = typeof errData.detail === 'string' ? errData.detail : 'Error al registrar medición';
+    const error = new Error(detail);
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
 export async function recordMeasurement(tankId, data) {
   // Asegurar inclusión explícita del ID del acuario
   const payload = { ...data };
@@ -455,6 +476,13 @@ export async function recordMeasurement(tankId, data) {
     payload.temperature = parseFloat(payload.temperatura);
   }
 
+  // ID idempotente desde el primer intento: si la petición llega al servidor pero la
+  // respuesta se pierde, el reintento desde la cola no crea un duplicado.
+  if (!payload.client_uuid) {
+    const { generateClientUUID } = await import('./utils/offlineQueue');
+    payload.client_uuid = generateClientUUID();
+  }
+
   // Control offline: si no hay conexión, encolar en IndexedDB con ID idempotente
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const { enqueueOfflineMeasurement } = await import('./utils/offlineQueue');
@@ -462,21 +490,10 @@ export async function recordMeasurement(tankId, data) {
     return { ...queued.payload, id: queued.client_uuid, is_offline_pending: true };
   }
 
-  // Soporta tanto la ruta /api/tanks/:id/measurements como /api/measurements
-  const targetUrl = tankId ? `/tanks/${tankId}/measurements` : '/measurements';
   try {
-    const res = await authFetch(targetUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || 'Error al registrar medición');
-    }
-    return res.json();
+    return await sendQueuedMeasurement(tankId, payload);
   } catch (err) {
-    if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('Network')) {
+    if (isNetworkError(err)) {
       const { enqueueOfflineMeasurement } = await import('./utils/offlineQueue');
       const queued = await enqueueOfflineMeasurement(tankId, payload);
       return { ...queued.payload, id: queued.client_uuid, is_offline_pending: true };

@@ -1,6 +1,11 @@
-const CACHE_NAME = 'aquapulse-cache-v6';
+const CACHE_NAME = 'aquapulse-cache-v7';
+const APP_SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
+  // Guardar el esqueleto de la app para poder abrirla sin conexión.
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).catch(() => {})
+  );
   self.skipWaiting();
 });
 
@@ -20,12 +25,40 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // SEGURIDAD PWA (Fase 5): NUNCA almacenar ni servir desde caché peticiones a /api/* (datos privados de usuario)
-  if (event.request.url.includes('/api/') || event.request.mode === 'navigate') {
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // SEGURIDAD PWA (Fase 5): NUNCA almacenar ni servir desde caché peticiones a /api/*
+  // (datos privados de usuario), ni nada que no sea GET del propio dominio.
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api')) {
     return;
   }
+
+  // Navegación: red primero; sin conexión, el index.html guardado (la SPA enruta sola).
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Archivos estáticos (JS, CSS, íconos): red primero y copia en caché para uso offline.
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(() => caches.match(request))
   );
 });
 
