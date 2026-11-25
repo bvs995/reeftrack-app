@@ -726,20 +726,20 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
 
               <div className="pt-2 flex flex-col sm:flex-row gap-2">
                 <a
-                  href="/api/legal/privacy"
+                  href="/privacidad"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
                 >
-                  Ver Política de Privacidad Completa (JSON/MD)
+                  Ver Política de Privacidad Completa
                 </a>
                 <a
-                  href="/api/legal/terms"
+                  href="/terminos"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
                 >
-                  Ver Términos de Uso Completos (JSON/MD)
+                  Ver Términos de Uso Completos
                 </a>
               </div>
             </div>

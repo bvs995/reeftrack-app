@@ -47,6 +47,24 @@ class TestAuditP3Point18:
         data_t = res_terms.json()
         assert "content" in data_t or "terms" in data_t or "text" in data_t
 
+    def test_legal_endpoints_serve_full_documents_in_docker_image(self):
+        """El texto servido debe ser el de PRIVACY.md/TERMS.md, no el de respaldo, y el
+        Dockerfile debe copiarlos: sin eso producción servía una sola línea."""
+        assert client.get("/api/legal/privacy").json()["content"] == (REPO_ROOT / "PRIVACY.md").read_text(encoding="utf-8")
+        assert client.get("/api/legal/terms").json()["content"] == (REPO_ROOT / "TERMS.md").read_text(encoding="utf-8")
+
+        dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        copy_lines = [l for l in dockerfile.splitlines() if l.strip().upper().startswith("COPY")]
+        for name in ("PRIVACY.md", "TERMS.md"):
+            assert any(name in l for l in copy_lines), f"El Dockerfile debe copiar {name} a /app"
+
+    def test_auth_modal_links_to_public_legal_pages(self):
+        """El aviso del registro debe enlazar a las páginas públicas, no ser texto plano."""
+        auth = (REPO_ROOT / "frontend" / "src" / "components" / "AuthModal.jsx").read_text(encoding="utf-8")
+        assert 'href="/terminos"' in auth and 'href="/privacidad"' in auth
+        main = (REPO_ROOT / "frontend" / "src" / "main.jsx").read_text(encoding="utf-8")
+        assert "LegalPage" in main
+
     def test_frontend_settings_and_auth_include_privacy_and_terms(self):
         # Frontend SettingsView.jsx debe incluir botón o sección de términos y privacidad
         settings_path = REPO_ROOT / "frontend" / "src" / "components" / "SettingsView.jsx"

@@ -3,12 +3,16 @@ import ReactDOM from 'react-dom/client'
 import './i18n'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import LegalPage, { legalDocForPath } from './components/LegalPage.jsx'
 import './index.css'
+
+// /privacidad y /terminos son páginas públicas (sin sesión) fuera de la app principal.
+const legalDoc = typeof window !== 'undefined' ? legalDocForPath(window.location.pathname) : null;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      {legalDoc ? <LegalPage doc={legalDoc} /> : <App />}
     </ErrorBoundary>
   </React.StrictMode>,
 )
