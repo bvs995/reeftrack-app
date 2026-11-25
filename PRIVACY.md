@@ -11,8 +11,8 @@ Esta Política de Privacidad (aviso de privacidad) explica qué datos personales
 
 ## 1. Responsable
 
-<!-- PENDIENTE (obligatorio en México antes de considerar completo el aviso): agregar "Responsable: nombre completo o razón social" y "Domicilio: domicilio completo". -->
-* **Responsable**: el titular de AquaReef
+* **Responsable**: Brandon Valadez Serrano
+* **Domicilio**: Av. Guadalajara 17, Col. Vergel de Guadalupe, C.P. 57150, Nezahualcóyotl, Estado de México, México
 * **Contacto de privacidad**: `privacy@aquareef.app`
 * **Sitio y aplicación**: `https://www.aquareef.app` (web y app instalable)
 

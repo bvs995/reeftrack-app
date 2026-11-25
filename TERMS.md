@@ -5,7 +5,7 @@
 
 <!-- NOTA PARA REVISIÓN LEGAL: borrador redactado a partir de lo que hace la app (no es asesoría legal). Revisar contra la Ley Federal de Protección al Consumidor y la normativa aplicable; completar los datos entre corchetes. Si se habilitan cobros, añadir precios, renovación, cancelación y reembolsos (y las reglas de Google Play si se publica ahí). -->
 
-Estos Términos de Uso regulan el uso de AquaReef ("la Aplicación", "el Servicio"), ofrecido por su titular ("nosotros").<!-- PENDIENTE: sustituir "su titular" por el nombre completo o razón social. --> Al crear una cuenta o usar el Servicio aceptas estos términos y nuestra [Política de Privacidad](/privacidad). Si no estás de acuerdo, no uses el Servicio.
+Estos Términos de Uso regulan el uso de AquaReef ("la Aplicación", "el Servicio"), ofrecido por Brandon Valadez Serrano, con domicilio en Av. Guadalajara 17, Col. Vergel de Guadalupe, C.P. 57150, Nezahualcóyotl, Estado de México, México ("nosotros"). Al crear una cuenta o usar el Servicio aceptas estos términos y nuestra [Política de Privacidad](/privacidad). Si no estás de acuerdo, no uses el Servicio.
 
 ---
 
@@ -98,9 +98,9 @@ Podemos actualizar estos términos. Publicaremos la nueva versión en esta pági
 
 ## 11. Ley aplicable
 
-Estos términos se rigen por las leyes aplicables, sin perjuicio de los derechos que te correspondan como consumidor.
+Estos términos se rigen por las leyes de los Estados Unidos Mexicanos, sin perjuicio de los derechos que te correspondan como consumidor.
 
-<!-- PENDIENTE / NOTA PARA REVISIÓN LEGAL: precisar país y estado de la ley aplicable y la ciudad de los tribunales competentes. -->
+<!-- PENDIENTE / NOTA PARA REVISIÓN LEGAL: definir los tribunales competentes (p. ej. los del domicilio del responsable) y confirmar la redacción frente a la Ley Federal de Protección al Consumidor. -->
 
 ---
 
