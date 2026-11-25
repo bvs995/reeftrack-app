@@ -734,9 +734,11 @@ def delete_user_account(
     elimina inmediatamente en cascada estricta el usuario y absolutamente todos sus registros asociados,
     incluyendo diagnósticos, auditorías, feedback y notificaciones push.
     """
+    # 403 y no 401: la sesión es válida y solo falló la confirmación. El frontend trata
+    # cualquier 401 como sesión vencida y cerraría la sesión por un error de tecleo.
     if not payload.password or not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Contraseña incorrecta. Se requiere confirmación de contraseña para eliminar la cuenta."
         )
 

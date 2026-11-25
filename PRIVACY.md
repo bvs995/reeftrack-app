@@ -1,107 +1,147 @@
-# 🔒 Política de Privacidad de AquaReef (Privacy Policy)
+# Política de Privacidad de AquaReef
 
-**Fecha de entrada en vigor**: 23 de noviembre de 2026  
-**Versión**: 1.0 (Alineada con directrices de Google Play Store, GDPR y CCPA)
+**Fecha de entrada en vigor**: 25 de noviembre de 2026
+**Versión**: 1.1
 
-AquaReef ("la Aplicación", "nosotros", "nuestro") respeta y protege la privacidad de sus usuarios. Esta Política de Privacidad describe de manera transparente qué datos recopilamos, cómo los procesamos, cómo los protegemos y cómo puedes ejercer tus derechos sobre tu información personal.
+<!-- NOTA PARA REVISIÓN LEGAL: borrador redactado a partir de lo que hace la app (no es asesoría legal). Revisar contra la LFPDPPP vigente (aviso de privacidad integral, derechos ARCO, transferencias), y GDPR/CCPA si habrá usuarios en la UE o California. Completar los datos marcados entre corchetes antes de publicar. -->
 
----
-
-## 1. Responsable del Tratamiento de Datos
-
-* **Responsable**: Equipo de Desarrollo AquaReef
-* **Contacto de Privacidad**: `privacy@aquareef.app` o `paliyo995@gmail.com`
-* **Sitio Web / Aplicación**: AquaReef PWA (Arrecifes y Acuarios)
+Esta Política de Privacidad (aviso de privacidad) explica qué datos personales trata AquaReef ("la Aplicación", "nosotros"), para qué los usamos, con quién los compartimos, cuánto tiempo los conservamos y cómo puedes ejercer tus derechos.
 
 ---
 
-## 2. Información que Recopilamos
+## 1. Responsable
 
-### 2.1 Datos de la Cuenta de Usuario
-* **Datos recopilados**: Correo electrónico, nombre completo o alias y contraseña cifrada.
-* **Finalidad**: Crear y gestionar tu cuenta de usuario, autenticar el inicio de sesión y aislar tus acuarios respecto a los de otros usuarios (Anti-IDOR).
-
-### 2.2 Datos de Acuarios y Telemetría Química
-* **Datos recopilados**: Parámetros de agua registrados por el usuario (pH, KH / Alcalinidad, Calcio, Magnesio, Nitrato, Fosfato, Salinidad, Temperatura, Amoníaco, Nitrito, elementos traza), volumen del tanque, biotipo (SPS, LPS, mixto, peces, plantado, agua dulce), bitácora de tareas mecánicas y cambios de agua.
-* **Finalidad**: Evaluar la estabilidad físico-química del acuario, proyectar consumos, predecir cambios de agua y alertar sobre desviaciones biopeligrosas.
-
-### 2.3 Procesamiento de Imágenes por Cámara (Escaneo de Tests)
-* **Datos procesados**: Fotografías de viales colorimétricos, fotómetros digitales o kits de test capturadas por la cámara del dispositivo.
-* **Tratamiento estricto**:
-  * Las imágenes se procesan de forma efímera para la extracción de lectura visual.
-  * **Eliminación de metadatos**: Se eliminan automáticamente todos los metadatos EXIF, coordenadas de GPS y marcas de dispositivo mediante sanitización en servidor antes de la inferencia.
-  * **Carácter de borrador**: Toda lectura visual es un borrador no confirmado.
-  * **No almacenamiento**: La imagen capturada **no se guarda permanentemente** en nuestros servidores ni en bases de datos salvo que el usuario lo solicite expresamente.
-
-### 2.4 Notificaciones Web Push (VAPID)
-* **Datos recopilados**: Endpoint del servidor push, claves criptográficas públicas de suscripción (`p256dh` y `auth`).
-* **Finalidad**: Enviar recordatorios programados de mantenimiento mecánico y alertas de bioseguridad inmediata ante parámetros críticos.
-* **Control**: El usuario puede activar, desactivar o revocar estas notificaciones en cualquier momento desde la configuración de la app o de su navegador/dispositivo.
+* **Responsable**: [Nombre completo o razón social del responsable]
+* **Domicilio**: [Domicilio completo del responsable]
+* **Contacto de privacidad**: `privacy@aquareef.app`
+* **Sitio y aplicación**: `https://www.aquareef.app` (web y app instalable)
 
 ---
 
-## 3. Inteligencia Artificial y Procesamiento de Datos (Carácter Orientativo)
+## 2. Datos que tratamos
 
-* **Diagnóstico Orientativo Asistido por IA**: Todos los análisis predictivos, evaluaciones de estabilidad y recomendaciones emitidas por la plataforma y sus modelos de Inteligencia Artificial son de **carácter estrictamente orientativo y preventivo**. No garantizan resultados biológicos ni reemplazan el criterio del acuarista. El usuario siempre debe contrastar cualquier alerta mediante un retest manual antes de realizar adiciones o cambios químicos.
-* **Motor Predictivo (Google Gemini API)**: Los diagnósticos clínicos se asisten mediante llamadas a la API empresarial de Google Gemini. A la IA se le remiten únicamente valores químicos despersonalizados, biotipo del tanque y volúmenes métricos. **Nunca** se transmiten nombres reales, correos electrónicos ni información de geolocalización a los modelos de lenguaje.
-* **Reportes de Inconsistencia y Consentimiento**: El botón *"Reportar diagnóstico incorrecto"* exige un consentimiento explícito previo del usuario (`consent_given=True`) para transferir de forma anónima los datos de una lectura y auditar la precisión del modelo.
+### 2.1 Datos de tu cuenta
+* Correo electrónico, nombre o alias, contraseña (guardada solo como hash `bcrypt`, nunca en texto plano), preferencia de unidades, plan (Free o Premium) y si verificaste tu correo.
+* **Para qué**: crear tu cuenta, iniciar sesión, enviarte el correo de verificación y de recuperación de contraseña, y separar tus datos de los de otros usuarios.
 
----
+### 2.2 Datos de tus acuarios
+* Nombre y volumen del acuario, tipo (arrecife, agua dulce, etc.), parámetros del agua que registras (pH, KH, calcio, magnesio, nitrato, fosfato, salinidad, temperatura, amoníaco, nitrito, elementos traza), notas, método de prueba, tareas de mantenimiento y cambios de agua.
+* **Para qué**: mostrarte tendencias, calcular proyecciones, generar alertas y recordatorios.
 
-## 4. Finalidad y Bases Legales del Tratamiento
+### 2.3 Fotos de pruebas (escaneo con cámara)
+* Cuando usas el escaneo, la foto de tu kit o fotómetro se envía a nuestro servidor, que **elimina sus metadatos EXIF** (incluida la ubicación GPS) y la envía a Google Gemini para leer el valor.
+* La lectura obtenida es un **borrador**: no se guarda como medición hasta que tú la confirmas o corriges.
+* **Las fotos no se guardan**: se procesan en memoria y se descartan.
 
-Tratamos tus datos bajo las siguientes bases legales:
-1. **Ejecución de un contrato**: Prestación del servicio de gestión de acuarios y cálculo de intervalos de seguridad.
-2. **Consentimiento explícito**: Procesamiento de escaneos de cámara, notificaciones push y reportes de auditoría de IA.
-3. **Interés legítimo**: Prevención de colapso de biomas acuáticos, auditoría de seguridad del servicio y detección de abusos o ataques de fuerza bruta.
+### 2.4 Diagnósticos con IA
+* Para cada diagnóstico guardamos un registro con los valores que se analizaron, las alertas de reglas y la respuesta del modelo.
+* **Para qué**: revisar la calidad y seguridad de los diagnósticos y controlar el gasto del servicio.
+* Si usas "Reportar diagnóstico incorrecto", guardamos tu comentario solo si das tu consentimiento en ese momento.
 
----
+### 2.5 Notificaciones push
+* Si las activas, guardamos la dirección de suscripción que entrega tu navegador (endpoint y claves `p256dh` y `auth`).
+* **Para qué**: enviarte recordatorios de mantenimiento y alertas de parámetros críticos. Puedes desactivarlas en cualquier momento desde la app o desde tu navegador.
 
-## 5. Divulgación y Transferencia a Terceros
-
-**No vendemos, alquilamos ni comercializamos tus datos personales con terceros para fines publicitarios o comerciales.**
-
-Compartimos datos únicamente con los siguientes proveedores de infraestructura necesarios para la operatividad:
-* **Alojamiento y Base de Datos**: Servidores de PostgreSQL seguros (Supabase / Render) con cifrado en tránsito (TLS 1.3) y en reposo.
-* **Inferencia de IA**: Google Cloud / Google Gemini API (Nivel Comercial de Pago / Pay-As-You-Go). De acuerdo con las condiciones contractuales de Google Cloud para cuentas de pago, los datos de los usuarios (prompts de telemetría e imágenes) **no se utilizan para entrenar ni mejorar los modelos de Google**.
-
----
-
-## 6. Seguridad de la Información
-
-Implementamos medidas técnicas y organizativas de nivel de producción:
-* Cifrado en tránsito mediante HTTPS/TLS obligatorio y políticas estrictas de cabeceras de seguridad (HSTS, CSP, X-Content-Type-Options, Frame Deny).
-* Cifrado de contraseñas con `bcrypt` (coste \(\ge 12\)).
-* Sesiones autenticadas mediante tokens JWT de 15 minutos y cookies de refresco `HttpOnly`, `Secure` y `SameSite=Lax`.
-* Aislamiento estricto de rutas `/api/*` respecto a la caché local del Service Worker (`sw.js`).
-* Verificación periódica contra dependencias vulnerables (0 vulnerabilidades reportadas en `pip-audit` y `npm audit`).
+### 2.6 Datos técnicos y de seguridad
+* **Dirección IP y correo usado en intentos de inicio de sesión**, para limitar intentos y frenar ataques de fuerza bruta.
+* Cookie de sesión `HttpOnly` necesaria para mantenerte conectado. No usamos cookies de publicidad ni de rastreo.
+* Nuestros proveedores de alojamiento registran datos técnicos de las conexiones (como IP, fecha y ruta solicitada) para operar y proteger el servicio.
 
 ---
 
-## 7. Derechos del Usuario (Acceso, Rectificación y Borrado - GDPR / CCPA)
+## 3. Inteligencia artificial (carácter orientativo)
 
-Como usuario de AquaReef, tienes derecho a:
-1. **Acceso y Portabilidad**: Puedes solicitar y descargar una copia completa de tus acuarios, mediciones y configuraciones en formato estructurado JSON en cualquier momento mediante las opciones de perfil o exportación.
-2. **Rectificación**: Puedes editar o corregir cualquier medición o acuario directamente desde la interfaz.
-3. **Borrado y Eliminación Total ("Derecho al Olvido")**: Puedes solicitar en cualquier momento la supresión completa, inmediata e irreversible de tu cuenta y todos tus datos asociados mediante el endpoint seguro `DELETE /api/user/account` (con confirmación de contraseña y periodo de gracia opcional de 7 días).
-4. **Revocación del Consentimiento**: Puedes revocar el permiso de notificaciones push o de escaneo por cámara en cualquier momento en las preferencias de tu perfil.
+* Los diagnósticos, proyecciones y recomendaciones son de **carácter orientativo y preventivo**. No garantizan resultados ni sustituyen tu criterio: verifica cualquier alerta con un retest antes de añadir productos o hacer cambios.
+* Usamos la **API de Google Gemini en nivel de pago**. Según las condiciones de Google para ese nivel, los datos enviados **no se usan para entrenar sus modelos**.
+* A Gemini enviamos los valores de tus parámetros, el tipo y volumen del acuario y, si usas el escaneo, la foto sin metadatos. **No enviamos tu nombre, tu correo ni tu ubicación.**
 
 ---
 
-## 8. Privacidad de Menores (COPPA)
+## 4. Bases para tratar tus datos
 
-AquaReef no está dirigida a menores de 13 años. No recopilamos conscientemente información personal de niños. Si detectamos que un menor de 13 años nos ha proporcionado información personal, procederemos a eliminarla de inmediato.
+1. **Prestación del servicio** que solicitas al crear tu cuenta (secciones 2.1 a 2.4).
+2. **Tu consentimiento**, para las notificaciones push y para los reportes de diagnóstico incorrecto. Puedes retirarlo en cualquier momento.
+3. **Seguridad del servicio**, para los datos técnicos de la sección 2.6.
 
----
-
-## 9. Cambios a esta Política de Privacidad
-
-Nos reservamos el derecho de actualizar esta Política de Privacidad para reflejar cambios normativos o nuevas funcionalidades de la aplicación. Te notificaremos cualquier modificación relevante mediante un aviso visible dentro de la aplicación.
+No usamos tus datos para publicidad ni los vendemos.
 
 ---
 
-## 10. Contacto
+## 5. Con quién compartimos tus datos
 
-Para ejercer tus derechos o realizar cualquier consulta relacionada con el tratamiento de tus datos, contáctanos en:
-* **Correo electrónico**: `privacy@aquareef.app`
-* **Soporte técnico**: `paliyo995@gmail.com`
+Solo con los proveedores necesarios para que la app funcione, que los tratan por cuenta nuestra:
+
+| Proveedor | Para qué | Datos | Ubicación |
+| :--- | :--- | :--- | :--- |
+| **Supabase** | Base de datos | Todos los datos de la sección 2 | Estados Unidos |
+| **Render** | Servidor de la API | Todos los datos en tránsito | Estados Unidos |
+| **Vercel** | Alojamiento de la web y paso de las peticiones a la API | Datos en tránsito y registros técnicos | Estados Unidos y red global |
+| **Google (Gemini API)** | Diagnósticos y lectura de fotos | Lo descrito en la sección 3 | Estados Unidos y otros |
+| **Resend** | Envío de correos (verificación, recuperación) | Tu correo y el contenido de esos correos | Estados Unidos |
+| **Cloudflare** | Dominio y reenvío de correos que nos escribes | Correos enviados a direcciones `@aquareef.app` | Red global |
+| **Servicio push de tu navegador** (Google, Mozilla o Apple) | Entregar notificaciones | Contenido de la notificación | Según tu navegador |
+
+Al usar estos proveedores, tus datos se almacenan y procesan **fuera de México**, principalmente en Estados Unidos. Solo compartiremos datos con autoridades cuando la ley lo exija.
+
+<!-- NOTA PARA REVISIÓN LEGAL: confirmar si estas comunicaciones a encargados requieren mención o consentimiento adicional como transferencias internacionales bajo la LFPDPPP vigente. -->
+
+---
+
+## 6. Cuánto tiempo conservamos tus datos
+
+* **Cuenta, acuarios, mediciones, tareas, diagnósticos y suscripciones push**: mientras tu cuenta exista. Al eliminarla, se borran de inmediato.
+* **Sesión**: el token de sesión dura hasta 7 días; al cerrar sesión o eliminar la cuenta se invalida.
+* **Enlaces de recuperación de contraseña**: caducan a los 30 minutos y solo se pueden usar una vez.
+* **Registros de intentos de inicio de sesión (IP y correo)**: se eliminan automáticamente pasadas unas 2 horas.
+* **Fotos de escaneo**: no se conservan.
+* **Copias de seguridad y registros técnicos de proveedores**: según los plazos de cada proveedor.
+
+<!-- NOTA PARA REVISIÓN LEGAL: confirmar el plazo de las copias de seguridad de Supabase según el plan contratado y de los registros de Vercel, Render y Resend. -->
+
+---
+
+## 7. Tus derechos
+
+Tienes derecho de **acceso, rectificación, cancelación (borrado) y oposición** (derechos ARCO), y a retirar tu consentimiento:
+
+1. **Acceso y portabilidad**: en **Ajustes → Descargar mis datos** obtienes un archivo JSON con tu cuenta, acuarios, mediciones y tareas.
+2. **Rectificación**: puedes corregir tu nombre, tus acuarios y tus mediciones desde la app.
+3. **Cancelación (borrado)**: en **Ajustes → Eliminar mi cuenta** borras de forma **inmediata y permanente** tu cuenta y todos tus datos asociados (acuarios, mediciones, tareas, diagnósticos, reportes, sesiones y suscripciones push). Se pide tu contraseña para confirmar. Técnicamente, la app usa la operación `DELETE /api/user/account`.
+4. **Oposición y retiro del consentimiento**: puedes desactivar las notificaciones push en cualquier momento, no usar el escaneo con cámara, o escribirnos.
+
+Para cualquier solicitud que no puedas hacer desde la app, escribe a `privacy@aquareef.app` desde el correo de tu cuenta, indicando qué derecho quieres ejercer. Te responderemos en los plazos que marca la ley.
+
+<!-- NOTA PARA REVISIÓN LEGAL: precisar plazos de respuesta ARCO y requisitos de identificación según la LFPDPPP vigente. -->
+
+---
+
+## 8. Seguridad
+
+* Conexión cifrada (HTTPS) en todo momento; el dominio `.app` no permite conexiones sin cifrar.
+* Contraseñas guardadas con `bcrypt`.
+* Sesiones con tokens de corta duración y cookie `HttpOnly` y `Secure`.
+* Acceso a la base de datos restringido; la API pública de la base de datos no permite leer ni escribir tablas.
+* Los datos privados de la API nunca se guardan en la caché de la app instalada.
+
+Ningún sistema es 100% seguro. Si detectamos un incidente que afecte tus datos, te avisaremos según lo que exija la ley.
+
+---
+
+## 9. Menores de edad
+
+AquaReef no está dirigida a menores de 13 años y no recopilamos conscientemente sus datos. Si sabemos que un menor de 13 años nos dio datos personales, los eliminaremos.
+
+<!-- NOTA PARA REVISIÓN LEGAL: confirmar la edad mínima y si se requiere consentimiento de padre o tutor para menores de 18 años en México. -->
+
+---
+
+## 10. Cambios a esta política
+
+Si cambiamos esta política, publicaremos la nueva versión en esta página con su fecha y, si el cambio es relevante, te avisaremos dentro de la app o por correo.
+
+---
+
+## 11. Contacto
+
+* **Privacidad**: `privacy@aquareef.app`
+* **Soporte**: `support@aquareef.app`

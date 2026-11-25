@@ -36,17 +36,60 @@ function renderInline(text, keyPrefix) {
   });
 }
 
-// Markdown mínimo: títulos, listas con viñeta o numeradas, separadores y párrafos.
+// Enlaces [texto](/ruta) solo internos (empiezan con "/"); el resto queda como texto.
+function renderLinks(text, keyPrefix) {
+  const parts = text.split(/(\[[^\]]+\]\(\/[^)\s]*\))/g).filter(Boolean);
+  return parts.flatMap((part, i) => {
+    const m = part.match(/^\[([^\]]+)\]\((\/[^)\s]*)\)$/);
+    if (m) {
+      return [<a key={`${keyPrefix}-a${i}`} href={m[2]} className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">{m[1]}</a>];
+    }
+    return renderInline(part, `${keyPrefix}-t${i}`);
+  });
+}
+
+// Tablas markdown simples (| a | b |), con la fila separadora | :--- | ignorada.
+function renderTable(rows, key) {
+  const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  const [head, ...body] = rows.filter((r) => !/^\|?\s*:?-{3,}/.test(r));
+  return (
+    <div key={key} className="overflow-x-auto mb-4 rounded-xl border border-slate-800">
+      <table className="w-full text-sm text-left">
+        <thead className="bg-slate-900 text-white">
+          <tr>{cells(head).map((c, i) => <th key={i} className="px-3 py-2 font-semibold">{renderLinks(c, `${key}-h${i}`)}</th>)}</tr>
+        </thead>
+        <tbody>
+          {body.map((r, ri) => (
+            <tr key={ri} className="border-t border-slate-800 align-top">
+              {cells(r).map((c, ci) => <td key={ci} className="px-3 py-2 text-slate-300">{renderLinks(c, `${key}-${ri}-${ci}`)}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Markdown mínimo: títulos, listas, tablas, separadores y párrafos. Los comentarios
+// <!-- ... --> (notas internas para revisión legal) no se muestran.
 function renderMarkdown(md) {
-  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
+  const lines = (md || '').replace(/\r\n/g, '\n').replace(/<!--[\s\S]*?-->/g, '').split('\n');
   const blocks = [];
   let list = null;
   let paragraph = [];
+  let table = [];
 
+  const flushTable = () => {
+    if (table.length) {
+      blocks.push(renderTable(table, `t-${blocks.length}`));
+      table = [];
+    }
+  };
   const flushParagraph = () => {
+    flushTable();
     if (paragraph.length) {
       const k = `p-${blocks.length}`;
-      blocks.push(<p key={k} className="text-slate-300 leading-relaxed mb-4">{renderInline(paragraph.join(' '), k)}</p>);
+      blocks.push(<p key={k} className="text-slate-300 leading-relaxed mb-4">{renderLinks(paragraph.join(' '), k)}</p>);
       paragraph = [];
     }
   };
@@ -56,7 +99,7 @@ function renderMarkdown(md) {
       const Tag = list.ordered ? 'ol' : 'ul';
       blocks.push(
         <Tag key={k} className={`${list.ordered ? 'list-decimal' : 'list-disc'} pl-6 mb-4 space-y-1.5 text-slate-300`}>
-          {list.items.map((item, i) => <li key={`${k}-${i}`} className="leading-relaxed">{renderInline(item, `${k}-${i}`)}</li>)}
+          {list.items.map((item, i) => <li key={`${k}-${i}`} className="leading-relaxed">{renderLinks(item, `${k}-${i}`)}</li>)}
         </Tag>
       );
       list = null;
@@ -69,6 +112,8 @@ function renderMarkdown(md) {
     const bullet = line.match(/^[*-]\s+(.*)$/);
     const numbered = line.match(/^\d+\.\s+(.*)$/);
 
+    if (line.startsWith('|')) { if (paragraph.length) flushParagraph(); flushList(); table.push(line); continue; }
+    flushTable();
     if (!line) { flushParagraph(); flushList(); continue; }
     if (/^(-{3,}|\*{3,})$/.test(line)) { flushParagraph(); flushList(); blocks.push(<hr key={`hr-${blocks.length}`} className="border-slate-700 my-6" />); continue; }
     if (heading) {
@@ -92,7 +137,7 @@ function renderMarkdown(md) {
     flushList();
     paragraph.push(line);
   }
-  flushParagraph(); flushList();
+  flushParagraph(); flushList(); flushTable();
   return blocks;
 }
 
