@@ -4,8 +4,12 @@ import {
   setAuthToken,
   loginUser as apiLogin,
   registerUser as apiRegister,
+  refreshSession,
+  logoutUser as apiLogout,
   fetchUserProfile,
-  updateUserProfile as apiUpdateProfile
+  updateUserProfile as apiUpdateProfile,
+  verifyEmailToken as apiVerifyEmail,
+  resendVerificationEmail as apiResendVerification
 } from '../api';
 
 const AuthContext = createContext(null);
@@ -17,25 +21,19 @@ export function AuthProvider({ children }) {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState('login'); // 'login' | 'register'
 
-  // Cargar usuario activo si existe token guardado
+  // Cargar usuario activo intentando recuperar sesión con cookie HttpOnly (P1.8)
   useEffect(() => {
     let isMounted = true;
 
     const initAuth = async () => {
-      const storedToken = getAuthToken();
-      if (!storedToken) {
-        if (isMounted) setLoading(false);
-        return;
-      }
-
       try {
-        const userData = await fetchUserProfile();
-        if (isMounted) {
-          setUser(userData);
+        const session = await refreshSession();
+        if (session && session.user && isMounted) {
+          setToken(session.access_token);
+          setUser(session.user);
         }
       } catch (err) {
-        console.warn('Sesión previa inválida o expirada:', err);
-        setAuthToken(null);
+        console.warn('Sin sesión previa activa:', err);
         if (isMounted) {
           setToken(null);
           setUser(null);
@@ -79,7 +77,8 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await apiLogout();
     setAuthToken(null);
     setToken(null);
     setUser(null);
@@ -91,8 +90,30 @@ export function AuthProvider({ children }) {
     return updated;
   }, []);
 
+  const verifyEmail = useCallback(async (verifyToken) => {
+    const data = await apiVerifyEmail(verifyToken);
+    if (data.access_token) {
+      setAuthToken(data.access_token);
+      setToken(data.access_token);
+    }
+    if (data.user) {
+      setUser(data.user);
+    } else {
+      setUser((prev) => (prev ? { ...prev, email_verified: true, is_active: true } : prev));
+    }
+    return data;
+  }, []);
+
+  const resendVerification = useCallback(async (targetEmail) => {
+    return await apiResendVerification(targetEmail);
+  }, []);
+
   const loginDemo = useCallback(async () => {
-    return await login('demo@aquapulse.io', 'demo123');
+    // import.meta.env.DEV es false en producción: Vite elimina este bloque (y la contraseña demo) del bundle.
+    if (import.meta.env.DEV) {
+      return await login('demo@aquapulse.io', 'demo123');
+    }
+    throw new Error('El acceso demo no está disponible.');
   }, [login]);
 
   const openAuthModal = useCallback((tab = 'login') => {
@@ -117,6 +138,9 @@ export function AuthProvider({ children }) {
     register,
     logout,
     updateProfile,
+    verifyEmail,
+    resendVerification,
+    setUser,
     loginDemo,
     isAuthModalOpen,
     authModalTab,

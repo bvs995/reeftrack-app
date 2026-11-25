@@ -12,7 +12,7 @@ AquaPulse - Fase 3:
 """
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple
 from pydantic import BaseModel, Field
 
@@ -252,6 +252,20 @@ def evaluate_parameter_with_interval(
             title="Parámetro Estable",
             message=f"{p_norm.upper()} dentro de parámetros operativos.",
             recommendation="Mantener rutina de monitoreo.",
+            interval=[v_min, v_max],
+            tested_value=v
+        )
+
+    # Amoníaco y nitrito a 0.0 representan el nivel ideal indetectable (no es alerta)
+    if p_norm in ("ammonia", "nitrite") and v <= 0.0:
+        return IntervalAlertResult(
+            parameter=p_norm,
+            status="safe",
+            severity="safe",
+            is_alert=False,
+            title=f"{p_norm.capitalize()} no detectable (Óptimo)",
+            message=f"{p_norm.capitalize()} en nivel indetectable o cero, óptimo para la fauna.",
+            recommendation="Mantener rutina de filtración biológica.",
             interval=[v_min, v_max],
             tested_value=v
         )
@@ -602,7 +616,7 @@ def project_trend_with_uncertainty(
     """
     p_norm = normalize_param_key(parameter)
     n = len(points)
-    now_dt = latest_timestamp or datetime.utcnow()
+    now_dt = latest_timestamp or datetime.now(timezone.utc)
 
     # 1. Mínimo 3 mediciones obligatorias para proyectar
     if n < 3:

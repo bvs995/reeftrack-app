@@ -7,7 +7,7 @@ AquaPulse - Fase 3:
 - Nutrientes NO3/PO4 en cero se muestran como '< e' (por debajo del límite de detección).
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple, Any
 from backend.models import (
     Measurement,
@@ -361,6 +361,15 @@ def analyze_nitrate_accumulation(
     )
     return pred, alert
 
+def _as_utc(dt: datetime) -> datetime:
+    """Normaliza una fecha a UTC con zona horaria.
+    Las columnas DateTime sin zona devuelven fechas 'naive' (SQLite y PostgreSQL); se asumen UTC.
+    Así se pueden comparar con datetime.now(timezone.utc) sin TypeError."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def calculate_predictions(measurements: List[Measurement]) -> PredictionResponse:
     """
     Función principal del motor predictivo con metrología de incertidumbre:
@@ -370,10 +379,10 @@ def calculate_predictions(measurements: List[Measurement]) -> PredictionResponse
     - Proyecta acumulación de nitratos y fecha estimada para cambio de agua.
     - Consolida alertas biológicas activas.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     fourteen_days_ago = now - timedelta(days=14)
 
-    recent_14_days = [m for m in measurements if m.timestamp >= fourteen_days_ago]
+    recent_14_days = [m for m in measurements if _as_utc(m.timestamp) >= fourteen_days_ago]
     count_14d = len(recent_14_days)
     total_count = len(measurements)
 

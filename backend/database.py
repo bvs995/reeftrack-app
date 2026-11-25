@@ -117,6 +117,7 @@ def init_db():
         return
 
     try:
+        import backend.models  # Asegurar registro de modelos en metadata
         Base.metadata.create_all(bind=engine)
     except Exception as ddl_err:
         logger.info(f"Aviso durante create_all (posible creación concurrente por otro worker): {ddl_err}")
@@ -126,17 +127,14 @@ def init_db():
         with engine.connect() as conn:
             try:
                 # Columnas de perfiles marinos en tanks y acuarios
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 1;"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
                 conn.execute(text("ALTER TABLE tanks ADD COLUMN IF NOT EXISTS flow_profile VARCHAR(50);"))
 
-                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS reef_profile VARCHAR(50);"))
-                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS dosing_method VARCHAR(50);"))
-                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS lighting_par INTEGER;"))
-                conn.execute(text("ALTER TABLE acuarios ADD COLUMN IF NOT EXISTS flow_profile VARCHAR(50);"))
-
-                # Columnas en measurements y mediciones
+                # Columnas en measurements (P1.9: única tabla canónica de mediciones)
                 meas_alter_statements = [
                     "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS salinity FLOAT;",
                     "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS temperature FLOAT;",
@@ -151,22 +149,32 @@ def init_db():
                     "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS phosphate FLOAT;",
                     "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS trace_elements JSONB;",
                     "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS test_methods JSONB;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS salinity FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperature FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS temperatura FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ph FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ammonia FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS nitrite FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS kh FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS calcium FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS magnesium FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS nitrate FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS phosphate FLOAT;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS trace_elements JSONB;",
-                    "ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS test_methods JSONB;",
                 ]
                 for stmt in meas_alter_statements:
                     conn.execute(text(stmt))
+
+                # Migración de datos de tablas legadas a tanks y measurements si existiesen (P1.9)
+                try:
+                    insp = inspect(conn)
+                    table_names = insp.get_table_names()
+                    if "acuarios" in table_names:
+                        conn.execute(text("""
+                            INSERT INTO tanks (id, user_id, name, tank_type, volume_liters, reef_profile, dosing_method, lighting_par, flow_profile, created_at)
+                            SELECT a.id, CAST(a.usuario_id AS INTEGER), a.nombre, 'reef', a.volumen_litros, a.reef_profile, a.dosing_method, a.lighting_par, a.flow_profile, COALESCE(a.creado_en, CURRENT_TIMESTAMP)
+                            FROM acuarios a
+                            WHERE NOT EXISTS (SELECT 1 FROM tanks t WHERE t.id = a.id)
+                        """))
+                        conn.commit()
+                    if "mediciones" in table_names:
+                        conn.execute(text("""
+                            INSERT INTO measurements (id, tank_id, ph, kh, calcium, magnesium, nitrate, phosphate, salinity, temperature, ammonia, nitrite, timestamp)
+                            SELECT m.id, m.acuario_id, m.ph, m.kh, COALESCE(m.calcium, m.calcio), COALESCE(m.magnesium, m.magnesio), COALESCE(m.nitrate, m.nitrato), COALESCE(m.phosphate, m.fosfato), m.salinity, COALESCE(m.temperature, m.temperatura), m.ammonia, m.nitrite, COALESCE(m.fecha_registro, CURRENT_TIMESTAMP)
+                            FROM mediciones m
+                            WHERE NOT EXISTS (SELECT 1 FROM measurements meas WHERE meas.id = m.id)
+                        """))
+                        conn.commit()
+                except Exception as _mig_e:
+                    logger.debug(f"Aviso en migración de tablas legadas: {_mig_e}")
 
                 # Columnas para maintenance_tasks
                 maint_task_statements = [
@@ -312,6 +320,12 @@ def init_db():
                 if "subscription_tier" not in user_columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN subscription_tier VARCHAR(50) DEFAULT 'free';"))
                     logger.info("Auto-migración: Columna subscription_tier añadida a users.")
+                if "token_version" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;"))
+                    logger.info("Auto-migración: Columna token_version añadida a users.")
+                if "email_verified" not in user_columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;"))
+                    logger.info("Auto-migración: Columna email_verified añadida a users.")
 
                 # Saneamiento de posibles valores nulos preexistentes para evitar IntegrityError
                 try:

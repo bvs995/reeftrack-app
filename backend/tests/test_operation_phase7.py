@@ -151,12 +151,22 @@ class TestOperationPhase7:
         assert stats["discard_rate"] >= 0.25
         assert stats["discard_rate_alert"] is True
 
-        # Verificar que /api/health reporta la alerta
+        # Verificar que /api/health es minimal y no filtra métricas operativas
         health_res = client.get("/api/health")
         assert health_res.status_code == 200
         health_data = health_res.json()
-        assert health_data["status"] == "degraded"
-        assert health_data["ai_operational_monitor"]["discard_rate_alert"] is True
+        assert health_data["status"] == "ok"
+        assert "ai_operational_monitor" not in health_data
+
+        # Verificar que /api/admin/ai-audit-stats reporta la alerta al administrador
+        user = self.db.query(User).filter(User.email == self.email).first()
+        user.is_admin = True
+        self.db.commit()
+
+        admin_res = client.get("/api/admin/ai-audit-stats", headers=self.headers)
+        assert admin_res.status_code == 200
+        admin_data = admin_res.json()
+        assert admin_data["discard_rate_alert"] is True
 
     # --------------------------------------------------------------------------
     # 3. LÍMITE DE GASTO EN GEMINI (BUDGET OVERRIDE)
@@ -167,7 +177,8 @@ class TestOperationPhase7:
         las llamadas externas a Gemini se bloquean proactivamente y se retorna diagnóstico por reglas determinísticas.
         """
         # Fijamos un límite bajo para la prueba (ej: 0.05 USD)
-        with patch.dict(os.environ, {"GEMINI_MONTHLY_BUDGET_USD": "0.05"}):
+        # Clave falsa: el bloqueo por presupuesto ocurre antes de cualquier llamada a Gemini.
+        with patch.dict(os.environ, {"GEMINI_MONTHLY_BUDGET_USD": "0.05", "GEMINI_API_KEY": "clave-falsa-solo-pruebas"}):
             # Simulamos gasto previo de 0.06 USD en auditoría
             record_diagnostic_audit(
                 db=self.db,
@@ -211,23 +222,18 @@ class TestOperationPhase7:
     # --------------------------------------------------------------------------
     def test_04_health_monitor_endpoint_structure(self):
         """
-        /api/health debe retornar:
+        /api/health debe ser minimal (P2.13):
         - Estado de base de datos
-        - Monitor operativo de IA: presupuesto, gasto acumulado, tasa de descarte y alertas.
+        - Sin métricas operativas de IA (éstas se exponen en /api/admin/ai-audit-stats).
         """
         res = client.get("/api/health")
-        assert res.status_code in [200, 503]
+        assert res.status_code == 200
         data = res.json()
         assert "status" in data
+        assert data["status"] == "ok"
         assert "database" in data
         assert data["database"] == "connected"
-        assert "ai_operational_monitor" in data
-        monitor = data["ai_operational_monitor"]
-        assert "budget_status" in monitor
-        assert "month_spend_usd" in monitor
-        assert "budget_limit_usd" in monitor
-        assert "discard_rate" in monitor
-        assert "discard_rate_alert" in monitor
+        assert "ai_operational_monitor" not in data
 
     # --------------------------------------------------------------------------
     # 5. BACKUPS CON RESTAURACIÓN PROBADA Y PARIDAD

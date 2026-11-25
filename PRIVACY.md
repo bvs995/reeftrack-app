@@ -40,9 +40,10 @@ AquaPulse ("la Aplicación", "nosotros", "nuestro") respeta y protege la privaci
 
 ---
 
-## 3. Inteligencia Artificial y Procesamiento de Datos
+## 3. Inteligencia Artificial y Procesamiento de Datos (Carácter Orientativo)
 
-* **Motor Predictivo (Google Gemini API)**: Los diagnósticos clínicos se asisten mediante llamadas a la API de Gemini. A la IA se le remiten únicamente valores químicos despersonalizados, biotipo del tanque y volúmenes métricos. **Nunca** se transmiten nombres reales, correos electrónicos ni información de geolocalización a los modelos de lenguaje.
+* **Diagnóstico Orientativo Asistido por IA**: Todos los análisis predictivos, evaluaciones de estabilidad y recomendaciones emitidas por la plataforma y sus modelos de Inteligencia Artificial son de **carácter estrictamente orientativo y preventivo**. No garantizan resultados biológicos ni reemplazan el criterio del acuarista. El usuario siempre debe contrastar cualquier alerta mediante un retest manual antes de realizar adiciones o cambios químicos.
+* **Motor Predictivo (Google Gemini API)**: Los diagnósticos clínicos se asisten mediante llamadas a la API empresarial de Google Gemini. A la IA se le remiten únicamente valores químicos despersonalizados, biotipo del tanque y volúmenes métricos. **Nunca** se transmiten nombres reales, correos electrónicos ni información de geolocalización a los modelos de lenguaje.
 * **Reportes de Inconsistencia y Consentimiento**: El botón *"Reportar diagnóstico incorrecto"* exige un consentimiento explícito previo del usuario (`consent_given=True`) para transferir de forma anónima los datos de una lectura y auditar la precisión del modelo.
 
 ---
@@ -62,7 +63,7 @@ Tratamos tus datos bajo las siguientes bases legales:
 
 Compartimos datos únicamente con los siguientes proveedores de infraestructura necesarios para la operatividad:
 * **Alojamiento y Base de Datos**: Servidores de PostgreSQL seguros (Supabase / Render) con cifrado en tránsito (TLS 1.3) y en reposo.
-* **Inferencia de IA**: Google Cloud / Gemini API para la interpretación contextual de rangos biológicos (datos anónimos de parámetros).
+* **Inferencia de IA**: Google Cloud / Google Gemini API (Nivel Comercial de Pago / Pay-As-You-Go). De acuerdo con las condiciones contractuales de Google Cloud para cuentas de pago, los datos de los usuarios (prompts de telemetría e imágenes) **no se utilizan para entrenar ni mejorar los modelos de Google**.
 
 ---
 
@@ -77,12 +78,12 @@ Implementamos medidas técnicas y organizativas de nivel de producción:
 
 ---
 
-## 7. Derechos del Usuario (GDPR / CCPA)
+## 7. Derechos del Usuario (Acceso, Rectificación y Borrado - GDPR / CCPA)
 
 Como usuario de AquaPulse, tienes derecho a:
-1. **Acceso y Portabilidad**: Puedes solicitar y descargar una copia completa de tus acuarios, mediciones y configuraciones en formato estructurado JSON en cualquier momento mediante el endpoint `/api/account/export`.
+1. **Acceso y Portabilidad**: Puedes solicitar y descargar una copia completa de tus acuarios, mediciones y configuraciones en formato estructurado JSON en cualquier momento mediante las opciones de perfil o exportación.
 2. **Rectificación**: Puedes editar o corregir cualquier medición o acuario directamente desde la interfaz.
-3. **Eliminación Total ("Derecho al Olvido")**: Puedes solicitar la supresión completa, inmediata e irreversible de tu cuenta y todos tus datos asociados mediante el endpoint `/api/account/delete`.
+3. **Borrado y Eliminación Total ("Derecho al Olvido")**: Puedes solicitar en cualquier momento la supresión completa, inmediata e irreversible de tu cuenta y todos tus datos asociados mediante el endpoint seguro `DELETE /api/user/account` (con confirmación de contraseña y periodo de gracia opcional de 7 días).
 4. **Revocación del Consentimiento**: Puedes revocar el permiso de notificaciones push o de escaneo por cámara en cualquier momento en las preferencias de tu perfil.
 
 ---

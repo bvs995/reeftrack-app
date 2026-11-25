@@ -34,7 +34,7 @@ export default function QuickLogModal({
         ? parameters.find(p => p.code === preselectedCode) || parameters[0]
         : parameters[0];
       setSelectedParam(initial);
-      setValue(initial ? String(initial.optimal_target || '') : '');
+      setValue(''); // nunca se precarga el valor óptimo: sería registrar una medición que no se hizo
       setNotes('');
       setMeasuredAt(new Date().toISOString().slice(0, 16));
 
@@ -58,7 +58,7 @@ export default function QuickLogModal({
   const handleSelectParam = (p) => {
     triggerHaptic();
     setSelectedParam(p);
-    setValue(p.optimal_target ? String(p.optimal_target) : '');
+    setValue(''); // el valor óptimo se muestra solo como referencia
   };
 
   const handleNumpadPress = (char) => {
@@ -90,8 +90,8 @@ export default function QuickLogModal({
 
   const handleSubmitSingle = async (e) => {
     if (e) e.preventDefault();
-    if (!value || isNaN(parseFloat(value))) {
-      setError('Ingresa un valor numérico válido.');
+    if (value === '' || value === '.' || value === '-' || isNaN(parseFloat(value))) {
+      setError('Escribe el valor medido (puedes escribir 0 si el resultado fue cero).');
       return;
     }
 
@@ -275,7 +275,7 @@ export default function QuickLogModal({
 
                   <div className="bg-marine-900 border-2 border-cyan-500/50 rounded-2xl p-3 text-center shadow-neon-cyan relative flex items-center justify-center">
                     <span className="text-4xl sm:text-5xl font-black text-white tracking-widest min-h-[50px] flex items-center">
-                      {value || '0'}
+                      {value !== '' ? value : '—'}
                     </span>
                     <span className="absolute right-4 text-xs font-bold text-cyan-400 uppercase">
                       {selectedParam.unit}

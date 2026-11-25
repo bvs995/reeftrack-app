@@ -1,0 +1,504 @@
+import pytest
+from fastapi.testclient import TestClient
+from backend.main import app
+from backend.database import SessionLocal
+from backend.models import User, PasswordResetToken
+from backend.auth import hash_password, create_access_token, create_password_reset_token
+
+client = TestClient(app)
+
+class TestAuditP0Point1:
+    """Tests para Punto 1: Forgot Password seguro, de un solo uso e invalidación de sesiones."""
+
+    def setup_method(self):
+        from backend.main import auth_attempts
+        auth_attempts.clear()
+        db = SessionLocal()
+        # Limpiar tokens y usuario previo
+        db.query(PasswordResetToken).delete()
+        user = db.query(User).filter(User.email == "p0_forgot_user@aquapulse.io").first()
+        if user:
+            db.delete(user)
+        db.commit()
+
+        # Crear usuario de prueba
+        test_user = User(
+            email="p0_forgot_user@aquapulse.io",
+            hashed_password=hash_password("OldPassword123!"),
+            full_name="P0 Test User",
+            is_active=True,
+            token_version=1
+        )
+        db.add(test_user)
+        db.commit()
+        db.close()
+
+    def test_forgot_password_response_never_contains_tokens_or_urls(self):
+        """La respuesta de /api/auth/forgot-password nunca debe filtrar tokens ni URLs de dev."""
+        res = client.post("/api/auth/forgot-password", json={"email": "p0_forgot_user@aquapulse.io"})
+        assert res.status_code == 200
+        data = res.json()
+        assert "reset_token_dev" not in data, "La respuesta NO debe incluir reset_token_dev"
+        assert "reset_url_dev" not in data, "La respuesta NO debe incluir reset_url_dev"
+        assert "reset_token" not in data, "La respuesta NO debe incluir reset_token"
+        assert "token" not in data, "La respuesta NO debe incluir token"
+        assert data.get("ok") is True
+
+    def test_forgot_password_unknown_email_is_neutral(self):
+        """Solicitar restablecimiento para correo no existente responde exactamente igual (OWASP Anti-Enumeración)."""
+        res = client.post("/api/auth/forgot-password", json={"email": "nonexistent_email_404@aquapulse.io"})
+        assert res.status_code == 200
+        data = res.json()
+        assert data.get("ok") is True
+        assert "reset_token" not in data
+        assert "reset_url" not in data
+
+    def test_reset_token_is_single_use(self):
+        """Un token de reseteo solo puede utilizarse una única vez."""
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "p0_forgot_user@aquapulse.io").first()
+        
+        # Generar solicitud
+        res = client.post("/api/auth/forgot-password", json={"email": user.email})
+        assert res.status_code == 200
+        
+        # Obtener el registro del token de la base de datos
+        token_record = db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).order_by(PasswordResetToken.id.desc()).first()
+        assert token_record is not None, "El token de reseteo debe registrarse en la BD"
+        assert token_record.used_at is None, "El token debe estar sin usar inicialmente"
+
+        # Simular uso con token generado para el mismo user y jti
+        token_jwt, _, _ = create_password_reset_token(user.email, user.id)
+        # Sincronizamos el registro en BD para que coincida con el JTI del token_jwt generado
+        import jwt
+        from backend.auth import JWT_SECRET, JWT_ALGORITHM
+        payload = jwt.decode(token_jwt, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        token_record.jti = payload["jti"]
+        db.commit()
+
+        # Primer uso -> Exitoso
+        res_reset1 = client.post("/api/auth/reset-password", json={
+            "token": token_jwt,
+            "new_password": "NewValidPassword123!"
+        })
+        assert res_reset1.status_code == 200, f"Error en primer reseteo: {res_reset1.text}"
+
+        # Segundo uso con el mismo token -> Debe fallar con 400 (Token ya utilizado)
+        res_reset2 = client.post("/api/auth/reset-password", json={
+            "token": token_jwt,
+            "new_password": "AnotherNewPassword123!"
+        })
+        assert res_reset2.status_code == 400
+        assert "utilizado" in res_reset2.json()["detail"].lower()
+        db.close()
+
+    def test_password_change_invalidates_all_prior_sessions(self):
+        """Cambiar la contraseña debe invalidar todos los tokens de sesión previos (token_version)."""
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "p0_forgot_user@aquapulse.io").first()
+        
+        # Generar access token con token_version actual
+        old_access_token = create_access_token({
+            "sub": str(user.id),
+            "email": user.email,
+            "token_version": user.token_version
+        })
+        
+        # Verificar que el token viejo funciona antes del reseteo
+        res_before = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_access_token}"})
+        assert res_before.status_code == 200
+
+        # Crear y usar token de reseteo
+        token_jwt, jti, expire = create_password_reset_token(user.email, user.id)
+        import hashlib
+        token_hash = hashlib.sha256(token_jwt.encode()).hexdigest()
+        reset_record = PasswordResetToken(user_id=user.id, token_hash=token_hash, jti=jti, expires_at=expire)
+        db.add(reset_record)
+        db.commit()
+
+        res_reset = client.post("/api/auth/reset-password", json={
+            "token": token_jwt,
+            "new_password": "BrandNewPassword123!"
+        })
+        assert res_reset.status_code == 200
+
+        # Verificar que la sesión previa fue revocada inmediatamente
+        res_after = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_access_token}"})
+        assert res_after.status_code == 401
+        assert "revocada" in res_after.json()["detail"].lower()
+        db.close()
+
+
+class TestAuditP0Point2:
+    """Tests para Punto 2: Eliminación de auto-admin por correo y verificación de email."""
+
+    def setup_method(self):
+        from backend.main import auth_attempts
+        auth_attempts.clear()
+        db = SessionLocal()
+        for email in ["paliyo995@gmail.com", "verify_me@aquapulse.io"]:
+            u = db.query(User).filter(User.email == email).first()
+            if u:
+                db.delete(u)
+        db.commit()
+        db.close()
+
+    def test_no_auto_admin_on_register(self):
+        """Registrarse con paliyo995@gmail.com o cualquier correo NUNCA otorga admin automáticamente."""
+        res = client.post("/api/auth/register", json={
+            "email": "paliyo995@gmail.com",
+            "password": "SecurePassword123!",
+            "full_name": "Test User"
+        })
+        assert res.status_code in (201, 200)
+
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "paliyo995@gmail.com").first()
+        assert user is not None
+        assert user.is_admin is False, "El usuario NUNCA debe ser administrador automáticamente al registrarse"
+        assert not hasattr(app.state, "AUTO_ADMIN_EMAILS") or not hasattr(app, "AUTO_ADMIN_EMAILS")
+        db.close()
+
+    def test_no_auto_admin_on_login(self):
+        """Iniciar sesión con paliyo995@gmail.com NUNCA promueve a admin automáticamente."""
+        db = SessionLocal()
+        user = User(
+            email="paliyo995@gmail.com",
+            hashed_password=hash_password("SecurePassword123!"),
+            is_admin=False,
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.close()
+
+        res = client.post("/api/auth/login", json={
+            "email": "paliyo995@gmail.com",
+            "password": "SecurePassword123!"
+        })
+        assert res.status_code == 200
+
+        db = SessionLocal()
+        user_after = db.query(User).filter(User.email == "paliyo995@gmail.com").first()
+        assert user_after.is_admin is False, "El login NUNCA debe auto-promover a administrador"
+        db.close()
+
+    def test_email_verification_flow(self):
+        """El registro emite token de verificación y la cuenta se activa tras verificar el correo."""
+        res = client.post("/api/auth/register", json={
+            "email": "verify_me@aquapulse.io",
+            "password": "SecurePassword123!",
+            "full_name": "Verify Me"
+        })
+        assert res.status_code in (201, 200)
+
+        # Verificar endpoint de verificación
+        from backend.auth import create_email_verification_token
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "verify_me@aquapulse.io").first()
+        token = create_email_verification_token(user.email, user.id)
+
+        # Consumir verificación
+        verify_res = client.post("/api/auth/verify-email", json={"token": token})
+        assert verify_res.status_code == 200
+        assert verify_res.json().get("ok") is True
+
+        db.refresh(user)
+        assert user.email_verified is True
+        assert user.is_active is True
+        db.close()
+
+
+class TestAuditP0Point3:
+    """Tests para Punto 3: Prevención de Path Traversal en serve_spa."""
+
+    def test_serve_spa_prevents_path_traversal(self):
+        """Verifica que intentos de path traversal sirvan index.html y nunca archivos fuera de dist."""
+        # 1. /../backend/main.py
+        res1 = client.get("/../backend/main.py")
+        assert "from fastapi import" not in res1.text, "Path traversal detectado con /../backend/main.py"
+        assert res1.status_code == 200
+
+        # 2. /%2e%2e/%2e%2e/backend/.env
+        res2 = client.get("/%2e%2e/%2e%2e/backend/.env")
+        assert "SECRET_KEY" not in res2.text, "Path traversal detectado con encoded .env"
+        assert res2.status_code == 200
+
+        # 3. /..%2fbackend%2fmain.py
+        res3 = client.get("/..%2fbackend%2fmain.py")
+        assert "from fastapi import" not in res3.text, "Path traversal detectado con URL-encoded slash"
+        assert res3.status_code == 200
+
+
+class TestAuditP0Point4:
+    """Tests para Punto 4: Eliminación de demo_fallback y errores claros en producción."""
+
+    def test_demo_fallback_field_rejected_in_request(self):
+        """Enviar demo_fallback en el payload de scan-measurement debe ser rechazado (extra='forbid')."""
+        from backend.tests.test_vision_phase2 import create_test_image
+        valid_b64 = create_test_image()
+
+        # Iniciar sesión para obtener token
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "scan_user_p0@aquapulse.io").first()
+        if not user:
+            user = User(email="scan_user_p0@aquapulse.io", hashed_password=hash_password("Pass123!"), is_active=True, email_verified=True)
+            db.add(user)
+            db.commit()
+        db.close()
+
+        login_res = client.post("/api/auth/login", json={"email": "scan_user_p0@aquapulse.io", "password": "Pass123!"})
+        token = login_res.json()["access_token"]
+
+        # Enviar con demo_fallback
+        res = client.post(
+            "/api/scan-measurement",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "image_base64": valid_b64,
+                "demo_fallback": True
+            }
+        )
+        assert res.status_code in (400, 422), "El campo demo_fallback debe ser rechazado por Pydantic (extra='forbid')"
+        assert "extra" in res.json()["detail"].lower() or "not permitted" in res.json()["detail"].lower()
+
+    def test_production_mode_never_returns_invented_demo_values_when_gemini_fails(self, monkeypatch):
+        """En producción, si Gemini falla o no hay clave, devuelve error claro y NUNCA valores inventados."""
+        import os
+        from unittest.mock import patch
+        from backend.tests.test_vision_phase2 import create_test_image
+        valid_b64 = create_test_image()
+
+        # Simular entorno de producción sin clave de Gemini
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("GEMINI_API_KEY", "")
+
+        db = SessionLocal()
+        user = db.query(User).filter(User.email == "scan_user_p0@aquapulse.io").first()
+        token = create_access_token({"sub": str(user.id), "email": user.email, "token_version": 1})
+        db.close()
+
+        res = client.post(
+            "/api/scan-measurement",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"image_base64": valid_b64}
+        )
+
+        assert res.status_code in (400, 422, 502, 503) or (res.status_code == 200 and res.json().get("success") is False)
+        if res.status_code == 200:
+            data = res.json()
+            assert data.get("value") is None, "En producción NUNCA se deben inventar valores de prueba"
+            assert "manualmente" in data.get("message", "").lower()
+        else:
+            detail = res.json().get("detail", "").lower()
+            assert "manualmente" in detail or "no se pudo leer" in detail or "no tiene una clave" in detail
+
+
+class TestAuditP0Point5:
+    """Tests para Punto 5: Corrección del bug de ceros en ai_service y first_not_none."""
+
+    def test_first_not_none_utility(self):
+        """first_not_none nunca debe descartar 0 ni 0.0 por falsedad lógica."""
+        from backend.services.ai_service import first_not_none
+        assert first_not_none(None, 0, 5) == 0
+        assert first_not_none(None, 0.0, 10.0) == 0.0
+        assert first_not_none(None, None, "value") == "value"
+        assert first_not_none(None, None) is None
+
+    def test_zero_nitrate_and_phosphate_in_sps_trigger_floor_alert(self):
+        """Nitrato 0 y Fosfato 0 en perfil SPS deben evaluarse como 0 y disparar alerta de piso de nutrientes."""
+        from backend.services.ai_service import analizar_parametros_estructurado
+
+        # Perfil SPS con NO3 = 0.0 y PO4 = 0.0
+        datos = {
+            "reef_profile": "sps_reef",
+            "volumen_litros": 300.0,
+            "kh": 8.0,
+            "calcium": 430.0,
+            "magnesium": 1350.0,
+            "nitrate": 0.0,
+            "phosphate": 0.0,
+            "salinity": 35.0,
+            "temperature": 25.0,
+            "ammonia": 0.0
+        }
+
+        # Ejecutamos análisis
+        resultado = analizar_parametros_estructurado(datos)
+        res_dict = resultado.model_dump() if hasattr(resultado, "model_dump") else resultado
+        
+        # En SPS, 0.0 en nutrientes es peligro biológico de blanqueamiento y dinoflagelados
+        findings_text = " ".join([f"{f.get('parameter', '')} {f.get('observation', '')}" for f in res_dict.get("findings", [])]).lower()
+        rules_text = " ".join(res_dict.get("rule_alerts_retained", [])).lower()
+        combined = findings_text + " " + rules_text
+
+        assert "nutrientes" in combined or "nitrato" in combined or "fosfato" in combined, "Debe alertar sobre piso de nutrientes con 0.0"
+        assert res_dict.get("severity") in ("warning", "critical"), "Severidad debe ser warning o critical por piso de nutrientes en SPS"
+
+    def test_zero_ammonia_does_not_trigger_alert(self):
+        """Amoníaco 0.0 es el estado ideal y óptimo; NUNCA debe generar alertas de peligro de amoníaco."""
+        from backend.services.ai_service import analizar_parametros_estructurado
+
+        datos = {
+            "reef_profile": "mixed_reef",
+            "volumen_litros": 200.0,
+            "kh": 8.2,
+            "calcium": 420.0,
+            "magnesium": 1320.0,
+            "nitrate": 5.0,
+            "phosphate": 0.04,
+            "ammonia": 0.0,
+            "nitrite": 0.0
+        }
+
+        resultado = analizar_parametros_estructurado(datos)
+        res_dict = resultado.model_dump() if hasattr(resultado, "model_dump") else resultado
+        ammonia_findings = [f for f in res_dict.get("findings", []) if f.get("parameter") in ("ammonia", "nitrite") and f.get("severity") in ("watch", "warning", "critical")]
+        assert len(ammonia_findings) == 0, f"Amoníaco en 0.0 nunca debe disparar alertas de peligro: {ammonia_findings}"
+
+
+class TestAuditP0Point6:
+    """Tests para Punto 6: Endpoints de IA legacy protegidos con auditoría, cuota y sin DosisRecomendada."""
+
+    def setup_method(self):
+        from backend.main import auth_attempts, scan_quota_manager
+        auth_attempts.clear()
+        scan_quota_manager.reset_for_tests()
+        db = SessionLocal()
+        from backend.models import DiagnosticAudit, Tank, Measurement
+        db.query(DiagnosticAudit).delete()
+        user = db.query(User).filter(User.email == "p0_legacy_ai_user@aquapulse.io").first()
+        if user:
+            db.delete(user)
+        db.commit()
+
+        # Crear usuario de prueba
+        test_user = User(
+            email="p0_legacy_ai_user@aquapulse.io",
+            hashed_password=hash_password("Password123!"),
+            full_name="P0 AI User",
+            subscription_tier="free",
+            is_active=True,
+            is_admin=False,
+            token_version=1
+        )
+        db.add(test_user)
+        db.commit()
+        db.refresh(test_user)
+
+        # Crear tanque y medicion
+        test_tank = Tank(
+            user_id=test_user.id,
+            name="Tanque Legacy IA",
+            tank_type="sps_reef",
+            volume_liters=300.0
+        )
+        db.add(test_tank)
+        db.commit()
+        db.refresh(test_tank)
+
+        test_meas = Measurement(
+            tank_id=test_tank.id,
+            user_id=test_user.id,
+            kh=8.0,
+            calcium=420.0,
+            magnesium=1300.0,
+            nitrate=5.0,
+            phosphate=0.04,
+            salinity=35.0,
+            temperature=25.0,
+            ph=8.2,
+            is_draft=False
+        )
+        db.add(test_meas)
+        db.commit()
+
+        self.user_id = test_user.id
+        self.tank_id = test_tank.id
+        self.token = create_access_token({"sub": str(test_user.id), "user_id": test_user.id, "email": test_user.email, "token_version": 1})
+        self.headers = {"Authorization": f"Bearer {self.token}"}
+        db.close()
+
+    def test_legacy_dosis_recomendada_schema_is_eliminated(self):
+        """DosisRecomendada y AnalisisAcuarioSchema deben haber sido eliminados de backend.models."""
+        import backend.models as bm
+        assert not hasattr(bm, "DosisRecomendada"), "DosisRecomendada debe eliminarse por completo"
+        assert not hasattr(bm, "AnalisisAcuarioSchema"), "AnalisisAcuarioSchema legacy debe eliminarse por completo"
+
+    def test_analizar_ia_requires_auth_and_records_audit_and_consumes_quota(self):
+        """/api/analizar-ia debe requerir auth, registrar auditoría con user_id y respetar cuota diaria."""
+        from backend.models import DiagnosticAudit
+        payload = {
+            "nombre_acuario": "Tanque Legacy IA",
+            "volumen_litros": 300.0,
+            "tipo": "sps_reef",
+            "kh": 8.0,
+            "calcio": 420.0,
+            "magnesio": 1300.0,
+            "nitrato": 5.0,
+            "fosfato": 0.04,
+            "ph": 8.2,
+            "temperatura": 25.0
+        }
+
+        # 1. Sin auth debe fallar 401
+        res_unauth = client.post("/api/analizar-ia", json=payload)
+        assert res_unauth.status_code == 401
+
+        # 2. Con auth debe responder 200 y registrar DiagnosticAudit con user_id
+        db = SessionLocal()
+        initial_audits = db.query(DiagnosticAudit).filter(DiagnosticAudit.user_id == self.user_id).count()
+        res = client.post("/api/analizar-ia", json=payload, headers=self.headers)
+        assert res.status_code == 200
+        data = res.json()
+        assert data.get("status") == "success"
+        assert "analisis" in data
+
+        # Verificar auditoría persistida en DB
+        audits_after = db.query(DiagnosticAudit).filter(DiagnosticAudit.user_id == self.user_id).count()
+        assert audits_after > initial_audits, "Debe registrar DiagnosticAudit asociado al user_id"
+
+        # 3. Consumo de cuota: plan free tiene límite de 5 escaneos/diagnósticos
+        for _ in range(4):
+            r = client.post("/api/analizar-ia", json=payload, headers=self.headers)
+            assert r.status_code in (200, 429)
+
+        # La 6ta llamada debe ser bloqueada por cuota diaria excedida (429)
+        res_exhausted = client.post("/api/analizar-ia", json=payload, headers=self.headers)
+        assert res_exhausted.status_code == 429, f"Debe bloquear con 429 al superar cuota diaria: {res_exhausted.text}"
+        db.close()
+
+    def test_tanks_and_acuarios_analisis_endpoints_exist_and_record_audit(self):
+        """Endpoints /api/tanks/{id}/analisis y /api/acuarios/{id}/analisis deben existir, auditar y no dar 404."""
+        from backend.models import DiagnosticAudit
+        # Probar alias /api/tanks/{id}/analisis
+        res_tanks = client.post(f"/api/tanks/{self.tank_id}/analisis", headers=self.headers)
+        assert res_tanks.status_code == 200, f"Endpoint /api/tanks/{self.tank_id}/analisis debe existir y devolver 200: {res_tanks.text}"
+        data_tanks = res_tanks.json()
+        assert data_tanks.get("status") == "success"
+
+        # Probar alias /api/acuarios/{id}/analisis
+        res_acuarios = client.post(f"/api/acuarios/{self.tank_id}/analisis", headers=self.headers)
+        assert res_acuarios.status_code == 200, f"Endpoint /api/acuarios/{self.tank_id}/analisis debe existir y devolver 200: {res_acuarios.text}"
+
+        # Verificar que se registró la auditoría con tank_id y user_id
+        db = SessionLocal()
+        audit_record = db.query(DiagnosticAudit).filter(
+            DiagnosticAudit.user_id == self.user_id,
+            DiagnosticAudit.tank_id == self.tank_id
+        ).first()
+        assert audit_record is not None, "Debe registrar DiagnosticAudit con user_id y tank_id"
+        db.close()
+
+    def test_no_str_e_returned_to_client_on_error(self):
+        """Ningún endpoint de IA debe filtrar excepciones crudas str(e) al cliente."""
+        import unittest.mock as mock
+        with mock.patch("backend.services.ai_service.analizar_parametros_estructurado", side_effect=Exception("DatabaseSecretInternalKeyException")):
+            res = client.post(
+                "/api/analizar-ia",
+                json={"nombre_acuario": "Tanque Error", "volumen_litros": 100.0, "tipo": "mixto", "kh": 8.0},
+                headers=self.headers
+            )
+            # Debe caer en fallback determinístico sin 500 y nunca contener el str(e) interno
+            assert res.status_code == 200 or res.status_code == 400
+            assert "DatabaseSecretInternalKeyException" not in res.text

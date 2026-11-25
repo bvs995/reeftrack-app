@@ -156,6 +156,13 @@ export default function AuthModal({ isOpen, onClose }) {
       if (tokenFromUrl) {
         setResetToken(tokenFromUrl);
         setAuthModalTab('reset');
+
+        // Limpiar inmediatamente el token de la URL sin recargar para no exponerlo en historial ni cabeceras
+        params.delete('reset_token');
+        params.delete('token');
+        const newQuery = params.toString() ? `?${params.toString()}` : '';
+        const cleanUrl = window.location.pathname + newQuery + window.location.hash;
+        window.history.replaceState(null, '', cleanUrl);
       }
     }
   }, [setAuthModalTab]);
@@ -639,6 +646,12 @@ export default function AuthModal({ isOpen, onClose }) {
               </>
             )}
           </button>
+
+          {authModalTab === 'register' && (
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed mt-2">
+              Al registrarte aceptas los <span className="text-cyan-400 font-semibold">Términos de Uso</span> y la <span className="text-cyan-400 font-semibold">Política de Privacidad</span>. Los diagnósticos emitidos por el sistema e IA son de carácter estrictamente orientativo.
+            </p>
+          )}
         </form>
 
         {/* Botón Volver a Iniciar Sesión en Vistas Secundarias */}
@@ -656,7 +669,7 @@ export default function AuthModal({ isOpen, onClose }) {
         )}
 
         {/* Separador y Demo Login solo en Login/Register */}
-        {(authModalTab === 'login' || authModalTab === 'register') && (
+        {import.meta.env.DEV && (authModalTab === 'login' || authModalTab === 'register') && (
           <>
             <div className="relative my-5">
               <div className="absolute inset-0 flex items-center">

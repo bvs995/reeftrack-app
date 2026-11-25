@@ -1,8 +1,13 @@
 import re
-from datetime import datetime
+from enum import Enum
+from datetime import datetime, timezone
+
+def utc_now() -> datetime:
+    """Retorna timestamp actual en UTC con zona horaria explícita (P2.17)."""
+    return datetime.now(timezone.utc)
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func, JSON
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, Boolean, func, JSON, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, synonym
 from backend.database import Base
@@ -39,7 +44,10 @@ class User(Base):
     subscription_tier = Column(String(50), default="free", nullable=False) # 'free', 'premium'
     is_admin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    token_version = Column(Integer, default=1, nullable=False)
+    deletion_scheduled_at = Column(DateTime, nullable=True) # Periodo de gracia para borrado de cuenta (P2.16)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     # Relaciones estrictas por usuario
     tanks = relationship("Tank", back_populates="owner", cascade="all, delete-orphan")
@@ -62,11 +70,12 @@ class Tank(Base):
     lighting_par = Column(Integer, nullable=True) # PAR
     flow_profile = Column(String(50), nullable=True) # "low_moderate", "moderate_indirect", "high_turbulent"
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     # Sinónimos para compatibilidad bilingüe
     nombre = synonym("name")
     volumen = synonym("volume_liters")
+    volumen_litros = synonym("volume_liters")
     tipo = synonym("tank_type")
 
     owner = relationship("User", back_populates="tanks")
@@ -84,7 +93,7 @@ class Measurement(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="SET NULL"), nullable=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=utc_now, nullable=False, index=True)
     ph = Column(Float, nullable=True)
     alkalinity_dkh = Column(Float, nullable=True)
     kh = Column(Float, nullable=True)
@@ -141,7 +150,7 @@ class MaintenanceTask(Base):
     next_due_at = Column(DateTime(timezone=True), nullable=True)
     is_enabled = Column(Boolean, default=True, nullable=False)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
     # Sinónimos para interoperabilidad
     tank_id = synonym("aquarium_id")
@@ -157,7 +166,7 @@ class MaintenanceLog(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     task_id = Column(Integer, ForeignKey("maintenance_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
     aquarium_id = Column(Integer, nullable=False, index=True)
-    completed_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     linked_water_change_id = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
 
@@ -172,9 +181,9 @@ class WaterChange(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     volume_liters = Column(Float, nullable=False)
     percentage = Column(Float, nullable=True)
-    performed_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    performed_at = Column(DateTime(timezone=True), default=utc_now)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
     aquarium_id = synonym("tank_id")
 
@@ -193,7 +202,7 @@ class PushSubscription(Base):
     user_agent = Column(String(500), nullable=True)
     notify_maintenance = Column(Boolean, default=True, nullable=False)
     notify_alerts = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
     user = relationship("User", back_populates="push_subscriptions")
 
@@ -209,7 +218,7 @@ class DiagnosticFeedback(Base):
     user_comment = Column(Text, nullable=False)
     category = Column(String(50), default="incorrect_diagnosis", nullable=False)
     consent_given = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
     user = relationship("User")
     tank = relationship("Tank")
@@ -235,78 +244,82 @@ class DiagnosticAudit(Base):
     cost_usd = Column(Float, default=0.0, nullable=False)
     token_count = Column(Integer, default=0, nullable=False)
     latency_ms = Column(Float, default=0.0, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False, index=True)
 
     user = relationship("User")
     tank = relationship("Tank")
 
 
-# ==============================================================================
-# MODELOS SQLALCHEMY ORM OFICIALES EN ESPAÑOL (acuarios y mediciones)
-# ==============================================================================
-
-class Acuario(Base):
-    __tablename__ = "acuarios"
-
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    nombre = Column(String(100), nullable=False)
-    volumen_litros = Column(Float, nullable=False)
-    usuario_id = Column(String(100), nullable=False, default="1", index=True)
-    reef_profile = Column(String(50), nullable=True)
-    dosing_method = Column(String(50), nullable=True)
-    lighting_par = Column(Integer, nullable=True)
-    flow_profile = Column(String(50), nullable=True)
-    creado_en = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
-
-    # Sinónimos para interoperabilidad total
-    volumen = synonym("volumen_litros")
-    name = synonym("nombre")
-    volume_liters = synonym("volumen_litros")
-    user_id = synonym("usuario_id")
-    created_at = synonym("creado_en")
-
-    mediciones = relationship("MedicionAcuario", back_populates="acuario", cascade="all, delete-orphan")
-
-
-class MedicionAcuario(Base):
-    __tablename__ = "mediciones"
+class PasswordResetToken(Base):
+    """
+    Token de restablecimiento de contraseña de un solo uso (Auditoría P0).
+    Almacena hash SHA-256 del token, JTI único, expiración y marca de uso.
+    """
+    __tablename__ = "password_reset_tokens"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    acuario_id = Column(Integer, ForeignKey("acuarios.id", ondelete="CASCADE"), nullable=False, index=True)
-    ph = Column(Float, nullable=True)
-    kh = Column(Float, nullable=True)
-    calcio = Column(Float, nullable=True)
-    calcium = Column(Float, nullable=True)
-    magnesio = Column(Float, nullable=True)
-    magnesium = Column(Float, nullable=True)
-    nitrato = Column(Float, nullable=True)
-    nitrate = Column(Float, nullable=True)
-    fosfato = Column(Float, nullable=True)
-    phosphate = Column(Float, nullable=True)
-    salinity = Column(Float, nullable=True)
-    temperature = Column(Float, nullable=True)
-    temperatura = Column(Float, nullable=True)
-    ammonia = Column(Float, nullable=True)
-    nitrite = Column(Float, nullable=True)
-    trace_elements = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
-    test_methods = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
-    fecha_registro = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    jti = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
-    # Sinónimos para interoperabilidad total
-    tank_id = synonym("acuario_id")
-    alkalinity_dkh = synonym("kh")
-    calcium_ppm = synonym("calcio")
-    magnesium_ppm = synonym("magnesio")
-    nitrate_ppm = synonym("nitrato")
-    phosphate_ppm = synonym("fosfato")
-    temperature_c = synonym("temperature")
-    timestamp = synonym("fecha_registro")
+    user = relationship("User")
 
-    acuario = relationship("Acuario", back_populates="mediciones")
-    tank = synonym("acuario")
 
-# Alias canónicos para modelos de base de datos
-Medicion = MedicionAcuario
+class RefreshToken(Base):
+    """
+    Sesiones de Refresh Tokens persistentes en BD con familias de tokens (P1.8).
+    Almacena hash SHA-256 del token, JTI único, family_id para rotación y detección de reúso,
+    fecha de expiración y fecha de revocación.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    jti = Column(String(64), nullable=False, unique=True, index=True)
+    family_id = Column(String(64), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
+
+    user = relationship("User")
+
+
+class UserDailyQuota(Base):
+    """
+    Control de cuota diaria persistente por usuario (P1.7).
+    Compartida entre escaneos y diagnósticos IA en PostgreSQL/SQLite.
+    """
+    __tablename__ = "user_daily_quotas"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD UTC
+    count = Column(Integer, default=0, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_user_daily_quota"),
+    )
+
+    user = relationship("User")
+
+
+class RateLimitRecord(Base):
+    """
+    Registro persistente de intentos para rate limiting (P1.7).
+    Controla límites por IP y por email en PostgreSQL/SQLite.
+    """
+    __tablename__ = "rate_limit_records"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    key = Column(String(255), nullable=False, index=True)      # e.g., 'ip:1.2.3.4', 'email:test@reef.com'
+    action = Column(String(50), nullable=False, index=True)    # 'auth', 'scan_burst', 'ai_burst'
+    timestamp = Column(Float, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
 
 
 # ==============================================================================
@@ -357,6 +370,21 @@ class ForgotPasswordRequest(BaseModel):
     def normalize_email(cls, v: str) -> str:
         return v.strip().lower() if isinstance(v, str) else v
 
+class ResendVerificationRequest(BaseModel):
+    email: str = Field(..., max_length=255, example="acuarista@reef.com", description="Correo para reenviar verificación")
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower() if isinstance(v, str) else v
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., max_length=1024, description="Token seguro de verificación de cuenta")
+
+    model_config = ConfigDict(extra="forbid")
+
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., max_length=512, description="Token seguro de restablecimiento")
     new_password: str = Field(
@@ -376,9 +404,7 @@ class ResetPasswordRequest(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     ok: bool = True
-    message: str
-    reset_url_dev: Optional[str] = None
-    reset_token_dev: Optional[str] = None
+    message: str = "Si tu correo está registrado, recibirás un enlace seguro para restablecer tu contraseña."
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
@@ -394,6 +420,7 @@ class UserResponse(BaseModel):
     subscription_tier: str = "free"
     is_admin: bool = False
     is_active: bool = True
+    email_verified: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -419,6 +446,13 @@ class AdminUserListItem(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class AccountDeleteRequest(BaseModel):
+    password: str = Field(..., min_length=1, description="Contraseña actual del usuario para confirmar la eliminación de la cuenta (P2.16)")
+    grace_period_days: Optional[int] = Field(0, ge=0, le=30, description="Días de gracia opcional antes del borrado permanente (0 para borrado inmediato)")
+
+    model_config = ConfigDict(extra="forbid")
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -521,30 +555,39 @@ class TankCreate(BaseModel):
                 data["reef_profile"] = None
         return data
 
-class TankUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    tank_type: Optional[str] = Field(None, max_length=50)
-    volume_liters: Optional[float] = Field(None, gt=0, le=100000.0)
-    reef_profile: Optional[str] = Field(None, max_length=50)
-    dosing_method: Optional[str] = Field(None, max_length=50)
-    lighting_par: Optional[int] = Field(None, ge=0, le=2000)
-    flow_profile: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = Field(None, max_length=2000)
+class TankTypeEnum(str, Enum):
+    reef = "reef"
+    freshwater = "freshwater"
+    planted = "planted"
+    fish_only = "fish_only"
+    soft_reef = "soft_reef"
+    lps_reef = "lps_reef"
+    mixed_reef = "mixed_reef"
+    sps_reef = "sps_reef"
+    freshwater_planted = "freshwater_planted"
+    freshwater_community = "freshwater_community"
+
+class ReefProfileEnum(str, Enum):
+    fish_only = "fish_only"
+    soft_reef = "soft_reef"
+    lps_reef = "lps_reef"
+    mixed_reef = "mixed_reef"
+    sps_reef = "sps_reef"
+
+class TankUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=80, description="Nombre del acuario (<= 80 car.)")
+    volume_liters: Optional[float] = Field(None, ge=1.0, le=50000.0, description="Volumen entre 1 y 50 000 litros")
+    tank_type: Optional[TankTypeEnum] = Field(None, description="Biotipo del acuario")
+    reef_profile: Optional[ReefProfileEnum] = Field(None, description="Perfil marino cerrado")
+    dosing_method: Optional[str] = Field(None, max_length=50, description="Método de dosificación")
+    lighting_par: Optional[int] = Field(None, ge=0, le=3000, description="PAR entero acotado")
+    flow_profile: Optional[str] = Field(None, max_length=50, description="Perfil de flujo")
+    notes: Optional[str] = Field(None, max_length=500, description="Notas (<= 500 car.)")
 
     model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="before")
-    @classmethod
-    def handle_type_alias(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "type" in data:
-                raw_type = data.pop("type")
-                if raw_type:
-                    data["tank_type"] = normalize_tank_type_value(raw_type)
-        return data
-
-class AquariumUpdate(TankUpdate):
-    pass
+TankUpdate = TankUpdateRequest
+AquariumUpdate = TankUpdateRequest
     
 class TankResponse(BaseModel):
     id: int
@@ -772,20 +815,6 @@ class PredictionResponse(BaseModel):
 # ESQUEMAS PYDANTIC v2 - ANÁLISIS CLÍNICO CON IA ESTRUCTURADO (GEMINI)
 # ==============================================================================
 
-class DosisRecomendada(BaseModel):
-    parametro: str = Field(description="Nombre del parámetro a ajustar (ej. Alcalinidad, Calcio)")
-    producto: str = Field(description="Nombre comercial o genérico del aditivo (ej. Bicarbonato de sodio, Cloruro de calcio)")
-    cantidad_sugerida: str = Field(description="Dosis exacta con unidades (ej. 15 ml o 5 gramos)")
-
-class AnalisisAcuarioSchema(BaseModel):
-    diagnostico_general: str = Field(description="Resumen clínico del estado químico actual del tanque.")
-    nivel_riesgo: str = Field(description="Clasificación del riesgo: 'Bajo', 'Moderado', 'Crítico' o 'Colapso Inminente'")
-    alerta_predictiva: str = Field(description="Predicción de lo que ocurrirá en las próximas 48 horas si no se actúa.")
-    acciones_correctoras: List[DosisRecomendada] = Field(description="Lista de acciones y dosificaciones requeridas.")
-
-# Alias de compatibilidad directa para AnalisisAcuarioResponse
-AnalisisAcuarioResponse = AnalisisAcuarioSchema
-
 class AquariumDataRequest(BaseModel):
     nombre_acuario: str = Field("Principal", max_length=100, example="Arrecife Mixto SPS/LPS", description="Nombre del acuario")
     volumen_litros: float = Field(280.0, gt=0, le=100000.0, example=280.0, description="Volumen del acuario en litros")
@@ -814,7 +843,7 @@ class AquariumDataRequest(BaseModel):
 
 class AquariumAnalysisResponse(BaseModel):
     status: str = "success"
-    analisis: AnalisisAcuarioSchema
+    analisis: Any
 
 class PredictiveAnalysisJsonResponse(BaseModel):
     status: str = "success"

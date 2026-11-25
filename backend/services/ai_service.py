@@ -2,18 +2,15 @@ import os
 import re
 import json
 import time
+import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple, Set
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.models import (
-    AnalisisAcuarioSchema,
-    AnalisisAcuarioResponse,
-    DosisRecomendada,
-    MedicionAcuario,
     Measurement,
     DiagnosticAudit
 )
@@ -45,9 +42,114 @@ load_dotenv()
 
 logger = logging.getLogger("aquapulse.ai_service")
 
-# Modelos recomendados: usuario solicita gemini-2.5-flash, con fallback a gemini-3.1-flash-lite y 3.8-flash
-PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
+# Modelos de Gemini oficiales vigentes y catálogo de obsolescencia (P2.14)
+SUPPORTED_GEMINI_MODELS = {
+    "gemini-3.8-flash": {"status": "active", "recommended": True},
+    "gemini-3.6-flash": {"status": "active", "recommended": False},
+    "gemini-3.5-flash-lite": {"status": "active", "recommended": True, "light": True},
+    "gemini-3.1-flash-lite": {"status": "active", "recommended": True, "light": True},
+}
+
+DEPRECATED_MODELS = {
+    "gemini-2.5-flash": "Deprecado oficialmente (reemplazado por gemini-3.5-flash-lite / gemini-3.8-flash, retiro 1 dic 2026)",
+    "gemini-2.5-pro": "Deprecado oficialmente (reemplazado por gemini-3.8-flash, retiro 1 dic 2026)",
+    "gemini-1.5-flash": "Retirado de servicio",
+    "gemini-1.5-pro": "Retirado de servicio",
+}
+
+AI_GENERATION_MAX_OUTPUT_TOKENS = 4096
+AI_GENERATION_THINKING_BUDGET = 0
+
+def validate_gemini_model(model_name: Optional[str]) -> str:
+    """
+    Verifica que el modelo de Gemini sea obligatorio por variable de entorno
+    y exista dentro del catálogo oficial vigente (P2.14).
+    """
+    if not model_name or not str(model_name).strip():
+        raise ValueError(
+            "La variable de entorno 'GEMINI_MODEL' es obligatoria. "
+            f"Modelos oficiales vigentes: {list(SUPPORTED_GEMINI_MODELS.keys())}."
+        )
+    clean_model = str(model_name).strip()
+    if clean_model.startswith("gemini-mock"):
+        return clean_model
+
+    if clean_model in DEPRECATED_MODELS:
+        raise ValueError(
+            f"El modelo '{clean_model}' está obsoleto/deprecado: {DEPRECATED_MODELS[clean_model]}. "
+            f"Por favor actualiza a uno vigente: {list(SUPPORTED_GEMINI_MODELS.keys())}."
+        )
+    if clean_model not in SUPPORTED_GEMINI_MODELS:
+        raise ValueError(
+            f"El modelo '{clean_model}' no existe o no es un modelo oficial soportado. "
+            f"Modelos oficiales vigentes: {list(SUPPORTED_GEMINI_MODELS.keys())}."
+        )
+    return clean_model
+
+def validate_gemini_tier() -> bool:
+    """
+    Verifica que en entorno de producción se utilice una clave/tier de pago (Pay-As-You-Go / Enterprise)
+    de Google Gemini API para garantizar que los datos de telemetría de los usuarios no sean
+    utilizados por Google para entrenar o mejorar sus modelos (P3.19 / GDPR / Play Store).
+    """
+    is_prod = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+    tier = os.getenv("GEMINI_TIER", "pay-as-you-go" if is_prod else "free").strip().lower()
+
+    if is_prod and tier in ["free", "unpaid", "trial_unpaid"]:
+        raise RuntimeError(
+            "POLÍTICA DE PRIVACIDAD: En entorno de producción (ENVIRONMENT=production) "
+            "la API de Google Gemini debe ser de nivel de pago (GEMINI_TIER=pay-as-you-go o paid). "
+            "En el nivel gratuito de Google AI Studio los datos de los usuarios pueden ser utilizados "
+            "para entrenar modelos de IA, lo que infringe la política de privacidad y protección de datos de AquaPulse."
+        )
+    return True
+
+RAW_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+PRIMARY_MODEL = validate_gemini_model(RAW_GEMINI_MODEL)
+FALLBACK_MODELS = [PRIMARY_MODEL, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+
+
+def first_not_none(*vals):
+    """
+    Retorna el primer valor que no sea None (P0.5).
+    Preserva estrictamente el valor numérico 0 y 0.0 para evitar descartar mediciones válidas.
+    """
+    for v in vals:
+        if v is not None:
+            return v
+    return None
+
+
+def sanitize_prompt_text(text: Optional[str], max_len: int = 500) -> str:
+    """
+    Sanea textos libres (nombres de tanques, notas de usuario, texto de imágenes)
+    antes de incluirlos en prompts dirigidos a Gemini (P1.10).
+    Neutraliza intentos de inyección de prompt, elimina caracteres de control
+    y bloques delimitadores de markdown/JSON.
+    """
+    if not text:
+        return ""
+    val = str(text).strip()
+    # Eliminar bloques de código markdown y delimitadores que puedan confundir el parser JSON
+    val = re.sub(r"```+", "", val)
+    # Neutralizar caracteres de control preservando espacios comunes
+    val = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", val)
+    # Patrones comunes de prompt injection
+    injection_patterns = [
+        r"(?i)ignore\s+(all\s+)?(previous|prior)\s+instructions",
+        r"(?i)system\s+prompt",
+        r"(?i)system\s*:",
+        r"(?i)human\s*:",
+        r"(?i)assistant\s*:",
+        r"(?i)override\s+rules",
+        r"(?i)disregard\s+rules"
+    ]
+    for pattern in injection_patterns:
+        val = re.sub(pattern, "[UNTRUSTED_DATA]", val)
+    # Acotar longitud
+    if len(val) > max_len:
+        val = val[:max_len]
+    return val
 
 
 def get_current_month_ai_spend(db: Optional[Session]) -> float:
@@ -55,7 +157,7 @@ def get_current_month_ai_spend(db: Optional[Session]) -> float:
     if not db:
         return 0.0
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         first_day_of_month = datetime(now.year, now.month, 1)
         total = db.query(func.coalesce(func.sum(DiagnosticAudit.cost_usd), 0.0)).filter(
             DiagnosticAudit.created_at >= first_day_of_month
@@ -64,6 +166,68 @@ def get_current_month_ai_spend(db: Optional[Session]) -> float:
     except Exception as e:
         logger.debug(f"Aviso consultando gasto de IA: {e}")
         return 0.0
+
+
+# Presupuesto mensual individual por usuario (P2.15)
+USER_MONTHLY_AI_BUDGET_USD = float(os.getenv("USER_MONTHLY_AI_BUDGET_USD", "2.00"))
+
+
+def get_current_month_user_ai_spend(db: Optional[Session], user_id: Optional[int]) -> float:
+    """Calcula el gasto acumulado en USD en llamadas a Gemini por un usuario en el mes en curso (P2.15)."""
+    if not db or not user_id:
+        return 0.0
+    try:
+        now = datetime.now(timezone.utc)
+        first_day_of_month = datetime(now.year, now.month, 1)
+        total = db.query(func.coalesce(func.sum(DiagnosticAudit.cost_usd), 0.0)).filter(
+            DiagnosticAudit.user_id == user_id,
+            DiagnosticAudit.created_at >= first_day_of_month
+        ).scalar()
+        return round(float(total or 0.0), 4)
+    except Exception as e:
+        logger.debug(f"Aviso consultando gasto de IA de usuario: {e}")
+        return 0.0
+
+
+def should_execute_double_pass(rules_max_severity: str) -> bool:
+    """
+    Control de costos (P2.15):
+    Ejecuta la segunda llamada de verificación (doble pasada) únicamente
+    si la severidad calculada por las reglas determinísticas es 'warning' o 'critical'.
+    Para lecturas estables ('ok') o preventivas ('watch'), se ahorra el segundo llamado a Gemini.
+    """
+    return str(rules_max_severity).lower() in ["warning", "critical"]
+
+
+# Caché en memoria para diagnósticos con entradas idénticas (P2.15)
+_DIAGNOSIS_CACHE: Dict[str, Tuple[float, Any]] = {}
+DIAGNOSIS_CACHE_TTL_SECONDS = 900  # 15 minutos
+
+
+def get_diagnosis_cache_key(tank_id: Any, profile: str, inputs: Dict[str, Any]) -> str:
+    """Genera hash determinístico para cachear diagnósticos con entradas idénticas (P2.15)."""
+    norm_inputs = {
+        str(k): round(float(v), 4) if isinstance(v, (int, float)) else str(v)
+        for k, v in sorted(inputs.items()) if v is not None
+    }
+    raw = f"{tank_id}:{profile}:{json.dumps(norm_inputs, sort_keys=True)}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def check_diagnosis_cache(cache_key: str) -> Optional[Any]:
+    now = time.time()
+    if cache_key in _DIAGNOSIS_CACHE:
+        ts, result = _DIAGNOSIS_CACHE[cache_key]
+        if now - ts <= DIAGNOSIS_CACHE_TTL_SECONDS:
+            return result
+        del _DIAGNOSIS_CACHE[cache_key]
+    return None
+
+
+def set_diagnosis_cache(cache_key: str, result: Any) -> None:
+    if len(_DIAGNOSIS_CACHE) > 1000:
+        _DIAGNOSIS_CACHE.clear()
+    _DIAGNOSIS_CACHE[cache_key] = (time.time(), result)
 
 
 def record_diagnostic_audit(
@@ -146,7 +310,7 @@ def get_ai_audit_statistics(db: Session, sample_size: int = 100) -> Dict[str, An
     """Retorna métricas consolidadas de auditoría operativa para /api/admin y monitor /api/health (Fase 7)."""
     try:
         budget_limit = float(os.getenv("GEMINI_MONTHLY_BUDGET_USD", "25.0"))
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         first_day_of_month = datetime(now.year, now.month, 1)
 
         month_spend = db.query(func.coalesce(func.sum(DiagnosticAudit.cost_usd), 0.0)).filter(
@@ -197,27 +361,15 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
     Obtiene el historial cronológico de mediciones de un acuario en las últimas 48 horas
     y lo resume en texto estructurado comprensible para la IA de AquaPulse.
     """
-    hace_48_horas = datetime.utcnow() - timedelta(hours=48)
+    hace_48_horas = datetime.now(timezone.utc) - timedelta(hours=48)
 
     registros = (
-        db.query(MedicionAcuario)
-        .filter(MedicionAcuario.acuario_id == acuario_id)
-        .filter(MedicionAcuario.fecha_registro >= hace_48_horas)
-        .order_by(MedicionAcuario.fecha_registro.asc())
+        db.query(Measurement)
+        .filter(Measurement.tank_id == acuario_id)
+        .filter(Measurement.timestamp >= hace_48_horas)
+        .order_by(Measurement.timestamp.asc())
         .all()
     )
-
-    if not registros:
-        try:
-            registros = (
-                db.query(Measurement)
-                .filter(Measurement.tank_id == acuario_id)
-                .filter(Measurement.timestamp >= hace_48_horas)
-                .order_by(Measurement.timestamp.asc())
-                .all()
-            )
-        except Exception:
-            pass
 
     if not registros:
         return "No hay registros en las últimas 48 horas. Estado inicial o estable."
@@ -244,248 +396,6 @@ def obtener_tendencia_ultimas_48h(db: Session, acuario_id: int) -> str:
         )
 
     return "\n".join(resumen_historial)
-
-
-def _generar_analisis_fallback(
-    nombre: str,
-    volumen: float,
-    ph: Optional[float],
-    kh: Optional[float],
-    calcio: Optional[float],
-    magnesio: Optional[float],
-    nitrato: Optional[float],
-    fosfato: Optional[float],
-    tendencia: str,
-    temperatura: Optional[float] = None,
-    tipo: str = "mixto",
-    reef_profile: Optional[str] = None,
-    dosing_method: Optional[str] = None,
-    lighting_par: Optional[int] = None,
-    flow_profile: Optional[str] = None,
-    salinity: Optional[float] = None,
-    ammonia: Optional[float] = None,
-    nitrite: Optional[float] = None,
-    trace_elements: Optional[Dict[str, Any]] = None,
-    test_methods: Optional[Dict[str, Any]] = None,
-    delta_kh_24h: Optional[float] = None,
-    dynamic_alerts: Optional[List[Dict[str, Any]]] = None,
-    maintenance_tasks: Optional[List[Dict[str, Any]]] = None
-) -> AnalisisAcuarioResponse:
-    """Genera un análisis clínico estructurado inteligente de respaldo respetando las reglas de biotipo y perfiles marinos."""
-    risk = "Bajo"
-    tipo_normalizado = (tipo or "mixto").strip().lower()
-    es_marino = tipo_normalizado in ["arrecife", "reef", "mixed", "mixto", "marine_fish", "peces_marinos", "fowlr", "fish_only", "soft_reef", "mixed_reef", "sps_reef", "lps_reef"]
-    
-    profile_info = get_marine_profile(reef_profile or tipo_normalizado)
-    profile_id = profile_info["id"]
-
-    alert = f"Parámetros dentro de umbrales operativos estables para '{profile_info['name']}'. Mantener rutina regular de filtración."
-    acciones: List[DosisRecomendada] = []
-
-    # 0. Correlación con Equipo y Mantenimiento Mecánico
-    if maintenance_tasks:
-        # A. Picos de NO3 o PO4 + filtración mecánica/skimmer vencida o > 7 días
-        mech_or_skimmer_overdue = [
-            t for t in maintenance_tasks
-            if t.get("task_key") in ["mechanical_filter", "skimmer_cup"]
-            and (t.get("status") == "overdue" or (t.get("days_since_last") is not None and t.get("days_since_last") > 7))
-        ]
-        has_high_nutrients = (
-            (nitrato is not None and nitrato > (profile_info["targets"]["nitrate"]["max"] if es_marino else 25.0)) or
-            (fosfato is not None and fosfato > (profile_info["targets"]["phosphate"]["max"] if es_marino else 0.10))
-        )
-        if mech_or_skimmer_overdue and has_high_nutrients:
-            task_names = ", ".join(t.get("title", "") for t in mech_or_skimmer_overdue)
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Filtración Mecánica / Skimmer",
-                    producto=f"Limpieza prioritaria de filtración ({task_names})",
-                    cantidad_sugerida="La acumulación de detrito orgánico en calcetines/esponjas o copa de skimmer es la causa raíz primaria de NO3/PO4. Lavar o sustituir antes de añadir resinas o químicos."
-                )
-            )
-
-        # B. SPS / Mixto / LPS + bombas de recirculación vencidas
-        if es_marino and profile_id in ["sps_reef", "mixed_reef", "lps_reef"]:
-            pumps_overdue = [t for t in maintenance_tasks if t.get("task_key") == "pumps_cleaning" and t.get("status") == "overdue"]
-            if pumps_overdue:
-                acciones.append(
-                    DosisRecomendada(
-                        parametro="Flujo / Bombas de recirculación",
-                        producto="Limpieza profunda y descalcificación con ácido cítrico",
-                        cantidad_sugerida="Limpieza de bombas vencida. La precipitación de sarro reduce hasta 40% el flujo real, propiciando zonas muertas y acumulación de cianobacteria."
-                    )
-                )
-
-        # C. Oscilación de KH + dosificadoras/sondas vencidas
-        has_kh_issue = any("KH" in d.get("title", "") for d in (dynamic_alerts or [])) or (delta_kh_24h is not None and delta_kh_24h > 0.3)
-        if has_kh_issue:
-            doser_overdue = [t for t in maintenance_tasks if t.get("task_key") == "doser_probes" and t.get("status") == "overdue"]
-            if doser_overdue:
-                acciones.append(
-                    DosisRecomendada(
-                        parametro="Dosificadoras / Sondas",
-                        producto="Calibración volumétrica de cabezales y sondas",
-                        cantidad_sugerida="Inestabilidad de KH detectada con calibración de dosificadoras vencida. Verifica mangueras y calibra la dosificación antes de ajustar dosis diarias."
-                    )
-                )
-
-    # 1. Integración de alertas dinámicas prioritarias
-    if dynamic_alerts:
-        for d_alert in dynamic_alerts:
-            sev = d_alert.get("severity")
-            if sev == "critical":
-                risk = "Crítico"
-                alert = d_alert["message"]
-            elif sev == "warning" and risk != "Crítico":
-                risk = "Moderado"
-                alert = d_alert["message"]
-            
-            acciones.append(
-                DosisRecomendada(
-                    parametro=d_alert.get("title", "Alerta Dinámica"),
-                    producto=d_alert.get("recommendation", "Acción preventiva"),
-                    cantidad_sugerida=d_alert.get("message", "")
-                )
-            )
-
-    # 2. Monitoreo de Temperatura
-    if temperatura is not None:
-        if temperatura > 27.5:
-            risk = "Crítico" if temperatura >= 28.5 else ("Moderado" if risk == "Bajo" else risk)
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Temperatura",
-                    producto="Enfriador (Chiller) o ventiladores de superficie",
-                    cantidad_sugerida=f"Temperatura a {temperatura} °C excede el rango óptimo. Aumentar disipación térmica."
-                )
-            )
-        elif temperatura < 23.5:
-            risk = "Moderado" if risk == "Bajo" else risk
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Temperatura",
-                    producto="Calentador termostático",
-                    cantidad_sugerida=f"Temperatura a {temperatura} °C por debajo del rango seguro. Calibrar calentador a 25.0 °C."
-                )
-            )
-
-    # 3. Monitoreo de Salinidad
-    if salinity is not None and es_marino:
-        targets = profile_info["targets"]["salinity"]
-        if salinity < targets["min"]:
-            risk = "Moderado" if risk == "Bajo" else risk
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Salinidad",
-                    producto="Agua salada concentrada en reposición",
-                    cantidad_sugerida=f"Salinidad a {salinity} SG por debajo del mínimo ({targets['min']} SG). Rellenar evaporación con agua salada suavemente."
-                )
-            )
-        elif salinity > targets["max"]:
-            risk = "Moderado" if risk == "Bajo" else risk
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Salinidad",
-                    producto="Agua pura de osmosis (RO/DI)",
-                    cantidad_sugerida=f"Salinidad a {salinity} SG por encima del máximo ({targets['max']} SG). Retirar agua salada y agregar RO/DI."
-                )
-            )
-
-    # 4. Amoníaco y Nitrito
-    if ammonia is not None and ammonia > 0.05:
-        risk = "Crítico"
-        alert = f"Amoníaco detectable a {ammonia} ppm. Riesgo inminente de toxicidad branquial en peces e invertebrados."
-        acciones.append(
-            DosisRecomendada(
-                parametro="Amoníaco (NH3)",
-                producto="Acondicionador neutralizador de amonio (ej. Seachem Prime) y bacterias vivas nitrificantes",
-                cantidad_sugerida="Dosis de emergencia y suspender alimentación."
-            )
-        )
-    if nitrite is not None and nitrite > 0.1:
-        risk = "Crítico" if risk != "Crítico" else risk
-        acciones.append(
-            DosisRecomendada(
-                parametro="Nitrito (NO2)",
-                producto="Bacterias nitrificantes y cambio de agua parcial",
-                cantidad_sugerida=f"Nitrito a {nitrite} ppm. Añadir ampolletas de bacterias heterótrofas/autótrofas."
-            )
-        )
-
-    # 5. KH y Balance de Nutrientes (Solo para perfiles con corales)
-    if kh is not None and es_marino and profile_id != "fish_only":
-        kh_targets = profile_info["targets"]["kh"]
-        if kh < kh_targets["min"]:
-            risk = "Crítico" if kh < 6.8 else ("Moderado" if risk == "Bajo" else risk)
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Alcalinidad (KH)",
-                    producto="Solución tampón de carbonatos / Bicarbonato sódico",
-                    cantidad_sugerida=f"{round(float(volumen or 280) * 0.04, 1)} ml/g diluido en zona de alto flujo. Incrementar máx 0.5 dKH/día."
-                )
-            )
-        elif kh > kh_targets["max"]:
-            risk = "Moderado" if risk == "Bajo" else risk
-            acciones.append(
-                DosisRecomendada(
-                    parametro="Alcalinidad (KH)",
-                    producto="Ajuste de dosificadora",
-                    cantidad_sugerida=f"KH a {kh} dKH por encima del rango de {profile_info['name']} ({kh_targets['min']}-{kh_targets['max']} dKH). Suspender dosificación 24h."
-                )
-            )
-
-    # 6. Nutrientes NO3 y PO4
-    if es_marino:
-        no3_targets = profile_info["targets"]["nitrate"]
-        po4_targets = profile_info["targets"]["phosphate"]
-        if nitrato is not None:
-            if nitrato > no3_targets["max"]:
-                risk = "Moderado" if risk == "Bajo" else risk
-                acciones.append(
-                    DosisRecomendada(
-                        parametro="Nitrato (NO3)",
-                        producto="Cambio parcial de agua y ajuste de skimmer",
-                        cantidad_sugerida=f"{round(float(volumen or 280) * 0.15, 1)} L (15%) con agua RO/DI y sal marina de calidad."
-                    )
-                )
-        if fosfato is not None and profile_id != "fish_only":
-            if fosfato > po4_targets["max"]:
-                risk = "Moderado" if risk == "Bajo" else risk
-                acciones.append(
-                    DosisRecomendada(
-                        parametro="Fosfato (PO4)",
-                        producto="Resina de óxido férrico (GFO) o eliminador de PO4 a base de lantano",
-                        cantidad_sugerida="Añadir en reactor de lecho fluido con flujo lento para evitar precipitación."
-                    )
-                )
-
-    if not acciones:
-        acciones = [
-            DosisRecomendada(
-                parametro="Rutina de Mantenimiento",
-                producto="Cambio de agua regular y monitoreo semanal",
-                cantidad_sugerida=f"{round(float(volumen or 280) * 0.1, 1)} litros (10%) para reposición de oligoelementos y dilución de compuestos orgánicos."
-            )
-        ]
-
-    diagnostico = (
-        f"Diagnóstico técnico AquaPulse para '{nombre}' ({volumen} L, biotipo '{tipo}', perfil '{profile_info['name']}'): "
-        f"pH={ph if ph is not None else '8.2'}, "
-        f"KH={kh if kh is not None else '8.2'} dKH, "
-        f"{f'Ca={calcio} ppm, Mg={magnesio} ppm, ' if profile_id != 'fish_only' else ''}"
-        f"NO3={nitrato if nitrato is not None else '5.0'} ppm, "
-        f"PO4={fosfato if fosfato is not None else '0.04'} ppm"
-        f"{f', Temp={temperatura} °C' if temperatura is not None else ''}"
-        f"{f', Salinidad={salinity} SG' if salinity is not None else ''}. "
-        f"Tendencia: '{tendencia}'."
-    )
-
-    return AnalisisAcuarioResponse(
-        diagnostico_general=diagnostico,
-        nivel_riesgo=risk,
-        alerta_predictiva=alert,
-        acciones_correctoras=acciones
-    )
 
 
 def analizar_parametros_estructurado(
@@ -525,6 +435,9 @@ def analizar_parametros_estructurado(
         api_key.startswith("inserta_")
     )
 
+    if not is_dummy_key:
+        validate_gemini_tier()
+
     nombre = datos_acuario.get("nombre_acuario", "Principal")
     volumen = float(datos_acuario.get("volumen_litros") or 280.0)
     tipo = (
@@ -538,16 +451,16 @@ def analizar_parametros_estructurado(
     lighting_par = datos_acuario.get("lighting_par")
     flow_profile = datos_acuario.get("flow_profile")
 
-    ph = datos_acuario.get("ph")
-    kh = datos_acuario.get("kh") or datos_acuario.get("alkalinity_dkh")
-    calcio = datos_acuario.get("calcio") or datos_acuario.get("calcium") or datos_acuario.get("calcium_ppm")
-    magnesio = datos_acuario.get("magnesio") or datos_acuario.get("magnesium") or datos_acuario.get("magnesium_ppm")
-    nitrato = datos_acuario.get("nitrato") or datos_acuario.get("nitrate") or datos_acuario.get("nitrate_ppm")
-    fosfato = datos_acuario.get("fosfato") or datos_acuario.get("phosphate") or datos_acuario.get("phosphate_ppm")
-    temperatura = datos_acuario.get("temperatura") or datos_acuario.get("temperature")
-    salinity = datos_acuario.get("salinity") or datos_acuario.get("salinity_ppt")
-    ammonia = datos_acuario.get("ammonia") or datos_acuario.get("ammonia_ppm")
-    nitrite = datos_acuario.get("nitrite") or datos_acuario.get("nitrite_ppm")
+    ph = first_not_none(datos_acuario.get("ph"))
+    kh = first_not_none(datos_acuario.get("kh"), datos_acuario.get("alkalinity_dkh"))
+    calcio = first_not_none(datos_acuario.get("calcio"), datos_acuario.get("calcium"), datos_acuario.get("calcium_ppm"))
+    magnesio = first_not_none(datos_acuario.get("magnesio"), datos_acuario.get("magnesium"), datos_acuario.get("magnesium_ppm"))
+    nitrato = first_not_none(datos_acuario.get("nitrato"), datos_acuario.get("nitrate"), datos_acuario.get("nitrate_ppm"))
+    fosfato = first_not_none(datos_acuario.get("fosfato"), datos_acuario.get("phosphate"), datos_acuario.get("phosphate_ppm"))
+    temperatura = first_not_none(datos_acuario.get("temperatura"), datos_acuario.get("temperature"))
+    salinity = first_not_none(datos_acuario.get("salinity"), datos_acuario.get("salinity_ppt"))
+    ammonia = first_not_none(datos_acuario.get("ammonia"), datos_acuario.get("ammonia_ppm"))
+    nitrite = first_not_none(datos_acuario.get("nitrite"), datos_acuario.get("nitrite_ppm"))
     trace_elements = datos_acuario.get("trace_elements") or {}
     test_methods = datos_acuario.get("test_methods") or {}
     tendencia = datos_acuario.get("tendencia_reciente", "Estable")
@@ -651,8 +564,10 @@ def analizar_parametros_estructurado(
             m_0 = history_measurements[0]
             raw_ts = m_0.get("timestamp") or m_0.get("fecha_registro")
             if raw_ts:
-                dt_meas = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00")).replace(tzinfo=None)
-                days_since_last = (datetime.utcnow() - dt_meas).total_seconds() / 86400.0
+                dt_meas = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                if dt_meas.tzinfo is None:
+                    dt_meas = dt_meas.replace(tzinfo=timezone.utc)
+                days_since_last = (datetime.now(timezone.utc) - dt_meas).total_seconds() / 86400.0
         except Exception:
             pass
 
@@ -681,11 +596,11 @@ def analizar_parametros_estructurado(
             days_since_last_measurement=days_since_last
         )
 
-    # Control de Presupuesto Operativo Gemini (Fase 7)
+    # Control de Presupuesto Operativo Gemini Global (Fase 7)
     budget_limit_usd = float(os.getenv("GEMINI_MONTHLY_BUDGET_USD", "25.0"))
     current_spend_usd = get_current_month_ai_spend(db)
     if current_spend_usd >= budget_limit_usd:
-        budget_msg = f"Límite mensual de gasto en IA alcanzado (${current_spend_usd:.2f} >= ${budget_limit_usd:.2f}). Activando modo determinístico por reglas."
+        budget_msg = f"Límite mensual global de gasto en IA alcanzado (${current_spend_usd:.2f} >= ${budget_limit_usd:.2f}). Activando modo determinístico por reglas."
         logger.warning(budget_msg)
         record_diagnostic_audit(
             db=db,
@@ -709,6 +624,44 @@ def analizar_parametros_estructurado(
             days_since_last_measurement=days_since_last
         )
 
+    # Control de Presupuesto Operativo por Usuario (P2.15)
+    user_spend_usd = get_current_month_user_ai_spend(db, effective_user_id)
+    if user_spend_usd >= USER_MONTHLY_AI_BUDGET_USD:
+        user_budget_msg = f"Tope mensual de gasto en IA por usuario alcanzado (${user_spend_usd:.2f} >= ${USER_MONTHLY_AI_BUDGET_USD:.2f}). Activando modo determinístico por reglas."
+        logger.warning(user_budget_msg)
+        record_diagnostic_audit(
+            db=db,
+            user_id=effective_user_id,
+            tank_id=effective_tank_id,
+            prompt_version="v1",
+            inputs=raw_params,
+            rules_alerts=all_rules_alerts,
+            raw_ai_output=None,
+            status="budget_exceeded",
+            rejection_reason=user_budget_msg,
+            cost_usd=0.0,
+            token_count=0,
+            latency_ms=round((time.time() - start_time) * 1000, 2)
+        )
+        return generate_rules_deterministic_diagnosis(
+            aquarium_name=nombre,
+            biotope=profile_info["name"],
+            rules_alerts=all_rules_alerts,
+            measured_intervals=list(intervals_dict.values()),
+            days_since_last_measurement=days_since_last
+        )
+
+    # Verificación de Caché de Diagnósticos Idénticos (P2.15)
+    diagnosis_cache_key = get_diagnosis_cache_key(
+        tank_id=effective_tank_id,
+        profile=profile_info.get("name", ""),
+        inputs=raw_params
+    )
+    cached_diagnosis = check_diagnosis_cache(diagnosis_cache_key)
+    if cached_diagnosis is not None:
+        logger.info(f"Diagnóstico recuperado exitosamente desde caché determinística (key: {diagnosis_cache_key[:8]})")
+        return cached_diagnosis
+
     # ==========================================================================
     # PASO 2: GEMINI (EXPLICA, NO DECIDE) CON SYSTEM PROMPT VERSIONADO
     # ==========================================================================
@@ -731,17 +684,23 @@ def analizar_parametros_estructurado(
             for k, v in intervals_dict.items()
         }
 
+        safe_nombre = sanitize_prompt_text(nombre, max_len=80)
+        safe_tendencia = sanitize_prompt_text(tendencia, max_len=500)
+
+        # Recortar tareas de mantenimiento a máximo 5 recientes (P2.15)
+        pruned_maintenance = maintenance_tasks[:5] if isinstance(maintenance_tasks, list) else maintenance_tasks
+
         user_prompt = f"""
         EVALUACIÓN CLÍNICA DETERMINÍSTICA PRE-COMPUTADA (INAPELABLE):
-        - Acuario: '{nombre}' ({volumen} L)
+        - Acuario: '{safe_nombre}' ({volumen} L)
         - Biotipo / Perfil de Arrecife: {profile_info['name']} ({profile_info['id']})
         - Método de dosificación: {DOSING_METHOD_LABELS.get(dosing_method, dosing_method or 'No especificado')}
         - Mediciones con Intervalos de Incertidumbre [v - e, v + e]: {json.dumps(intervals_summary, ensure_ascii=False)}
         - Alertas Determinísticas Pre-evaluadas (Inapelables): {json.dumps(all_rules_alerts, ensure_ascii=False)}
         - Severidad máxima calculada por reglas: {rules_max_severity.upper()}
         - Antigüedad del último test: {f'{days_since_last:.1f} días' if days_since_last is not None else 'Sin fecha exacta'}
-        - Correlación de mantenimiento y equipo: {json.dumps(maintenance_tasks, ensure_ascii=False) if maintenance_tasks else 'Al día'}
-        - Tendencia reciente: {tendencia}
+        - Correlación de mantenimiento y equipo: {json.dumps(pruned_maintenance, ensure_ascii=False) if pruned_maintenance else 'Al día'}
+        - Tendencia reciente: {safe_tendencia}
 
         REGLAS DE RESPUESTA:
         1. Eres una IA: explica el contexto biológico de los datos anteriores, NO decidas nuevos límites ni anules alertas.
@@ -764,7 +723,8 @@ def analizar_parametros_estructurado(
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
                         temperature=0.1,  # temperature <= 0.2
-                        max_output_tokens=1024,
+                        max_output_tokens=AI_GENERATION_MAX_OUTPUT_TOKENS,
+                        thinking_config=types.ThinkingConfig(thinking_budget=AI_GENERATION_THINKING_BUDGET),
                         response_mime_type="application/json",
                         response_schema=AIDiagnosisOutput,
                     ),
@@ -789,38 +749,41 @@ def analizar_parametros_estructurado(
             raise RuntimeError(f"Falla en generación con modelos Gemini: {last_error}")
 
         # ======================================================================
-        # PASO 3: DOBLE PASADA (SEGUNDA REVISIÓN INDEPENDIENTE)
+        # PASO 3: DOBLE PASADA (SEGUNDA REVISIÓN INDEPENDIENTE) CONDICIONAL (P2.15)
+        # Solo se ejecuta si la severidad de las reglas determinísticas es 'warning' o 'critical'
         # ======================================================================
         pass2_output: Optional[AIDiagnosisOutput] = None
-        try:
-            auditor_prompt = (
-                f"Audita críticamente la siguiente evaluación preliminar del acuario '{nombre}' con perfil '{profile_info['name']}':\n"
-                f"Severidad preliminar: {pass1_output.severity}, Acciones: {pass1_output.recommended_actions}\n"
-                f"Alertas determinísticas inapelables: {json.dumps(all_rules_alerts, ensure_ascii=False)}\n"
-                "Emite una segunda evaluación independiente de máxima prudencia biológica respetando estrictamente el catálogo cerrado de acciones."
-            )
-            resp_audit = client.models.generate_content(
-                model=PRIMARY_MODEL,
-                contents=auditor_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.1,
-                    max_output_tokens=1024,
-                    response_mime_type="application/json",
-                    response_schema=AIDiagnosisOutput,
-                ),
-            )
-            if resp_audit:
-                if hasattr(resp_audit, "parsed") and resp_audit.parsed is not None:
-                    pass2_output = resp_audit.parsed
-                elif resp_audit.text:
-                    c_txt = resp_audit.text.strip()
-                    if c_txt.startswith("```"):
-                        c_txt = re.sub(r"^```(?:json)?\s*", "", c_txt)
-                        c_txt = re.sub(r"\s*```$", "", c_txt)
-                    pass2_output = AIDiagnosisOutput.model_validate_json(c_txt)
-        except Exception as audit_err:
-            logger.debug(f"Aviso en segunda pasada de auditoría: {audit_err}. Procediendo con verificación estricta de Pasada 1.")
+        if should_execute_double_pass(rules_max_severity):
+            try:
+                auditor_prompt = (
+                    f"Audita críticamente la siguiente evaluación preliminar del acuario '{nombre}' con perfil '{profile_info['name']}':\n"
+                    f"Severidad preliminar: {pass1_output.severity}, Acciones: {pass1_output.recommended_actions}\n"
+                    f"Alertas determinísticas inapelables: {json.dumps(all_rules_alerts, ensure_ascii=False)}\n"
+                    "Emite una segunda evaluación independiente de máxima prudencia biológica respetando estrictamente el catálogo cerrado de acciones."
+                )
+                resp_audit = client.models.generate_content(
+                    model=PRIMARY_MODEL,
+                    contents=auditor_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=0.1,
+                        max_output_tokens=AI_GENERATION_MAX_OUTPUT_TOKENS,
+                        thinking_config=types.ThinkingConfig(thinking_budget=AI_GENERATION_THINKING_BUDGET),
+                        response_mime_type="application/json",
+                        response_schema=AIDiagnosisOutput,
+                    ),
+                )
+                if resp_audit:
+                    if hasattr(resp_audit, "parsed") and resp_audit.parsed is not None:
+                        pass2_output = resp_audit.parsed
+                    elif resp_audit.text:
+                        c_txt = resp_audit.text.strip()
+                        if c_txt.startswith("```"):
+                            c_txt = re.sub(r"^```(?:json)?\s*", "", c_txt)
+                            c_txt = re.sub(r"\s*```$", "", c_txt)
+                        pass2_output = AIDiagnosisOutput.model_validate_json(c_txt)
+            except Exception as audit_err:
+                logger.debug(f"Aviso en segunda pasada de auditoría: {audit_err}. Procediendo con verificación estricta de Pasada 1.")
 
         # Consolidar doble pasada si está disponible
         if pass2_output:
@@ -890,6 +853,8 @@ def analizar_parametros_estructurado(
             latency_ms=latency_ms
         )
 
+        # Cachear diagnóstico sanitizado final (P2.15)
+        set_diagnosis_cache(diagnosis_cache_key, sanitized_output)
         return sanitized_output
 
     except Exception as e:
@@ -919,11 +884,7 @@ def analizar_parametros_estructurado(
         raise e
 
 
-# Alias de compatibilidad
-analizar_parametros_acuario = analizar_parametros_estructurado
-analizar_acuario_estructurado = analizar_parametros_estructurado
-
-
-# Alias de compatibilidad
+# Función pública canónica de análisis IA (P2.17)
+# Alias para compatibilidad con código existente
 analizar_parametros_acuario = analizar_parametros_estructurado
 analizar_acuario_estructurado = analizar_parametros_estructurado

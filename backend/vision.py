@@ -95,7 +95,6 @@ Reglas estrictas de extracción:
 class ScanMeasurementRequest(BaseModel):
     image_base64: str = Field(..., description="Imagen en Base64 (incluyendo o no data:image/...)")
     preferred_parameter: Optional[str] = Field(None, max_length=50, description="Parámetro sugerido si el usuario preseleccionó uno")
-    demo_fallback: bool = Field(True, description="Si no hay API key configurada, simular lectura de muestra para pruebas de UI")
     save_image: bool = Field(False, description="Guardar la imagen solo si el usuario lo solicita explícitamente")
 
     model_config = ConfigDict(extra="forbid")
@@ -218,7 +217,11 @@ def analyze_test_image(
     if preferred_parameter and preferred_parameter.strip().lower() in ALLOWED_PARAMETERS:
         sanitized_param = preferred_parameter.strip().lower()
 
-    # Comprobación de API key
+    # Comprobación de API key y entorno de ejecución
+    env = os.environ.get("ENVIRONMENT", "").strip().lower()
+    is_dev = env == "development"
+    effective_demo_fallback = allow_demo_fallback and is_dev
+
     api_key = (
         os.environ.get("GEMINI_API_KEY") or
         os.environ.get("GOOGLE_API_KEY") or
@@ -231,10 +234,10 @@ def analyze_test_image(
         api_key.startswith("inserta_")
     )
 
-    # 2. Modo demostración si no hay API Key configurada
+    # 2. Modo demostración solo si no hay API Key y ENVIRONMENT=development (P0.4)
     if is_dummy_key:
-        if allow_demo_fallback:
-            logger.warning("⚠️ GEMINI_API_KEY no configurada. Generando borrador demostrativo para pruebas de UI.")
+        if effective_demo_fallback:
+            logger.warning("⚠️ GEMINI_API_KEY no configurada. Generando borrador demostrativo para pruebas en entorno development.")
             param = sanitized_param or "alkalinity_dkh"
 
             demo_values = {
@@ -264,23 +267,30 @@ def analyze_test_image(
                 raw_reading=str(val),
                 message="Lectura propuesta como borrador. Por favor verifica y confirma el valor antes de guardarlo."
             )
-        else:
-            return ScanMeasurementResponse(
-                success=False,
-                api_key_configured=False,
-                status="draft",
-                is_draft=True,
-                requires_review=True,
-                message="API Key no configurada. Por favor define GEMINI_API_KEY en el archivo backend/.env."
-            )
+
+        logger.error("GEMINI_API_KEY no configurada en entorno de producción.")
+        return ScanMeasurementResponse(
+            success=False,
+            api_key_configured=False,
+            status="error",
+            is_draft=True,
+            requires_review=True,
+            parameter=sanitized_param,
+            value=None,
+            confidence=0.0,
+            kit_detected=None,
+            notes=None,
+            raw_reading=None,
+            message="No se pudo leer la fotografía del test kit. Por favor ingresa el valor manualmente."
+        )
 
     # 3. Conexión con Google GenAI (Gemini Vision)
     try:
         from google import genai
         from google.genai import types
 
-        primary_model = os.environ.get("VISION_MODEL", "gemini-3.1-flash-lite")
-        fallback_models = [primary_model, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash-lite"]
+        primary_model = os.environ.get("VISION_MODEL", "gemini-3.5-flash-lite")
+        fallback_models = [primary_model, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
         candidate_models = list(dict.fromkeys(fallback_models))
 
         client = genai.Client(api_key=api_key)
@@ -350,7 +360,7 @@ def analyze_test_image(
 
     except Exception as e:
         logger.error(f"Error procesando imagen con Gemini Vision: {e}")
-        if allow_demo_fallback:
+        if effective_demo_fallback:
             logger.warning(f"Error con Gemini Vision ({e}). Activando fallback demostrativo para desarrollo/pruebas.")
             param = sanitized_param or "alkalinity_dkh"
             demo_values = {
@@ -382,8 +392,14 @@ def analyze_test_image(
         return ScanMeasurementResponse(
             success=False,
             api_key_configured=True,
-            status="draft",
+            status="error",
             is_draft=True,
             requires_review=True,
-            message=f"Error al analizar la imagen con el modelo de visión: {str(e)}"
+            parameter=sanitized_param,
+            value=None,
+            confidence=0.0,
+            kit_detected=None,
+            notes=None,
+            raw_reading=None,
+            message="No se pudo leer la fotografía del test kit. Por favor ingresa el valor manualmente."
         )

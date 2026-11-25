@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   CheckCircle2,
   Calendar,
-  Layers
+  Layers,
+  FileText,
+  X
 } from 'lucide-react';
 
 export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
@@ -29,13 +31,38 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
     subscriptionTier,
     updateProfile,
     logout,
-    openAuthModal
+    openAuthModal,
+    resendVerification
   } = useAuth();
 
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [selectedUnits, setSelectedUnits] = useState(unitPreference || 'liters');
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+  const [showLegalModal, setShowLegalModal] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendFeedback, setResendFeedback] = useState(null);
+
+  const handleResendVerificationInSettings = async () => {
+    if (!user?.email || resendingEmail) return;
+    triggerHaptic();
+    setResendingEmail(true);
+    setResendFeedback(null);
+    try {
+      const res = await resendVerification(user.email);
+      setResendFeedback({
+        type: 'success',
+        message: res?.message || t('common.emailResentSuccess') || 'Correo de activación reenviado con éxito. Revisa tu bandeja de entrada.'
+      });
+    } catch (err) {
+      setResendFeedback({
+        type: 'error',
+        message: err.message || t('common.emailResendError') || 'Error al reenviar correo de verificación'
+      });
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const currentLang = (i18n.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
 
@@ -264,6 +291,19 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
             </span>
           </button>
 
+          {/* Opción Privacidad y Términos */}
+          <button 
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setShowLegalModal(true);
+            }}
+            className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+          >
+            <span className="flex items-center">🔒 Privacidad y Términos de Uso</span>
+            <span className="text-gray-400">{'>'}</span>
+          </button>
+
           {/* Opción Panel Admin (Solo visible si es admin) */}
           {user?.is_admin && (
             <button 
@@ -296,14 +336,67 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
             </div>
             <div>
               <p className="text-sm font-black text-white">{user?.full_name || t('settings.defaultName')}</p>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <span className="text-xs text-slate-400 font-mono">{user?.email}</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  {t('common.active')}
-                </span>
+                {user?.email_verified ? (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    {t('common.active')}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 text-amber-400" />
+                    {t('common.unverifiedEmail') || 'Correo sin verificar'}
+                  </span>
+                )}
               </div>
             </div>
           </div>
+
+          {!user?.email_verified && (
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-200">
+                    {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaPulse'}
+                  </p>
+                  <p className="text-[11px] text-amber-300/80">
+                    Se requiere confirmación para sincronizar y registrar telemetría.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleResendVerificationInSettings}
+                disabled={resendingEmail}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-marine-950 font-bold text-xs flex items-center gap-1.5 transition disabled:opacity-50 shrink-0"
+              >
+                {resendingEmail ? (
+                  <span>{t('common.resendingEmail') || 'Reenviando...'}</span>
+                ) : (
+                  <span>{t('common.resendEmailBtn') || 'Reenviar correo'}</span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {resendFeedback && (
+            <div
+              className={`p-3 rounded-2xl text-xs flex items-center gap-2 border ${
+                resendFeedback.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+              }`}
+            >
+              {resendFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{resendFeedback.message}</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
@@ -330,7 +423,11 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
                   value={user?.email || ''}
                   className="w-full bg-marine-950/50 border border-marine-800 text-slate-400 rounded-2xl px-4 py-2.5 text-sm cursor-not-allowed"
                 />
-                <ShieldCheck className="w-4 h-4 text-emerald-400 absolute right-3.5 top-3.5" />
+                {user?.email_verified ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 absolute right-3.5 top-3.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-400 absolute right-3.5 top-3.5" />
+                )}
               </div>
             </div>
           </div>
@@ -587,6 +684,78 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
           </button>
         </div>
       </section>
+      {/* Modal de Privacidad y Términos de Uso */}
+      {showLegalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-marine-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-marine-900 border border-marine-800 rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-marine-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-black text-white">Privacidad y Términos de Uso</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLegalModal(false)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-marine-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                <p className="font-bold">⚠️ Diagnóstico de IA Orientativo y Preventivo</p>
+                <p className="text-xs text-amber-200/80 mt-1">
+                  Todos los diagnósticos y recomendaciones de AquaPulse son de carácter estrictamente orientativo y preventivo. No constituyen prescripción veterinaria ni garantía biológica absoluta. Verifica siempre anomalías críticas con un retest.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-white text-sm mb-1">🤖 Procesamiento con Google Gemini API</h4>
+                <p className="text-xs text-slate-400">
+                  Las mediciones químicas e imágenes de test kits se analizan de forma despersonalizada mediante la API de Google Gemini. No compartimos nombres, correos ni datos de ubicación. Todas las imágenes son despojadas de metadatos EXIF y GPS.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-white text-sm mb-1">🛡️ Derechos del Usuario (GDPR / CCPA)</h4>
+                <p className="text-xs text-slate-400">
+                  Tienes derecho a acceder a tus datos, rectificar mediciones y solicitar el borrado permanente total de tu cuenta ("Derecho al Olvido") en cualquier momento desde esta pantalla de Ajustes.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <a
+                  href="/api/legal/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
+                >
+                  Ver Política de Privacidad Completa (JSON/MD)
+                </a>
+                <a
+                  href="/api/legal/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
+                >
+                  Ver Términos de Uso Completos (JSON/MD)
+                </a>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-marine-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLegalModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-cyan-500 text-marine-950 font-bold text-xs hover:brightness-110 transition"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

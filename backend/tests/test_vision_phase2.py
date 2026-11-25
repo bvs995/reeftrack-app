@@ -144,8 +144,7 @@ class TestVisionPhase2(unittest.TestCase):
             headers={"Authorization": f"Bearer {self.token_free}"},
             json={
                 "image_base64": valid_b64,
-                "preferred_parameter": "alkalinity_dkh",
-                "demo_fallback": True
+                "preferred_parameter": "alkalinity_dkh"
             }
         )
         self.assertEqual(res.status_code, 200)
@@ -171,7 +170,7 @@ class TestVisionPhase2(unittest.TestCase):
             res = client.post(
                 "/api/scan-measurement",
                 headers={"Authorization": f"Bearer {self.token_free}"},
-                json={"image_base64": valid_b64, "demo_fallback": True}
+                json={"image_base64": valid_b64}
             )
             self.assertEqual(res.status_code, 200, f"Escaneo {i+1} debió ser exitoso")
             self.assertEqual(res.headers.get("X-RateLimit-Limit"), "5")
@@ -181,7 +180,7 @@ class TestVisionPhase2(unittest.TestCase):
         res_blocked = client.post(
             "/api/scan-measurement",
             headers={"Authorization": f"Bearer {self.token_free}"},
-            json={"image_base64": valid_b64, "demo_fallback": True}
+            json={"image_base64": valid_b64}
         )
         self.assertEqual(res_blocked.status_code, 429)
         self.assertIn("límite diario de 5 escaneos", res_blocked.json()["detail"])
@@ -196,7 +195,7 @@ class TestVisionPhase2(unittest.TestCase):
             res = client.post(
                 "/api/scan-measurement",
                 headers={"Authorization": f"Bearer {self.token_prem}"},
-                json={"image_base64": valid_b64, "demo_fallback": True}
+                json={"image_base64": valid_b64}
             )
             self.assertEqual(res.status_code, 200, f"Escaneo Premium {i+1} debió ser exitoso")
 

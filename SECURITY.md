@@ -75,3 +75,4 @@ AquaPulse implementa un modelo de seguridad por capas en todas las etapas del ci
 ## 3. Conformidad y Cumplimiento Normativo
 * **GDPR / CCPA**: Endpoints para descarga completa de datos (`GET /api/account/export`) y eliminación irreversible de cuenta (`DELETE /api/account/delete`).
 * **Google Play Policy**: Cero almacenamiento permanente de capturas de cámara sin confirmación explícita del usuario; consentimiento explícito obligatorio en reportes de feedback.
+* **Google Gemini Paid Tier (P3.19)**: En producción es obligatorio el uso de `GEMINI_TIER=pay-as-you-go` o de pago. Los datos de telemetría e imágenes de los usuarios no son utilizados por Google para entrenar sus modelos.

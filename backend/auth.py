@@ -1,8 +1,12 @@
 import os
 import logging
 import secrets
-from datetime import datetime, timedelta
-from typing import Optional
+import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
 import jwt
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -54,21 +58,33 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Genera un token JWT firmado de vida corta (15 min) para autenticación de API."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "purpose": "access"})
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc), "purpose": "access"})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def create_refresh_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
-    """Genera un refresh token rotativo criptográficamente aleatorio (7 días)."""
-    expire = datetime.utcnow() + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+def create_refresh_token(
+    user_id: int,
+    family_id: Optional[str] = None,
+    expires_delta: Optional[timedelta] = None
+) -> Tuple[str, str, str, str, datetime]:
+    """
+    Genera un refresh token rotativo criptográficamente seguro (7 días) con JTI y family_id (P1.8).
+    Retorna (token_jwt, token_hash, jti, family_id, expire_datetime).
+    """
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    jti = secrets.token_hex(16)
+    fam_id = family_id or secrets.token_hex(16)
     payload = {
         "sub": str(user_id),
         "purpose": "refresh",
-        "jti": secrets.token_hex(16),
+        "jti": jti,
+        "family_id": fam_id,
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return token, token_hash, jti, fam_id, expire
 
 def verify_refresh_token(token: str) -> dict:
     """Valida un refresh token y asegura que tenga purpose='refresh'."""
@@ -93,20 +109,26 @@ def verify_refresh_token(token: str) -> dict:
 
     return payload
 
-def create_password_reset_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
-    """Genera un token criptográfico firmado temporal (30 min) para restablecimiento de contraseña."""
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=30))
+def create_password_reset_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> Tuple[str, str, datetime]:
+    """
+    Genera un token criptográfico firmado temporal (30 min) para restablecimiento de contraseña.
+    Retorna (token_jwt, jti, expire_datetime).
+    """
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=30))
+    jti = secrets.token_hex(16)
     payload = {
         "sub": str(user_id),
         "email": email.strip().lower(),
         "purpose": "password_reset",
+        "jti": jti,
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return token, jti, expire
 
 def verify_password_reset_token(token: str) -> dict:
-    """Valida estrictamente un token de restablecimiento de contraseña."""
+    """Valida estrictamente la firma, expiración y estructura de un token de restablecimiento de contraseña."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
@@ -120,13 +142,58 @@ def verify_password_reset_token(token: str) -> dict:
             detail="El enlace de restablecimiento es inválido o está corrupto."
         )
 
-    if payload.get("purpose") != "password_reset" or "sub" not in payload:
+    if payload.get("purpose") != "password_reset" or "sub" not in payload or "jti" not in payload:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El token proporcionado no es válido para restablecimiento de contraseña."
         )
 
     return payload
+
+def send_password_reset_email(to_email: str, reset_url: str) -> bool:
+    """Envía enlace seguro de reseteo mediante el proveedor transaccional configurado."""
+    from backend.services.email_service import send_password_reset_email as _send
+    return _send(to_email, reset_url)
+
+def create_email_verification_token(email: str, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
+    """Genera token JWT firmado (24h) para verificación de correo electrónico."""
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=24))
+    payload = {
+        "sub": str(user_id),
+        "email": email.strip().lower(),
+        "purpose": "email_verification",
+        "exp": expire,
+        "iat": datetime.now(timezone.utc)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_email_verification_token(token: str) -> dict:
+    """Valida un token de verificación de correo electrónico."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de verificación ha expirado. Por favor solicita uno nuevo."
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token de verificación es inválido o está corrupto."
+        )
+
+    if payload.get("purpose") != "email_verification" or "sub" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token proporcionado no es válido para verificación de correo."
+        )
+
+    return payload
+
+def send_email_verification(to_email: str, verify_url: str) -> bool:
+    """Envía correo transaccional de verificación mediante el proveedor configurado."""
+    from backend.services.email_service import send_verification_email as _send
+    return _send(to_email, verify_url)
 
 def decode_access_token(token: str) -> Optional[dict]:
     """Decodifica y valida la firma y expiración de un token JWT."""
@@ -188,20 +255,24 @@ def get_current_user(
         )
 
     if not user.is_active:
+        if not getattr(user, "email_verified", True) and os.getenv("REQUIRE_EMAIL_VERIFICATION", "false").lower() in ("true", "1", "yes"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Debes verificar tu correo electrónico antes de acceder a esta función. Revisa tu bandeja de entrada o solicita un nuevo enlace."
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta cuenta ha sido suspendida por un administrador. Contacta a soporte."
         )
 
-    # Auto-promoción a Administrador si coincide con paliyo995@gmail.com o ADMIN_EMAIL
-    auto_admin_emails = {
-        "paliyo995@gmail.com",
-        os.getenv("ADMIN_EMAIL", "").strip().lower()
-    } - {""}
-    if user.email and user.email.lower() in auto_admin_emails and not user.is_admin:
-        user.is_admin = True
-        db.commit()
-        db.refresh(user)
+    # Verificación de invalidación de sesiones (token_version)
+    if payload.get("token_version") is not None and user.token_version is not None:
+        if payload.get("token_version") != user.token_version:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sesión revocada debido a un cambio de credenciales. Por favor inicia sesión nuevamente.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
 
     return user
 

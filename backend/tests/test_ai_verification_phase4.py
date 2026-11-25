@@ -182,7 +182,7 @@ class TestAIVerificationPhase4(unittest.TestCase):
         # Campos de interoperabilidad automática
         self.assertEqual(output.nivel_riesgo, "Moderado")
         self.assertEqual(output.diagnostico_general, output.summary)
-        self.assertTrue(len(output.acciones_correctoras) > 0)
+        self.assertTrue(len(output.recommended_actions) > 0)
 
     # ==========================================================================
     # 4.4 VALIDADOR ANTES DE MOSTRAR
