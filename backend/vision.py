@@ -199,7 +199,8 @@ def analyze_test_image(
     image_data: str,
     preferred_parameter: Optional[str] = None,
     allow_demo_fallback: bool = True,
-    save_image: bool = False
+    save_image: bool = False,
+    usage_sink: Optional[dict] = None
 ) -> ScanMeasurementResponse:
     """
     Analiza una fotografía de test de acuario usando la librería oficial Google GenAI (Gemini).
@@ -316,6 +317,10 @@ def analyze_test_image(
                     )
                 )
                 if response and response.text:
+                    # Para que quien llama registre el gasto de esta llamada (tope de IA).
+                    if usage_sink is not None:
+                        usage_sink["response"] = response
+                        usage_sink["model"] = model_cand
                     break
             except Exception as model_err:
                 logger.warning(f"Error con modelo {model_cand}: {model_err}. Probando siguiente modelo...")
