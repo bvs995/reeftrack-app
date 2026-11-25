@@ -5,7 +5,7 @@
 
 <!-- NOTA PARA REVISIÓN LEGAL: borrador redactado a partir de lo que hace la app (no es asesoría legal). Revisar contra la Ley Federal de Protección al Consumidor y la normativa aplicable; completar los datos entre corchetes. Si se habilitan cobros, añadir precios, renovación, cancelación y reembolsos (y las reglas de Google Play si se publica ahí). -->
 
-Estos Términos de Uso regulan el uso de AquaReef ("la Aplicación", "el Servicio"), ofrecido por [Nombre completo o razón social] ("nosotros"). Al crear una cuenta o usar el Servicio aceptas estos términos y nuestra [Política de Privacidad](/privacidad). Si no estás de acuerdo, no uses el Servicio.
+Estos Términos de Uso regulan el uso de AquaReef ("la Aplicación", "el Servicio"), ofrecido por su titular ("nosotros").<!-- PENDIENTE: sustituir "su titular" por el nombre completo o razón social. --> Al crear una cuenta o usar el Servicio aceptas estos términos y nuestra [Política de Privacidad](/privacidad). Si no estás de acuerdo, no uses el Servicio.
 
 ---
 
@@ -98,9 +98,9 @@ Podemos actualizar estos términos. Publicaremos la nueva versión en esta pági
 
 ## 11. Ley aplicable
 
-Estos términos se rigen por las leyes de [País y, en su caso, estado]. Cualquier controversia se resolverá ante los tribunales competentes de [ciudad], sin perjuicio de los derechos que te correspondan como consumidor.
+Estos términos se rigen por las leyes aplicables, sin perjuicio de los derechos que te correspondan como consumidor.
 
-<!-- NOTA PARA REVISIÓN LEGAL: confirmar ley aplicable y jurisdicción. -->
+<!-- PENDIENTE / NOTA PARA REVISIÓN LEGAL: precisar país y estado de la ley aplicable y la ciudad de los tribunales competentes. -->
 
 ---
 

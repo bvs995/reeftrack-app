@@ -11,8 +11,8 @@ Esta Política de Privacidad (aviso de privacidad) explica qué datos personales
 
 ## 1. Responsable
 
-* **Responsable**: [Nombre completo o razón social del responsable]
-* **Domicilio**: [Domicilio completo del responsable]
+<!-- PENDIENTE (obligatorio en México antes de considerar completo el aviso): agregar "Responsable: nombre completo o razón social" y "Domicilio: domicilio completo". -->
+* **Responsable**: el titular de AquaReef
 * **Contacto de privacidad**: `privacy@aquareef.app`
 * **Sitio y aplicación**: `https://www.aquareef.app` (web y app instalable)
 
