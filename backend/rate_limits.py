@@ -1,5 +1,5 @@
 """
-AquaPulse - Módulo Centralizado de Rate Limiting y Cuotas Persistentes (P1.7 / P2.17)
+AquaReef - Módulo Centralizado de Rate Limiting y Cuotas Persistentes (P1.7 / P2.17)
 """
 import hmac
 import ipaddress

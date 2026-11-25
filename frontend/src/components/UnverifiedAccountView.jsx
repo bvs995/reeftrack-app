@@ -50,7 +50,7 @@ export default function UnverifiedAccountView({ onOpenSettings }) {
 
         {/* Titular */}
         <h1 className="text-xl sm:text-2xl font-black text-white text-center tracking-tight mb-2">
-          {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaPulse'}
+          {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaReef'}
         </h1>
 
         <p className="text-sm text-slate-300 text-center max-w-lg mx-auto mb-6">

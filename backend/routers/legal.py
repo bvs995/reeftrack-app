@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Documentos Legales y Términos de Servicio (P3.18)
+AquaReef - Router de Documentos Legales y Términos de Servicio (P3.18)
 """
 import os
 import logging
@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 @router.get(
     "/api/legal/privacy",
-    summary="Consultar Política de Privacidad oficial de AquaPulse"
+    summary="Consultar Política de Privacidad oficial de AquaReef"
 )
 def get_privacy_policy():
     """Retorna la Política de Privacidad en formato estructurado y texto Markdown."""
@@ -24,11 +24,11 @@ def get_privacy_policy():
     if privacy_file.exists():
         content = privacy_file.read_text(encoding="utf-8")
     else:
-        content = "# Política de Privacidad\nAquaPulse protege tus datos y utiliza diagnósticos orientativos."
+        content = "# Política de Privacidad\nAquaReef protege tus datos y utiliza diagnósticos orientativos."
 
     return {
         "status": "success",
-        "title": "Política de Privacidad de AquaPulse",
+        "title": "Política de Privacidad de AquaReef",
         "version": "1.0",
         "is_ai_orientative": True,
         "ai_provider": "Google Gemini",
@@ -39,7 +39,7 @@ def get_privacy_policy():
 
 @router.get(
     "/api/legal/terms",
-    summary="Consultar Términos y Condiciones de Uso de AquaPulse"
+    summary="Consultar Términos y Condiciones de Uso de AquaReef"
 )
 def get_terms_of_service():
     """Retorna los Términos de Servicio y Condiciones de Uso en formato estructurado y texto Markdown."""
@@ -48,11 +48,11 @@ def get_terms_of_service():
     if terms_file.exists():
         content = terms_file.read_text(encoding="utf-8")
     else:
-        content = "# Términos de Uso\nLos diagnósticos de IA en AquaPulse son de carácter orientativo."
+        content = "# Términos de Uso\nLos diagnósticos de IA en AquaReef son de carácter orientativo."
 
     return {
         "status": "success",
-        "title": "Términos y Condiciones de Uso de AquaPulse",
+        "title": "Términos y Condiciones de Uso de AquaReef",
         "version": "1.0",
         "is_ai_orientative": True,
         "ai_provider": "Google Gemini",

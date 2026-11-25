@@ -38,7 +38,7 @@ class TestAIVerificationPhase4(unittest.TestCase):
         reg_res = client.post("/api/auth/register", json={
             "email": self.user_email,
             "password": self.password,
-            "full_name": "Auditor IA AquaPulse"
+            "full_name": "Auditor IA AquaReef"
         })
         self.assertEqual(reg_res.status_code, 201)
         self.token = reg_res.json()["access_token"]

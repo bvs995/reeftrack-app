@@ -1,6 +1,6 @@
 {
-  "name": "AquaPulse - Aquarium & Reef Tracker",
-  "short_name": "AquaPulse",
+  "name": "AquaReef - Aquarium & Reef Tracker",
+  "short_name": "AquaReef",
   "description": "PWA predictiva para acuaristas de arrecife y agua dulce con cálculo de tasas de consumo y cambios de agua.",
   "start_url": "/",
   "display": "standalone",

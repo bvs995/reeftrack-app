@@ -21,7 +21,7 @@ from backend.database import DATABASE_URL
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AquaPulse Backup & Restore CLI")
+    parser = argparse.ArgumentParser(description="AquaReef Backup & Restore CLI")
     parser.add_argument("--backup", action="store_true", help="Generar respaldo SQL de la base de datos actual")
     parser.add_argument("--output", type=str, default=None, help="Ruta del archivo de salida")
     parser.add_argument("--test-restore", action="store_true", help="Probar ciclo completo de respaldo y restauración en BD temporal")

@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Administración del Sistema (P2.17)
+AquaReef - Router de Administración del Sistema (P2.17)
 """
 import logging
 from typing import List

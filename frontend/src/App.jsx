@@ -408,14 +408,14 @@ function AppContent() {
                 <div className="flex justify-center mb-6 relative">
                   <img 
                     src="/logo-reef-icon.png" 
-                    alt="AquaPulse Logo" 
+                    alt="AquaReef Logo" 
                     onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
                     className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
                   />
                 </div>
 
                 <h1 className="text-2xl font-bold text-white text-center mb-1">
-                  AquaPulse Commercial Cloud
+                  AquaReef
                 </h1>
                 <p className="text-sm text-slate-400 max-w-lg mx-auto mb-6">
                   {t('app.welcomeDesc')}

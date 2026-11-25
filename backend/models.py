@@ -861,7 +861,7 @@ class DiagnosticFeedbackCreate(BaseModel):
 
 class DiagnosticFeedbackResponse(BaseModel):
     status: str = "success"
-    message: str = "Reporte recibido correctamente. Gracias por colaborar con la seguridad y precisión de AquaPulse."
+    message: str = "Reporte recibido correctamente. Gracias por colaborar con la seguridad y precisión de AquaReef."
     feedback_id: Optional[int] = None
     consent_given: bool = True
 

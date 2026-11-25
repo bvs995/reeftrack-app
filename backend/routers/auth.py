@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Autenticación, Sesiones y Gestión de Cuenta (P2.17)
+AquaReef - Router de Autenticación, Sesiones y Gestión de Cuenta (P2.17)
 """
 import os
 import hashlib

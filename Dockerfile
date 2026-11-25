@@ -1,5 +1,5 @@
 # ==============================================================================
-# 🌊 AquaPulse Backend - Production Multi-Stage Dockerfile
+# 🌊 AquaReef Backend - Production Multi-Stage Dockerfile
 # ==============================================================================
 
 # Build Stage
@@ -42,6 +42,8 @@ COPY backend /app/backend
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 COPY migrations /app/migrations
+# Textos legales servidos por /api/legal/* (backend/routers/legal.py los lee de /app)
+COPY PRIVACY.md TERMS.md /app/
 
 # Permisos para el usuario no-root
 RUN chown -R appuser:appgroup /app

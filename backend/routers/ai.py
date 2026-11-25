@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Análisis Clínico Preventivo e Inteligencia Artificial (P2.17)
+AquaReef - Router de Análisis Clínico Preventivo e Inteligencia Artificial (P2.17)
 """
 import logging
 from typing import Optional, Dict, Any, List
@@ -36,7 +36,7 @@ router = APIRouter(tags=["IA Preventiva"])
 @router.post(
     "/api/analisis-predictivo",
     response_model=PredictiveAnalysisJsonResponse,
-    summary="Obtener análisis predictivo estructurado en JSON (AquaPulse AI)"
+    summary="Obtener análisis predictivo estructurado en JSON (AquaReef AI)"
 )
 def obtener_analisis_json(
     data: AquariumDataRequest,
@@ -337,7 +337,7 @@ def acuario_analisis_legacy_alias(
 @router.post(
     "/api/analizar-ia",
     response_model=AquariumAnalysisResponse,
-    summary="Analizar parámetros químicos y prever colapsos con IA (AquaPulse AI)"
+    summary="Analizar parámetros químicos y prever colapsos con IA (AquaReef AI)"
 )
 def endpoint_analizar_acuario(
     data: AquariumDataRequest,
@@ -417,7 +417,7 @@ def report_diagnostic_feedback_endpoint(
 
     return DiagnosticFeedbackResponse(
         status="success",
-        message="Reporte recibido correctamente. Gracias por colaborar con la seguridad y precisión de AquaPulse.",
+        message="Reporte recibido correctamente. Gracias por colaborar con la seguridad y precisión de AquaReef.",
         feedback_id=feedback_record.id,
         consent_given=True
     )

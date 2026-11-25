@@ -1,6 +1,6 @@
 """
 Motor de Metrología, Intervalos de Incertidumbre y Acciones Anti-Colapso para Acuarios.
-AquaPulse - Fase 3:
+AquaReef - Fase 3:
 - Errores base por parámetro y kit analítico (Hanna, Salifert, Red Sea, Genérico).
 - Incorporación de error de visión IA (e_total = sqrt(e_kit² + e_vision²)).
 - Evaluación de alertas con intervalos [v - e, v + e]: Confirmada vs Probable (retest en 1–2 h).

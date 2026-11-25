@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Gestión de Acuarios / Tanques (P2.17)
+AquaReef - Router de Gestión de Acuarios / Tanques (P2.17)
 """
 import logging
 from typing import List, Optional

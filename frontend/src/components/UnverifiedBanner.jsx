@@ -52,7 +52,7 @@ export default function UnverifiedBanner() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-black text-xs sm:text-sm text-white tracking-wide">
-                  {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaPulse'}
+                  {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaReef'}
                 </span>
                 <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   {t('common.unverifiedEmail') || 'Correo sin verificar'}

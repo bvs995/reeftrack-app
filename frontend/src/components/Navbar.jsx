@@ -54,13 +54,13 @@ export default function Navbar({
           {/* AQUÍ ESTÁ EL NUEVO LOGO DEL ARRECIFE */}
           <img 
             src="/logo-reef-icon.png" 
-            alt="AquaPulse Logo" 
+            alt="AquaReef Logo" 
             onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
             className="w-12 h-12 rounded-2xl shadow-lg shadow-cyan-500/10 border border-cyan-500/20 object-cover shrink-0" 
           />
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl font-bold text-white tracking-tight">AquaPulse</h1>
+              <h1 className="text-xl font-bold text-white tracking-tight">AquaReef</h1>
               <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/50 border border-cyan-800/80 px-1.5 py-0.5 rounded-full uppercase">PWA</span>
             </div>
             <p className="text-xs text-gray-400 hidden sm:block">Gestión Predictiva Multi-Usuario para Acuarios de Arrecife</p>

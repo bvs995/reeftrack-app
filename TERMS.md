@@ -1,25 +1,25 @@
-# 📜 Términos y Condiciones de Uso de AquaPulse (Terms of Service)
+# 📜 Términos y Condiciones de Uso de AquaReef (Terms of Service)
 
 **Fecha de entrada en vigor**: 23 de noviembre de 2026  
 **Versión**: 1.0 (Alineada con directrices de Google Play Store y normativas internacionales de protección al consumidor)
 
-Bienvenido a AquaPulse ("la Aplicación", "el Servicio", "nosotros"). Al registrarte, acceder o utilizar AquaPulse en la web o como Progressive Web App (PWA), aceptas quedar vinculado por estos Términos y Condiciones de Uso. Si no estás de acuerdo con alguno de ellos, no debes utilizar el Servicio.
+Bienvenido a AquaReef ("la Aplicación", "el Servicio", "nosotros"). Al registrarte, acceder o utilizar AquaReef en la web o como Progressive Web App (PWA), aceptas quedar vinculado por estos Términos y Condiciones de Uso. Si no estás de acuerdo con alguno de ellos, no debes utilizar el Servicio.
 
 ---
 
 ## 1. Naturaleza del Servicio y Diagnóstico Asistido por IA (Carácter Orientativo)
 
-1.1. **Diagnóstico Orientativo y Preventivo**: AquaPulse es una herramienta de telemetría, monitoreo y soporte a la toma de decisiones para acuarios marinos y de agua dulce. Todas las evaluaciones, cálculos de incertidumbre metrológica, análisis predictivos y sugerencias generadas por el sistema y por modelos de Inteligencia Artificial (IA) son de **carácter estrictamente orientativo y referencial**.
+1.1. **Diagnóstico Orientativo y Preventivo**: AquaReef es una herramienta de telemetría, monitoreo y soporte a la toma de decisiones para acuarios marinos y de agua dulce. Todas las evaluaciones, cálculos de incertidumbre metrológica, análisis predictivos y sugerencias generadas por el sistema y por modelos de Inteligencia Artificial (IA) son de **carácter estrictamente orientativo y referencial**.
 
-1.2. **No Constituye Prescripción Veterinaria ni Garantía Biológica**: Ningún análisis o recomendación generado por AquaPulse reemplaza el juicio crítico del acuarista ni constituye asesoramiento veterinario o biológico garantizado. Las especies acuáticas son biológicamente sensibles a factores no medibles por un kit de test; por tanto, **el usuario debe verificar siempre cualquier anomalía con un retest manual** antes de realizar adiciones químicas, dosificaciones o modificaciones estructurales en su acuario.
+1.2. **No Constituye Prescripción Veterinaria ni Garantía Biológica**: Ningún análisis o recomendación generado por AquaReef reemplaza el juicio crítico del acuarista ni constituye asesoramiento veterinario o biológico garantizado. Las especies acuáticas son biológicamente sensibles a factores no medibles por un kit de test; por tanto, **el usuario debe verificar siempre cualquier anomalía con un retest manual** antes de realizar adiciones químicas, dosificaciones o modificaciones estructurales en su acuario.
 
-1.3. **Exclusión de Dosificación Automática**: La IA de AquaPulse tiene prohibido contractualmente formular dosis absolutas de productos químicos. Las acciones sugeridas se limitan a un catálogo cerrado de buenas prácticas de bioseguridad (ej. `retest_parameter`, `monitor_24h`, `pause_dosing`, `water_change_small`, `check_equipment`, `consult_expert`). El usuario asume toda la responsabilidad sobre las sustancias y volúmenes dosificados en sus sistemas acuáticos.
+1.3. **Exclusión de Dosificación Automática**: La IA de AquaReef tiene prohibido contractualmente formular dosis absolutas de productos químicos. Las acciones sugeridas se limitan a un catálogo cerrado de buenas prácticas de bioseguridad (ej. `retest_parameter`, `monitor_24h`, `pause_dosing`, `water_change_small`, `check_equipment`, `consult_expert`). El usuario asume toda la responsabilidad sobre las sustancias y volúmenes dosificados en sus sistemas acuáticos.
 
 ---
 
 ## 2. Uso de Inteligencia Artificial y Proveedores Externos (Google Gemini API)
 
-2.1. **Procesamiento de Parámetros e Imágenes**: AquaPulse utiliza la API empresarial de **Google Gemini** bajo nivel comercial de pago (Pay-As-You-Go) para asistir en la interpretación de parámetros químicos y en la lectura asistida por cámara de viales de pruebas colorimétricas o fotómetros digitales. En este nivel de servicio, Google garantiza contractualmente que los datos de los usuarios no se utilizan para entrenar modelos.
+2.1. **Procesamiento de Parámetros e Imágenes**: AquaReef utiliza la API empresarial de **Google Gemini** bajo nivel comercial de pago (Pay-As-You-Go) para asistir en la interpretación de parámetros químicos y en la lectura asistida por cámara de viales de pruebas colorimétricas o fotómetros digitales. En este nivel de servicio, Google garantiza contractualmente que los datos de los usuarios no se utilizan para entrenar modelos.
 
 2.2. **Despersonalización y Privacidad**: Únicamente se transmiten al proveedor de inferencia datos numéricos despersonalizados (valores de pH, KH, Ca, Mg, nutrientes, temperatura), tipo de biotipo y volúmenes del tanque. **Nunca** se envían a los modelos de lenguaje nombres reales, contraseñas, direcciones de correo electrónico ni datos de geolocalización.
 
@@ -53,17 +53,17 @@ Bienvenido a AquaPulse ("la Aplicación", "el Servicio", "nosotros"). Al registr
 
 5.2. **Plan Premium**: Amplía el número de acuarios y extiende la cuota diaria de operaciones avanzadas de IA.
 
-5.3. **Protección contra Abusos**: AquaPulse aplica límites de tasa (rate limiting) y presupuestos mensuales por usuario para garantizar la estabilidad y sostenibilidad del servicio para toda la comunidad.
+5.3. **Protección contra Abusos**: AquaReef aplica límites de tasa (rate limiting) y presupuestos mensuales por usuario para garantizar la estabilidad y sostenibilidad del servicio para toda la comunidad.
 
 ---
 
 ## 6. Limitación de Responsabilidad
 
-6.1. En la máxima medida permitida por la ley aplicable, AquaPulse y sus desarrolladores no serán responsables por pérdidas de organismos vivos (peces, corales, invertebrados, plantas), daños a equipamiento o filtros, ni por daños indirectos, incidentales o consecuentes derivados del uso del Servicio o de la interpretación de los análisis asistidos por IA.
+6.1. En la máxima medida permitida por la ley aplicable, AquaReef y sus desarrolladores no serán responsables por pérdidas de organismos vivos (peces, corales, invertebrados, plantas), daños a equipamiento o filtros, ni por daños indirectos, incidentales o consecuentes derivados del uso del Servicio o de la interpretación de los análisis asistidos por IA.
 
 ---
 
 ## 7. Contacto
 
 Si tienes preguntas sobre estos Términos de Uso o sobre la Política de Privacidad, puedes escribirnos a:
-* **Correo de soporte**: `support@aquapulse.io` o `paliyo995@gmail.com`
+* **Correo de soporte**: `support@aquareef.app` o `paliyo995@gmail.com`

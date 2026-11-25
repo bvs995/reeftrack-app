@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Mantenimiento Mecánico y Cambios de Agua (P2.17)
+AquaReef - Router de Mantenimiento Mecánico y Cambios de Agua (P2.17)
 """
 import logging
 from typing import List, Optional, Dict, Any

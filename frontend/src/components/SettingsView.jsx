@@ -145,14 +145,14 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
           <div className="flex justify-center mb-6 relative">
             <img 
               src="/logo-reef-icon.png" 
-              alt="AquaPulse Logo" 
+              alt="AquaReef Logo" 
               onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
               className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
             />
           </div>
 
           <h1 className="text-2xl font-bold text-white text-center mb-1">
-            AquaPulse Commercial Cloud
+            AquaReef
           </h1>
           <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
             {t('settings.sessionRequiredDesc')}
@@ -187,7 +187,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
             >
               <span className="flex items-center">
                 <span className="bg-cyan-500 text-black px-2 py-1 rounded text-xs font-bold mr-3">P</span>
-                AquaPulse Premium
+                AquaReef Premium
               </span>
               <span className="text-gray-400">{'>'}</span>
             </button>
@@ -273,7 +273,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
           >
             <span className="flex items-center">
               <span className="bg-cyan-500 text-black px-2 py-1 rounded text-xs font-bold mr-3">P</span>
-              AquaPulse Premium
+              AquaReef Premium
             </span>
             <span className="text-gray-400">{'>'}</span>
           </button>
@@ -359,7 +359,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
                 <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-amber-200">
-                    {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaPulse'}
+                    {t('common.verifyEmailNotice') || 'Verifica tu correo para usar AquaReef'}
                   </p>
                   <p className="text-[11px] text-amber-300/80">
                     Se requiere confirmación para sincronizar y registrar telemetría.
@@ -603,7 +603,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
         <div className="mt-6 pt-5 border-t border-marine-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-extrabold text-white">AquaPulse Pro / Premium</span>
+              <span className="text-sm font-extrabold text-white">AquaReef Pro / Premium</span>
               <span className="text-xs text-purple-300 font-bold">{t('settings.proPrice')}</span>
             </div>
             <p className="text-xs text-slate-400">
@@ -706,7 +706,7 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
               <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
                 <p className="font-bold">⚠️ Diagnóstico de IA Orientativo y Preventivo</p>
                 <p className="text-xs text-amber-200/80 mt-1">
-                  Todos los diagnósticos y recomendaciones de AquaPulse son de carácter estrictamente orientativo y preventivo. No constituyen prescripción veterinaria ni garantía biológica absoluta. Verifica siempre anomalías críticas con un retest.
+                  Todos los diagnósticos y recomendaciones de AquaReef son de carácter estrictamente orientativo y preventivo. No constituyen prescripción veterinaria ni garantía biológica absoluta. Verifica siempre anomalías críticas con un retest.
                 </p>
               </div>
 
@@ -726,20 +726,20 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
 
               <div className="pt-2 flex flex-col sm:flex-row gap-2">
                 <a
-                  href="/api/legal/privacy"
+                  href="/privacidad"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
                 >
-                  Ver Política de Privacidad Completa (JSON/MD)
+                  Ver Política de Privacidad Completa
                 </a>
                 <a
-                  href="/api/legal/terms"
+                  href="/terminos"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-cyan-300 text-xs font-bold text-center border border-cyan-500/30 transition"
                 >
-                  Ver Términos de Uso Completos (JSON/MD)
+                  Ver Términos de Uso Completos
                 </a>
               </div>
             </div>

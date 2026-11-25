@@ -7,7 +7,7 @@ cd "$DIR"
 export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 echo "=========================================================="
-echo "  🌊 AquaPulse - PWA para Acuarios & Reef Tracking"
+echo "  🌊 AquaReef - PWA para Acuarios & Reef Tracking"
 echo "=========================================================="
 echo ""
 

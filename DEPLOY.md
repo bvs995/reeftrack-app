@@ -1,4 +1,4 @@
-# 🚀 Guía de Despliegue en Producción (Cloud) - AquaPulse
+# 🚀 Guía de Despliegue en Producción (Cloud) - AquaReef
 
 Esta guía explica paso a paso cómo desplegar la aplicación en la nube:
 - **Backend & Base de Datos**: [Render.com](https://render.com) (FastAPI + PostgreSQL administrado).
@@ -14,7 +14,7 @@ Asegúrate de inicializar el repositorio y subir tu código (el archivo `.gitign
 cd /Users/brandonvaladez/.gemini/antigravity/scratch/aquatracker
 git init
 git add .
-git commit -m "feat: preparar AquaPulse para producción con PostgreSQL, Render y Vercel"
+git commit -m "feat: preparar AquaReef para producción con PostgreSQL, Render y Vercel"
 
 # Conecta tu repositorio remoto de GitHub (ejemplo):
 git remote add origin https://github.com/TU_USUARIO/aquapulse.git
@@ -26,7 +26,7 @@ git push -u origin main
 
 ## 2. Despliegue del Backend & PostgreSQL en Render
 
-AquaPulse incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual provisiona automáticamente el servicio FastAPI y la base de datos PostgreSQL.
+AquaReef incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual provisiona automáticamente el servicio FastAPI y la base de datos PostgreSQL.
 
 ### Pasos en Render:
 1. Inicia sesión en tu cuenta de [Render Dashboard](https://dashboard.render.com).
@@ -37,13 +37,13 @@ AquaPulse incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual p
    - **`aquapulse-backend`**: Servicio Web FastAPI en Python 3.11.
 5. Completa las variables de entorno solicitadas:
    - `GEMINI_API_KEY`: Pega tu API Key de Google Gemini (`AQ.Ab8RN6L...`).
-   - `ALLOWED_ORIGINS`: Déjalo en `*` temporalmente o pon el dominio que te asigne Vercel (ej: `https://aquapulse.vercel.app`).
+   - `ALLOWED_ORIGINS`: Déjalo en `*` temporalmente o pon el dominio que te asigne Vercel (ej: `https://www.aquareef.app`).
 6. Haz clic en **Apply**. Render compilará las dependencias desde [`backend/requirements.txt`](backend/requirements.txt), conectará la base de datos PostgreSQL mediante `DATABASE_URL` y arrancará Uvicorn.
 7. Una vez finalizado el despliegue, copia la URL pública de tu backend:
    ```
-   https://aquapulse-backend.onrender.com
+   https://reeftrack-api.onrender.com
    ```
-   *(Verifica que esté activa visitando `https://aquapulse-backend.onrender.com/api/health`)*
+   *(Verifica que esté activa visitando `https://reeftrack-api.onrender.com/api/health`)*
 
 ---
 
@@ -60,7 +60,7 @@ AquaPulse incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual p
    - **Output Directory**: `dist`
 5. En la sección **Environment Variables**, agrega la siguiente variable:
    - **Key**: `VITE_API_URL`
-   - **Value**: `https://aquapulse-backend.onrender.com` *(la URL generada por Render en el paso anterior)*
+   - **Value**: `https://reeftrack-api.onrender.com` *(la URL generada por Render en el paso anterior)*
 6. Haz clic en **Deploy**.
 
 > **Nota sobre el Enrutamiento PWA**: El archivo [`frontend/vercel.json`](frontend/vercel.json) se encarga automáticamente de redirigir todas las rutas a `/index.html` (SPA routing) y define que `sw.js` (Service Worker) no sea almacenado en caché de larga duración para que los usuarios reciban actualizaciones instantáneas.
@@ -83,7 +83,7 @@ AquaPulse incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual p
 ### Variables en Vercel (Frontend):
 | Variable | Descripción | Valor recomendado |
 | :--- | :--- | :--- |
-| `VITE_API_URL` | URL base pública de tu API en Render | `https://aquapulse-backend.onrender.com` |
+| `VITE_API_URL` | URL base pública de tu API en Render | `https://reeftrack-api.onrender.com` |
 
 ---
 
@@ -91,9 +91,9 @@ AquaPulse incluye el archivo [`render.yaml`](render.yaml) (Blueprint), el cual p
 
 Una vez completados ambos despliegues:
 
-- [ ] Abre en tu navegador `https://aquapulse-backend.onrender.com/api/health` y confirma que devuelva:
+- [ ] Abre en tu navegador `https://reeftrack-api.onrender.com/api/health` y confirma que devuelva:
   `{"status":"online","database":"connected"}`.
 - [ ] Abre tu app en Vercel (`https://tu-app.vercel.app`).
 - [ ] Verifica que cargue el historial de mediciones y las gráficas de consumo sin errores de CORS.
 - [ ] Prueba el botón **"Escanear Lectura"** desde la cámara de tu móvil para confirmar que Gemini Vision reconozca la foto y complete el formulario.
-- [ ] En tu navegador móvil (Safari en iOS o Chrome en Android), pulsa **"Añadir a pantalla de inicio"** para instalar AquaPulse como PWA nativa.
+- [ ] En tu navegador móvil (Safari en iOS o Chrome en Android), pulsa **"Añadir a pantalla de inicio"** para instalar AquaReef como PWA nativa.

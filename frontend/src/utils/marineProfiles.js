@@ -1,5 +1,5 @@
 /**
- * Perfiles bioquímicos y configuración de ecosistemas para AquaPulse.
+ * Perfiles bioquímicos y configuración de ecosistemas para AquaReef.
  * Soporta exactamente 6 opciones maestras:
  * 1. freshwater: Agua Dulce
  * 2. planted: Plantado

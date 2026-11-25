@@ -1,5 +1,5 @@
 """
-AquaPulse - Commercial Multi-User API Gateway (P2.17 Modularized)
+AquaReef - Commercial Multi-User API Gateway (P2.17 Modularized)
 """
 import os
 import sys
@@ -71,7 +71,7 @@ if is_production:
 
 # Inicialización de la aplicación FastAPI (/docs deshabilitado en producción)
 app = FastAPI(
-    title="AquaPulse Commercial Multi-User API",
+    title="AquaReef API",
     description="Backend SaaS multi-usuario de alta precisión para acuarios con autenticación JWT y aislamiento de datos.",
     version="3.0.0",
     docs_url=None if is_production else "/docs",
@@ -221,7 +221,7 @@ def health_check(db: Session = Depends(get_db)):
     summary="Listar todos los perfiles de acuarios (marinos y de agua dulce)"
 )
 def get_marine_profiles_endpoint():
-    """Retorna el catálogo completo de biotipos y perfiles de referencia oficiales de AquaPulse."""
+    """Retorna el catálogo completo de biotipos y perfiles de referencia oficiales de AquaReef."""
     return {
         "status": "success",
         "profiles": list(MARINE_PROFILES.values()),
@@ -269,4 +269,4 @@ if DIST_DIR.exists():
 
         if index_file.exists():
             return FileResponse(str(index_file))
-        return {"status": "AquaPulse API is active"}
+        return {"status": "AquaReef API is active"}

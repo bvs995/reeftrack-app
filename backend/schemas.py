@@ -1,5 +1,5 @@
 """
-Esquemas Pydantic v2 oficiales para AquaPulse.
+Esquemas Pydantic v2 oficiales para AquaReef.
 Re-exporta y centraliza los esquemas para validación de API.
 """
 from typing import Optional, List, Dict, Any, Literal

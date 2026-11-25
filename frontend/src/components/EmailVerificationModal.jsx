@@ -76,7 +76,7 @@ export default function EmailVerificationModal({
                 Verificando tu cuenta...
               </h3>
               <p className="mt-2 text-sm text-slate-400 leading-relaxed max-w-xs mx-auto">
-                Confirmando tu dirección de correo electrónico con AquaPulse Cloud. Por favor espera un momento.
+                Confirmando tu dirección de correo electrónico con AquaReef Cloud. Por favor espera un momento.
               </p>
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function EmailVerificationModal({
               }}
               className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             >
-              <span>Comenzar a usar AquaPulse</span>
+              <span>Comenzar a usar AquaReef</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

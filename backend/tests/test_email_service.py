@@ -1,5 +1,5 @@
 """
-AquaPulse - Pruebas del Servicio de Correos Transaccionales y Cuentas No Verificadas
+AquaReef - Pruebas del Servicio de Correos Transaccionales y Cuentas No Verificadas
 """
 import os
 import re
@@ -49,7 +49,7 @@ def setup_mock_email_provider():
     finally:
         db.close()
 
-    mock_prov = MockEmailProvider(from_email="noreply@aquapulse.io")
+    mock_prov = MockEmailProvider(from_email="no-reply@aquareef.app")
     set_email_provider(mock_prov)
     yield mock_prov
     mock_prov.clear()
@@ -115,7 +115,7 @@ class TestEmailProvidersUnit:
             port=587,
             user="user@example.com",
             password="secretpassword",
-            from_email="noreply@aquapulse.io",
+            from_email="no-reply@aquareef.app",
             use_tls=True,
         )
         ok = provider.send_email(
@@ -158,7 +158,7 @@ class TestProductionStartupValidation:
             {
                 "ENVIRONMENT": "production",
                 "EMAIL_PROVIDER": "resend",
-                "EMAIL_FROM": "noreply@aquapulse.io",
+                "EMAIL_FROM": "no-reply@aquareef.app",
                 "EMAIL_API_KEY": "",
             },
             clear=False,
@@ -172,7 +172,7 @@ class TestProductionStartupValidation:
             {
                 "ENVIRONMENT": "production",
                 "EMAIL_PROVIDER": "smtp",
-                "EMAIL_FROM": "noreply@aquapulse.io",
+                "EMAIL_FROM": "no-reply@aquareef.app",
                 "SMTP_HOST": "",
             },
             clear=False,
@@ -186,7 +186,7 @@ class TestProductionStartupValidation:
             {
                 "ENVIRONMENT": "production",
                 "EMAIL_PROVIDER": "resend",
-                "EMAIL_FROM": "noreply@aquapulse.io",
+                "EMAIL_FROM": "no-reply@aquareef.app",
                 "EMAIL_API_KEY": "re_valid_key",
                 "FRONTEND_URL": "",
             },
@@ -201,9 +201,9 @@ class TestProductionStartupValidation:
             {
                 "ENVIRONMENT": "production",
                 "EMAIL_PROVIDER": "resend",
-                "EMAIL_FROM": "noreply@aquapulse.io",
+                "EMAIL_FROM": "no-reply@aquareef.app",
                 "EMAIL_API_KEY": "re_valid_key",
-                "FRONTEND_URL": "https://aquapulse.io",
+                "FRONTEND_URL": "https://www.aquareef.app",
             },
             clear=False,
         ):
@@ -321,7 +321,7 @@ class TestUnverifiedAccountBehavior:
         password = "SecurePassword123!"
 
         # 1. Registrar usuario con REQUIRE_EMAIL_VERIFICATION=true
-        with patch.dict(os.environ, {"REQUIRE_EMAIL_VERIFICATION": "true", "FRONTEND_URL": "https://aquapulse.io"}):
+        with patch.dict(os.environ, {"REQUIRE_EMAIL_VERIFICATION": "true", "FRONTEND_URL": "https://www.aquareef.app"}):
             reg_res = client.post(
                 "/api/auth/register",
                 json={"email": email, "password": password, "full_name": "Unverified User"},

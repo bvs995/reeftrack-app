@@ -316,7 +316,7 @@ export default function AuthModal({ isOpen, onClose }) {
         <div className="flex justify-center mb-6 relative">
           <img 
             src="/logo-reef-icon.png" 
-            alt="AquaPulse Logo" 
+            alt="AquaReef Logo" 
             onError={(e) => { e.currentTarget.src = '/logo-reef.png'; }}
             className="w-20 h-20 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.3)] object-cover" 
           />
@@ -327,7 +327,7 @@ export default function AuthModal({ isOpen, onClose }) {
             ? t('auth.forgotTitle')
             : authModalTab === 'reset'
             ? t('auth.resetTitle')
-            : 'AquaPulse Commercial Cloud'}
+            : 'AquaReef'}
         </h1>
         <p className="text-xs text-slate-400 text-center mb-6 max-w-xs mx-auto">
           {authModalTab === 'forgot'
@@ -649,7 +649,10 @@ export default function AuthModal({ isOpen, onClose }) {
 
           {authModalTab === 'register' && (
             <p className="text-[11px] text-slate-400 text-center leading-relaxed mt-2">
-              Al registrarte aceptas los <span className="text-cyan-400 font-semibold">Términos de Uso</span> y la <span className="text-cyan-400 font-semibold">Política de Privacidad</span>. Los diagnósticos emitidos por el sistema e IA son de carácter estrictamente orientativo.
+              Al registrarte aceptas los{' '}
+              <a href="/terminos" target="_blank" rel="noopener noreferrer" className="text-cyan-400 font-semibold underline underline-offset-2 hover:text-cyan-300">Términos de Uso</a>
+              {' '}y la{' '}
+              <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-cyan-400 font-semibold underline underline-offset-2 hover:text-cyan-300">Política de Privacidad</a>. Los diagnósticos emitidos por el sistema e IA son de carácter estrictamente orientativo.
             </p>
           )}
         </form>

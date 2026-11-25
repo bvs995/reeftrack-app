@@ -1,5 +1,5 @@
 """
-Módulo de Respaldo y Restauración Probada para AquaPulse (Fase 7 - Operación).
+Módulo de Respaldo y Restauración Probada para AquaReef (Fase 7 - Operación).
 Soporta bases de datos PostgreSQL (Render/Supabase) y SQLite de desarrollo local.
 Garantiza verificación de integridad comparando conteos de filas (COUNT(*)).
 """
@@ -221,7 +221,7 @@ def run_backup_drill(source_db_url: Optional[str] = None) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="AquaPulse Backup & Disaster Recovery CLI (P3.20)")
+    parser = argparse.ArgumentParser(description="AquaReef Backup & Disaster Recovery CLI (P3.20)")
     parser.add_argument("--drill", action="store_true", help="Ejecutar simulacro de backup y restauración con verificación de paridad")
     parser.add_argument("--backup", type=str, nargs="?", const="default", help="Crear respaldo en ruta opcional")
     parser.add_argument("--restore", type=str, help="Restaurar archivo SQL")

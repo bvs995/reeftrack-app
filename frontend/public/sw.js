@@ -92,8 +92,8 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = data.title || 'AquaPulse 🌊';
-  const body = data.body || 'Tienes una nueva actualización en AquaPulse.';
+  const title = data.title || 'AquaReef 🌊';
+  const body = data.body || 'Tienes una nueva actualización en AquaReef.';
   const icon = data.icon || '/icon-192.png';
   const badge = data.badge || '/icon-192.png';
   const url = data.url || '/';
@@ -120,7 +120,7 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Si la ventana de AquaPulse ya está abierta, enfocarla y navegar
+      // Si la ventana de AquaReef ya está abierta, enfocarla y navegar
       for (const client of windowClients) {
         if ('focus' in client) {
           if ('navigate' in client && targetUrl) {

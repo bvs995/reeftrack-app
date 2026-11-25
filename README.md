@@ -1,6 +1,6 @@
-# 🌊 AquaPulse | Progressive Web App (PWA) para Acuarios & Reef
+# 🌊 AquaReef | Progressive Web App (PWA) para Acuarios & Reef
 
-**AquaPulse** es una Progressive Web App de alta precisión diseñada tanto para acuarios marinos de arrecife (**Reef SPS/LPS**) como para acuarios de agua dulce (**Aquascaping Plantado High-Tech / Comunitario**).
+**AquaReef** es una Progressive Web App de alta precisión diseñada tanto para acuarios marinos de arrecife (**Reef SPS/LPS**) como para acuarios de agua dulce (**Aquascaping Plantado High-Tech / Comunitario**).
 
 Su objetivo fundamental es eliminar la fricción en el registro diario de mediciones y proporcionar **analítica predictiva proactiva**:
 - Cálculo automático de **tasas de consumo diario** ($\Delta \text{unidades}/\text{día}$).
@@ -52,7 +52,7 @@ Su objetivo fundamental es eliminar la fricción en el registro diario de medici
 
 ### 1. Despliegue del Backend en Render
 
-AquaPulse incluye un archivo [`render.yaml`](render.yaml) (Render Blueprint) que automatiza la creación del servicio web y de la base de datos PostgreSQL:
+AquaReef incluye un archivo [`render.yaml`](render.yaml) (Render Blueprint) que automatiza la creación del servicio web y de la base de datos PostgreSQL:
 
 1. Ve a tu panel en [Render Dashboard](https://dashboard.render.com).
 2. Haz clic en **Blueprints** -> **New Blueprint Instance**.
@@ -60,7 +60,7 @@ AquaPulse incluye un archivo [`render.yaml`](render.yaml) (Render Blueprint) que
 4. Render leerá [`render.yaml`](render.yaml) y provisionará automáticamente:
    - La base de datos administrada **`aquapulse-postgres`** (PostgreSQL 16).
    - El servicio web **`aquapulse-backend`** con FastAPI, vinculando automáticamente `DATABASE_URL` y ejecutando migraciones iniciales.
-5. Copia la URL pública generada (ej: `https://aquapulse-backend.onrender.com`).
+5. Copia la URL pública generada (ej: `https://reeftrack-api.onrender.com`).
 
 #### Variables de Entorno del Backend en Render:
 | Variable | Descripción | Valor por defecto |
@@ -76,7 +76,7 @@ AquaPulse incluye un archivo [`render.yaml`](render.yaml) (Render Blueprint) que
 ### 2. Despliegue del Frontend en Vercel
 
 1. Ve a [Vercel Dashboard](https://vercel.com/dashboard) y haz clic en **Add New Project**.
-2. Conecta el repositorio de AquaPulse.
+2. Conecta el repositorio de AquaReef.
 3. Configuración del proyecto:
    - **Framework Preset**: `Vite`
    - **Root Directory**: `frontend` *(o raíz si usas el `vercel.json` principal)*
@@ -84,7 +84,7 @@ AquaPulse incluye un archivo [`render.yaml`](render.yaml) (Render Blueprint) que
    - **Output Directory**: `dist`
 4. En **Environment Variables**, añade:
    ```env
-   VITE_API_URL=https://aquapulse-backend.onrender.com
+   VITE_API_URL=https://reeftrack-api.onrender.com
    ```
 5. Haz clic en **Deploy**. El archivo [`frontend/vercel.json`](frontend/vercel.json) asegurará el enrutamiento SPA y la política de caché óptima para Service Worker y PWA.
 

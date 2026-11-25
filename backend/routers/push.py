@@ -1,5 +1,5 @@
 """
-AquaPulse - Router de Notificaciones Web Push (VAPID) y Cron Reminders (P2.17)
+AquaReef - Router de Notificaciones Web Push (VAPID) y Cron Reminders (P2.17)
 """
 import secrets
 import logging
@@ -140,7 +140,7 @@ def test_push_notification(
     sent = send_push_to_user(
         db=db,
         user_id=current_user.id,
-        title="🌊 AquaPulse: Notificación de Prueba",
+        title="🌊 AquaReef: Notificación de Prueba",
         body="¡Las notificaciones Web Push están funcionando correctamente en tu dispositivo!",
         url="/?tab=dashboard",
         tag="aquapulse-test"

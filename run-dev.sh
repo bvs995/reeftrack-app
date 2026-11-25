@@ -7,7 +7,7 @@ cd "$DIR"
 export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 echo "=========================================================="
-echo "  🌊 AquaPulse - Modo Desarrollo (Hot Reload)"
+echo "  🌊 AquaReef - Modo Desarrollo (Hot Reload)"
 echo "=========================================================="
 echo ""
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AquaPulse Code Review Generator
+AquaReef Code Review Generator
 Consolidates source code into a clean, secure markdown file.
 Excludes node_modules, venv, .git, dist, __pycache__, binary assets, and .env files.
 Audits for leaks of passwords, VAPID private keys, Gemini keys, and database credentials.
@@ -173,7 +173,7 @@ def main():
         
     # Build markdown
     md_parts = []
-    md_parts.append("# 🌊 AquaPulse — Consolidado Completo de Código Fuente y Arquitectura\n")
+    md_parts.append("# 🌊 AquaReef — Consolidado Completo de Código Fuente y Arquitectura\n")
     md_parts.append(f"> **Fecha de Generación**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     md_parts.append(f"> **Archivos Consolidados**: {len(files)} archivos de código fuente")
     md_parts.append(f"> **Auditoría de Seguridad**: VERIFICADO - 0 contraseñas, 0 llaves VAPID privadas, 0 GEMINI_API_KEY y 0 credenciales de BD filtradas.")
