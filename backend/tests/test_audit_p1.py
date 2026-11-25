@@ -480,6 +480,34 @@ class TestAuditP1Point11:
         missing = required_tables - tables
         assert not missing, f"Faltan tablas creadas por Alembic en base nueva: {missing}"
 
+        # Cada columna declarada en los modelos debe existir tras migrar. En producción
+        # init_db() no agrega columnas, así que una columna faltante rompe las consultas.
+        import backend.models  # noqa: F401  registra los modelos en Base.metadata
+        from backend.database import Base
+
+        missing_cols = []
+        for table in Base.metadata.sorted_tables:
+            if table.name not in tables:
+                missing_cols.append(f"{table.name} (tabla completa)")
+                continue
+            db_cols = {c["name"] for c in insp.get_columns(table.name)}
+            missing_cols.extend(f"{table.name}.{c.name}" for c in table.columns if c.name not in db_cols)
+        assert not missing_cols, f"Columnas de los modelos que Alembic no crea: {missing_cols}"
+
+    def test_migrations_downgrade_to_base_and_upgrade_again(self, tmp_path):
+        """Todas las migraciones deben poder revertirse hasta base y volver a aplicarse."""
+        from alembic.config import Config
+        from alembic import command
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent.parent
+        alembic_cfg = Config(str(root / "alembic.ini"))
+        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{tmp_path / 'roundtrip.db'}")
+
+        command.upgrade(alembic_cfg, "head")
+        command.downgrade(alembic_cfg, "base")
+        command.upgrade(alembic_cfg, "head")
+
 
 
 

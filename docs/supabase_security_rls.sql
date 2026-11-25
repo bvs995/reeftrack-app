@@ -1,6 +1,15 @@
 -- ==============================================================================
 -- AQUAPULSE - POLÍTICAS DE SEGURIDAD RLS (SUPABASE / POSTGRESQL) Y ROL SIN DDL
 -- ==============================================================================
+--
+-- ⚠️ NO EJECUTAR TAL CUAL. Se conserva como referencia.
+-- El backend se conecta como dueño de las tablas y nunca fija app.current_user_id,
+-- así que el FORCE ROW LEVEL SECURITY de abajo le ocultaría todas las filas y la app
+-- dejaría de funcionar. Además omite varias tablas (tokens, auditorías, cuotas).
+-- La protección vigente está en la migración de Alembic
+-- alembic/versions/8a9b0c1d2e3f_enable_rls_and_lock_supabase_api_roles.py
+-- (RLS sin políticas en todo public + REVOKE a anon/authenticated), y
+-- scripts/verify_migrations.py comprueba que siga así.
 
 -- 1. CREACIÓN DE USUARIO DE APLICACIÓN CON PRIVILEGIOS MÍNIMOS (SIN PERMISOS DDL)
 -- ------------------------------------------------------------------------------
