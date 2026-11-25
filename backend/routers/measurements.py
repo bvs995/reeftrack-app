@@ -24,6 +24,12 @@ from backend.vision import (
     analyze_test_image,
 )
 from backend.rate_limits import scan_quota_manager
+from backend.services.ai_service import (
+    VISION_AUDIT_STATUS,
+    ai_budget_block_reason,
+    estimate_gemini_cost,
+    record_diagnostic_audit,
+)
 from backend.analytics import calculate_predictions
 from backend.push_service import check_and_notify_measurement_alert
 
@@ -296,8 +302,24 @@ def scan_measurement_photo(
     payload: ScanMeasurementRequest,
     request: Request,
     response: Response,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
+    # Tope de gasto en IA (global y por usuario): si ya se alcanzó, no se llama a Gemini ni se
+    # consume cuota; el usuario puede escribir el valor a mano.
+    block_reason = ai_budget_block_reason(db, current_user.id)
+    if block_reason:
+        logger.warning(f"Escaneo bloqueado por presupuesto de IA: {block_reason}")
+        return ScanMeasurementResponse(
+            success=False,
+            api_key_configured=True,
+            status="budget_exceeded",
+            is_draft=True,
+            requires_review=True,
+            parameter=payload.preferred_parameter,
+            message="El escaneo con IA no está disponible por ahora (se alcanzó el límite de uso de este mes). Ingresa el valor manualmente.",
+        )
+
     quota_info = scan_quota_manager.check_and_consume(
         user_id=current_user.id,
         subscription_tier=current_user.subscription_tier,
@@ -311,12 +333,28 @@ def scan_measurement_photo(
 
     try:
         is_dev = os.getenv("ENVIRONMENT", "").strip().lower() == "development"
+        usage: dict = {}
         result = analyze_test_image(
             image_data=payload.image_base64,
             preferred_parameter=payload.preferred_parameter,
             allow_demo_fallback=is_dev,
-            save_image=payload.save_image
+            save_image=payload.save_image,
+            usage_sink=usage,
         )
+        if usage.get("response") is not None:
+            tokens_in, tokens_out, cost_usd = estimate_gemini_cost(usage["response"])
+            record_diagnostic_audit(
+                db=db,
+                user_id=current_user.id,
+                tank_id=None,
+                prompt_version=f"vision:{usage.get('model', '')}",
+                inputs={"parameter": result.parameter, "preferred_parameter": payload.preferred_parameter},
+                rules_alerts=[],
+                raw_ai_output=None,
+                status=VISION_AUDIT_STATUS,
+                cost_usd=cost_usd,
+                token_count=tokens_in + tokens_out,
+            )
         result.remaining_scans_today = quota_info["remaining_today"]
         result.daily_quota = quota_info["daily_quota"]
         return result

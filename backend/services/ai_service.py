@@ -172,6 +172,58 @@ def get_current_month_ai_spend(db: Optional[Session]) -> float:
 USER_MONTHLY_AI_BUDGET_USD = float(os.getenv("USER_MONTHLY_AI_BUDGET_USD", "2.00"))
 
 
+# Estado con el que se registran los escaneos con cámara en diagnostic_audits: cuentan para el
+# gasto, pero no son diagnósticos y no deben entrar en la tasa de descarte.
+VISION_AUDIT_STATUS = "vision"
+
+
+def _price_per_million(var: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.getenv(var, str(default))))
+    except ValueError:
+        return default
+
+
+def estimate_gemini_cost(*responses: Any) -> Tuple[int, int, float]:
+    """
+    Suma tokens y costo estimado en USD de una o varias respuestas de Gemini.
+
+    Los precios se configuran con GEMINI_PRICE_INPUT_PER_M y GEMINI_PRICE_OUTPUT_PER_M (USD por
+    millón de tokens). Los valores por defecto son deliberadamente altos: es preferible que el tope
+    de gasto se active antes de tiempo a que se active tarde. Los tokens de razonamiento
+    (thoughts_token_count) se facturan como salida, así que se suman a la salida.
+    """
+    price_in = _price_per_million("GEMINI_PRICE_INPUT_PER_M", 0.50)
+    price_out = _price_per_million("GEMINI_PRICE_OUTPUT_PER_M", 3.00)
+    tokens_in = tokens_out = 0
+    for resp in responses:
+        usage = getattr(resp, "usage_metadata", None) if resp is not None else None
+        if not usage:
+            continue
+        tokens_in += int(getattr(usage, "prompt_token_count", 0) or 0)
+        tokens_out += int(getattr(usage, "candidates_token_count", 0) or 0)
+        tokens_out += int(getattr(usage, "thoughts_token_count", 0) or 0)
+    cost = round((tokens_in * price_in + tokens_out * price_out) / 1_000_000, 6)
+    return tokens_in, tokens_out, cost
+
+
+def ai_budget_block_reason(db: Optional[Session], user_id: Optional[int]) -> Optional[str]:
+    """
+    Devuelve el motivo si ya se alcanzó el tope mensual global (GEMINI_MONTHLY_BUDGET_USD) o el
+    del usuario (USER_MONTHLY_AI_BUDGET_USD); None si todavía se puede llamar a Gemini.
+    Lo usan tanto los diagnósticos como el escaneo con cámara.
+    """
+    global_limit = float(os.getenv("GEMINI_MONTHLY_BUDGET_USD", "25.0"))
+    global_spend = get_current_month_ai_spend(db)
+    if global_spend >= global_limit:
+        return f"Límite mensual global de gasto en IA alcanzado (${global_spend:.2f} >= ${global_limit:.2f})."
+    user_limit = float(os.getenv("USER_MONTHLY_AI_BUDGET_USD", str(USER_MONTHLY_AI_BUDGET_USD)))
+    user_spend = get_current_month_user_ai_spend(db, user_id)
+    if user_id and user_spend >= user_limit:
+        return f"Tope mensual de gasto en IA por usuario alcanzado (${user_spend:.2f} >= ${user_limit:.2f})."
+    return None
+
+
 def get_current_month_user_ai_spend(db: Optional[Session], user_id: Optional[int]) -> float:
     """Calcula el gasto acumulado en USD en llamadas a Gemini por un usuario en el mes en curso (P2.15)."""
     if not db or not user_id:
@@ -287,7 +339,7 @@ def record_diagnostic_audit(
 def check_discard_rate_alert(db: Session, sample_size: int = 50, threshold: float = 0.25) -> bool:
     """Evalúa si la tasa de descarte de la IA en los últimos N diagnósticos supera el umbral crítico (Fase 7)."""
     try:
-        recent = db.query(DiagnosticAudit.status).order_by(DiagnosticAudit.created_at.desc()).limit(sample_size).all()
+        recent = db.query(DiagnosticAudit.status).filter(DiagnosticAudit.status != VISION_AUDIT_STATUS).order_by(DiagnosticAudit.created_at.desc()).limit(sample_size).all()
         if len(recent) < 5:
             return False
         total = len(recent)
@@ -317,7 +369,7 @@ def get_ai_audit_statistics(db: Session, sample_size: int = 100) -> Dict[str, An
             DiagnosticAudit.created_at >= first_day_of_month
         ).scalar() or 0.0
 
-        recent = db.query(DiagnosticAudit.status).order_by(DiagnosticAudit.created_at.desc()).limit(sample_size).all()
+        recent = db.query(DiagnosticAudit.status).filter(DiagnosticAudit.status != VISION_AUDIT_STATUS).order_by(DiagnosticAudit.created_at.desc()).limit(sample_size).all()
         total = len(recent)
         discarded = sum(1 for (st,) in recent if st == "discarded")
         accepted = sum(1 for (st,) in recent if st == "accepted")
@@ -753,6 +805,7 @@ def analizar_parametros_estructurado(
         # Solo se ejecuta si la severidad de las reglas determinísticas es 'warning' o 'critical'
         # ======================================================================
         pass2_output: Optional[AIDiagnosisOutput] = None
+        resp_audit = None  # segunda llamada (si se hace) también se cobra
         if should_execute_double_pass(rules_max_severity):
             try:
                 auditor_prompt = (
@@ -795,10 +848,8 @@ def analizar_parametros_estructurado(
         # PASO 4: VALIDADOR ESTRICTO ANTES DE MOSTRAR (4.4) Y AUDITORÍA (FASE 7)
         # ======================================================================
         latency_ms = round((time.time() - start_time) * 1000, 2)
-        tokens_in = getattr(response.usage_metadata, "prompt_token_count", 0) if (hasattr(response, "usage_metadata") and response.usage_metadata) else 450
-        tokens_out = getattr(response.usage_metadata, "candidates_token_count", 0) if (hasattr(response, "usage_metadata") and response.usage_metadata) else 220
+        tokens_in, tokens_out, cost_usd = estimate_gemini_cost(response, resp_audit)
         total_tokens = int(tokens_in + tokens_out)
-        cost_usd = round((tokens_in * 0.075 + tokens_out * 0.30) / 1_000_000, 6)
         raw_text_record = getattr(response, "text", "") or ""
 
         is_valid, sanitized_output, discrepancies = validate_and_sanitize_ai_diagnosis(
