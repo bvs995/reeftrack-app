@@ -669,7 +669,7 @@ export default function AuthModal({ isOpen, onClose }) {
         )}
 
         {/* Separador y Demo Login solo en Login/Register */}
-        {(authModalTab === 'login' || authModalTab === 'register') && (
+        {import.meta.env.DEV && (authModalTab === 'login' || authModalTab === 'register') && (
           <>
             <div className="relative my-5">
               <div className="absolute inset-0 flex items-center">

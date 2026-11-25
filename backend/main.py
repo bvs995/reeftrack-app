@@ -178,14 +178,19 @@ def startup_event():
     except Exception as e:
         logger.error(f"Error durante init_db en startup: {e}")
 
-    try:
-        db = next(get_db())
+    # Usuario demo con contraseña fija: SOLO en desarrollo y nunca en producción.
+    seed_demo = (not is_production) and os.getenv("SEED_DEMO_DATA", "true").strip().lower() in ("true", "1", "yes")
+    if seed_demo:
         try:
-            seed_database_if_empty(db)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning(f"Aviso durante seed_database_if_empty en startup: {e}")
+            db = next(get_db())
+            try:
+                seed_database_if_empty(db)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Aviso durante seed_database_if_empty en startup: {e}")
+    else:
+        logger.info("Sembrado de usuario demo desactivado (producción o SEED_DEMO_DATA=false).")
 
 
 # ==============================================================================

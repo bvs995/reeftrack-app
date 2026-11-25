@@ -109,7 +109,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loginDemo = useCallback(async () => {
-    return await login('demo@aquapulse.io', 'demo123');
+    // import.meta.env.DEV es false en producción: Vite elimina este bloque (y la contraseña demo) del bundle.
+    if (import.meta.env.DEV) {
+      return await login('demo@aquapulse.io', 'demo123');
+    }
+    throw new Error('El acceso demo no está disponible.');
   }, [login]);
 
   const openAuthModal = useCallback((tab = 'login') => {

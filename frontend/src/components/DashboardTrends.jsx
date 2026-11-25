@@ -966,17 +966,15 @@ export default function DashboardTrends({
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   }, [measurements, currentParam.key, activeParam]);
 
-  // Calcular la pendiente local para proyección de 3 días si no viene precalculada
-  const localSlope = useMemo(() => {
-    if (validReadings.length < 2) return 0;
+  // Tendencia por regresión lineal con R². Solo es "concluyente" con al menos 3 mediciones,
+  // un lapso mayor a ~2 horas entre la primera y la última, y R² >= 0.5 (criterio de AquaPulse).
+  // Si no se cumple, NO se dibuja proyección: una línea plana con un solo punto engaña al usuario.
+  const trend = useMemo(() => {
+    if (validReadings.length < 3) return { conclusive: false, slope: 0, r2: null, reason: 'insufficient' };
     const recent = validReadings.slice(-5);
     const t0 = new Date(recent[0].timestamp).getTime() / 86400000;
     const tLast = new Date(recent[recent.length - 1].timestamp).getTime() / 86400000;
-    const spanDays = tLast - t0;
-
-    // Si las lecturas están tomadas a menos de 2 horas de diferencia, asumir estabilidad (tasa 0)
-    // para evitar divisiones infinitesimales que disparen pendientes erráticas (ej: -73.11)
-    if (spanDays < 0.08) return 0;
+    if (tLast - t0 < 0.08) return { conclusive: false, slope: 0, r2: null, reason: 'too_close' };
 
     const points = recent.map(r => [
       (new Date(r.timestamp).getTime() / 86400000) - t0,
@@ -988,8 +986,15 @@ export default function DashboardTrends({
     const sumXY = points.reduce((acc, p) => acc + p[0] * p[1], 0);
     const sumX2 = points.reduce((acc, p) => acc + p[0] ** 2, 0);
     const den = (n * sumX2 - sumX ** 2);
-    if (Math.abs(den) < 1e-9) return 0;
+    if (Math.abs(den) < 1e-9) return { conclusive: false, slope: 0, r2: null, reason: 'too_close' };
     const rawSlope = (n * sumXY - sumX * sumY) / den;
+
+    const meanY = sumY / n;
+    const intercept = meanY - rawSlope * (sumX / n);
+    const ssTot = points.reduce((acc, p) => acc + (p[1] - meanY) ** 2, 0);
+    const ssRes = points.reduce((acc, p) => acc + (p[1] - (intercept + rawSlope * p[0])) ** 2, 0);
+    const r2 = ssTot < 1e-12 ? 1 : 1 - ssRes / ssTot; // valores idénticos = parámetro estable
+    if (r2 < 0.5) return { conclusive: false, slope: 0, r2, reason: 'noisy' };
 
     // Límites biológicos de variación máxima por día para amortiguar ruido
     const maxDailyChange = {
@@ -1010,8 +1015,14 @@ export default function DashboardTrends({
       temperatura: 3.0
     };
     const maxLimit = maxDailyChange[currentParam.key] || 5.0;
-    return Math.max(-maxLimit, Math.min(maxLimit, rawSlope));
+    return { conclusive: true, slope: Math.max(-maxLimit, Math.min(maxLimit, rawSlope)), r2, reason: 'ok' };
   }, [validReadings, currentParam.key, activeParam]);
+
+  const localSlope = trend.slope;
+  const trendMessage =
+    trend.reason === 'insufficient' ? `Faltan mediciones (${validReadings.length}/3)` :
+    trend.reason === 'noisy' ? 'Tendencia no concluyente' :
+    trend.reason === 'too_close' ? 'Mediciones muy juntas' : '--';
 
   // Configurar datasets de Chart.js con la zona segura sombreada y línea punteada de 3 días
   const chartData = useMemo(() => {
@@ -1044,7 +1055,7 @@ export default function DashboardTrends({
       projValues.push(Number(proyeccionDia.toFixed(3)));
     }
 
-    const allLabels = [...realLabels, ...projLabels];
+    const allLabels = trend.conclusive ? [...realLabels, ...projLabels] : realLabels;
 
     return {
       labels: allLabels,
@@ -1052,7 +1063,7 @@ export default function DashboardTrends({
         // Medición Real del Acuarista
         {
           label: `Medición Real (${currentParam.unit})`,
-          data: [...realValues, null, null, null],
+          data: trend.conclusive ? [...realValues, null, null, null] : realValues,
           borderColor: currentParam.color,
           backgroundColor: currentParam.color,
           borderWidth: 3,
@@ -1067,7 +1078,8 @@ export default function DashboardTrends({
         // Línea Punteada de Proyección a 3 Días
         {
           label: `Proyección 3 Días (${pendienteDiaria >= 0 ? '+' : ''}${pendienteDiaria.toFixed(2)} ${currentParam.unit}/día)`,
-          data: projValues,
+          data: trend.conclusive ? projValues : [],
+          hidden: !trend.conclusive,
           borderColor: '#38bdf8', // Cyan
           borderDash: [6, 6], // Define el estilo punteado
           borderWidth: 2.5,
@@ -1081,7 +1093,24 @@ export default function DashboardTrends({
         }
       ]
     };
-  }, [validReadings, currentParam, localSlope, activeParam]);
+  }, [validReadings, currentParam, localSlope, activeParam, trend]);
+
+  // Rango del eje Y: datos + proyección + zona segura, con un margen. Ya no se fuerza a empezar en 0.
+  const yRange = useMemo(() => {
+    const vals = validReadings
+      .map(r => getReadingValue(r, currentParam.key) ?? getReadingValue(r, activeParam))
+      .filter(v => v !== null && v !== undefined && !isNaN(v));
+    const projs = chartData && chartData.datasets[1] ? chartData.datasets[1].data.filter(v => v !== null && v !== undefined) : [];
+    const nums = [...vals, ...projs].map(Number);
+    if (nums.length === 0) return {};
+    if (Number.isFinite(currentParam.safeMin)) nums.push(currentParam.safeMin);
+    if (Number.isFinite(currentParam.safeMax)) nums.push(currentParam.safeMax);
+    const lo = Math.min(...nums);
+    const hi = Math.max(...nums);
+    const span = hi - lo;
+    const pad = span > 0 ? span * 0.2 : (Math.abs(hi) * 0.05 || 0.1);
+    return { min: lo >= 0 ? Math.max(0, lo - pad) : lo - pad, max: hi + pad };
+  }, [validReadings, currentParam, activeParam, chartData]);
 
   const isPhosphate = currentParam.key === 'phosphate_ppm' || activeParam === 'phosphate';
   const isSalinity = currentParam.key === 'salinity_ppt' || currentParam.key === 'salinity' || activeParam === 'salinidad';
@@ -1091,13 +1120,13 @@ export default function DashboardTrends({
     maintainAspectRatio: false,
     scales: {
       y: {
-        min: isSalinity ? 1.018 : 0, // Bloquea el eje Y apropiadamente
-        suggestedMax: currentParam.suggestedMax || (currentParam.safeMax ? currentParam.safeMax * 1.25 : 1.0),
+        min: yRange.min,
+        max: yRange.max,
         grid: {
           color: 'rgba(255, 255, 255, 0.05)',
         },
         ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } },
-        suggestedMin: isSalinity ? 1.018 : (currentParam.safeMin && currentParam.safeMin > 0 ? currentParam.safeMin * 0.8 : 0)
+        // (el rango del eje Y se calcula en yRange)
       },
       x: {
         grid: {
@@ -1506,7 +1535,9 @@ export default function DashboardTrends({
               {currentParam.name}{' '}
               <span className="ml-3 text-xs bg-emerald-900/50 text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-800 font-semibold">
                 Zona Segura:{' '}
-                {currentParam.safeMin !== undefined && currentParam.safeMin !== null
+                {currentParam.safeMax === 0
+                  ? '0 (sin trazas)'
+                  : currentParam.safeMin !== undefined && currentParam.safeMin !== null
                   ? `${currentParam.safeMin} - ${currentParam.safeMax}`
                   : `< ${currentParam.safeMax}`}{' '}
                 {currentParam.unit}
@@ -1543,17 +1574,23 @@ export default function DashboardTrends({
               <span className={`text-sm font-black flex items-center justify-end gap-1 ${
                 localSlope < 0 ? 'text-amber-400' : 'text-cyan-400'
               }`}>
-                {localSlope < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
-                {localSlope > 0 ? '+' : ''}{localSlope.toFixed(3)} {currentParam.unit}/d
+                {trend.conclusive ? (
+                  <>
+                    {localSlope < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
+                    {localSlope > 0 ? '+' : ''}{localSlope.toFixed(3)} {currentParam.unit}/d
+                  </>
+                ) : (
+                  <span className="text-slate-400">—</span>
+                )}
               </span>
             </div>
 
             <div className="bg-marine-950 px-3.5 py-2 rounded-xl border border-marine-800 text-right hidden lg:block">
               <span className="block text-[10px] font-black uppercase text-slate-400">Proyección +3 Días</span>
               <span className="text-sm font-black text-white">
-                {validReadings.length > 0
+                {trend.conclusive && validReadings.length > 0
                   ? `${Math.max(0, (getReadingValue(validReadings[validReadings.length - 1], currentParam.key) ?? getReadingValue(validReadings[validReadings.length - 1], activeParam) ?? 0) + localSlope * 3).toFixed(2)} ${currentParam.unit}`
-                  : '--'}
+                  : trendMessage}
               </span>
             </div>
           </div>
@@ -1590,10 +1627,12 @@ export default function DashboardTrends({
               <span className="w-3 h-3 rounded-full bg-cyan-400" />
               <span className="text-slate-300 font-semibold">Medición Real</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400" />
-              <span className="text-slate-300 font-semibold">Proyección Punteada (+3 días)</span>
-            </div>
+            {trend.conclusive && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400" />
+                <span className="text-slate-300 font-semibold">Proyección Punteada (+3 días)</span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/40" />
               <span className="text-slate-300 font-semibold">Zona de Rango Seguro</span>
