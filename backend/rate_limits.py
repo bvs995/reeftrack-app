@@ -1,6 +1,8 @@
 """
 AquaPulse - Módulo Centralizado de Rate Limiting y Cuotas Persistentes (P1.7 / P2.17)
 """
+import hmac
+import ipaddress
 import os
 import threading
 import logging
@@ -15,22 +17,128 @@ from backend.services.email_service import mask_email
 
 logger = logging.getLogger("aquapulse.rate_limits")
 
-# Proxy de confianza (P1.7)
-raw_trusted = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1,::1").strip()
-TRUSTED_PROXIES = {ip.strip() for ip in raw_trusted.split(",") if ip.strip()}
+# ------------------------------------------------------------------------------
+# Resolución de la IP real del cliente (P1.7)
+#
+# Cadena en producción:  navegador -> Vercel (rewrite /api/*) -> balanceador de Render -> uvicorn
+#
+# Cada proxy AÑADE a la derecha de X-Forwarded-For la IP que se conectó con él; lo que esté a la
+# izquierda lo escribió quien hizo la petición y puede ser falso. Por eso nunca se toma la primera
+# entrada: se cuentan desde la derecha los saltos que sí son de confianza.
+#
+#   TRUSTED_PROXY_HOPS   Proxies delante de la app que no se pueden saltar (en Render: 1, su
+#                        balanceador; el contenedor no es accesible de otra forma).
+#   PROXY_SHARED_SECRET  Secreto que Vercel pone en la cabecera X-Proxy-Secret (transform "set"
+#                        de vercel.json, que pisa cualquier valor que mande el visitante). Si la
+#                        petición lo trae, se confía en un salto más: el de Vercel. Admite varios
+#                        valores separados por comas para rotarlo sin cortes.
+#   FORWARDED_ALLOW_IPS  IPs/CIDR de proxies identificables por su IP (por defecto loopback, para
+#                        desarrollo con proxy local). OJO: uvicorn también lee esta variable y, si
+#                        el par es de confianza, reescribe request.client.host antes de que llegue
+#                        aquí; con "*" toma la primera entrada (falsificable). No definirla en Render.
+# ------------------------------------------------------------------------------
+PROXY_SECRET_HEADER = "X-Proxy-Secret"
+
+
+def _parse_ip(value: str) -> Optional[ipaddress._BaseAddress]:
+    """Interpreta una entrada de X-Forwarded-For ("1.2.3.4", "1.2.3.4:5678", "[::1]:80")."""
+    value = (value or "").strip().strip('"')
+    if not value:
+        return None
+    if value.startswith("["):  # IPv6 con puerto
+        value = value[1:].split("]", 1)[0]
+    elif value.count(":") == 1:  # IPv4 con puerto
+        value = value.split(":", 1)[0]
+    try:
+        return ipaddress.ip_address(value)
+    except ValueError:
+        return None
+
+
+def _trusted_networks() -> tuple[bool, list]:
+    raw = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
+    trust_all = False
+    networks = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if item == "*":
+            trust_all = True
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            logger.warning("FORWARDED_ALLOW_IPS contiene un valor inválido e ignorado: %r", item)
+    return trust_all, networks
+
+
+def _trusted_proxy_hops() -> int:
+    try:
+        return max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "0")))
+    except ValueError:
+        logger.warning("TRUSTED_PROXY_HOPS no es un entero; se usa 0.")
+        return 0
+
+
+def _has_valid_proxy_secret(request: Request) -> bool:
+    raw = os.getenv("PROXY_SHARED_SECRET", "")
+    secrets_ = [s.strip() for s in raw.split(",") if s.strip()]
+    if not secrets_:
+        return False
+    provided = request.headers.get(PROXY_SECRET_HEADER) or ""
+    if not provided:
+        return False
+    provided_b = provided.encode("utf-8")
+    # Comparar contra todos sin cortocircuito para no filtrar cuál coincide por tiempo.
+    match = False
+    for candidate in secrets_:
+        match |= hmac.compare_digest(provided_b, candidate.encode("utf-8"))
+    return match
 
 
 def get_client_ip(request: Request) -> str:
     """
-    Resuelve la IP real del cliente solo detrás de un proxy de confianza (P1.7).
-    Previene spoofing de cabeceras X-Forwarded-For cuando proviene de clientes no autorizados.
+    Resuelve la IP real del cliente sin confiar en cabeceras que el cliente pueda falsificar (P1.7).
+
+    Se arma la cadena X-Forwarded-For + [par TCP] y se recorre desde la derecha descartando:
+      1. los primeros N saltos, con N = TRUSTED_PROXY_HOPS (+1 si llega el secreto de Vercel);
+      2. después, cualquier salto cuya IP esté en FORWARDED_ALLOW_IPS.
+    La primera entrada que no se descarta es el cliente. Si es ilegible se usa el par TCP.
     """
-    peer_ip = request.client.host if request.client else "127.0.0.1"
-    if peer_ip in TRUSTED_PROXIES or "*" in TRUSTED_PROXIES:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return peer_ip
+    peer = request.client.host if request.client else "127.0.0.1"
+
+    forwarded = request.headers.get("X-Forwarded-For") or ""
+    chain = [part.strip() for part in forwarded.split(",") if part.strip()]
+    chain.append(peer)
+
+    hops = _trusted_proxy_hops()
+    if hops and _has_valid_proxy_secret(request):
+        hops += 1  # el salto de Vercel también es de confianza
+    trust_all, networks = _trusted_networks()
+
+    def is_trusted(entry: str) -> bool:
+        if trust_all:
+            return True
+        ip = _parse_ip(entry)
+        return ip is not None and any(ip in net for net in networks)
+
+    index = len(chain) - 1
+    while index > 0 and (hops > 0 or is_trusted(chain[index])):
+        index -= 1
+        hops = max(0, hops - 1)
+
+    client_ip = _parse_ip(chain[index])
+    if client_ip is None:
+        return peer
+    return str(client_ip)
+
+
+if os.getenv("ENVIRONMENT", "").lower() == "production" and "*" in os.getenv("FORWARDED_ALLOW_IPS", ""):
+    logger.warning(
+        "FORWARDED_ALLOW_IPS='*' en producción: uvicorn y el rate limit tomarán la primera IP de "
+        "X-Forwarded-For, que el cliente puede falsificar. Usa TRUSTED_PROXY_HOPS y PROXY_SHARED_SECRET."
+    )
 
 
 AUTH_RATE_LIMIT_IP_MAX = int(os.getenv("AUTH_RATE_LIMIT_IP_MAX", "5"))

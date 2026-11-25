@@ -121,12 +121,14 @@ class TestAuditP1Point7:
         resolved_ip = get_client_ip(req)
         assert resolved_ip == "203.0.113.195", f"Debe rechazar X-Forwarded-For si el peer no es proxy confiable: {resolved_ip}"
 
-        # Si el peer es un proxy local confiable (127.0.0.1)
+        # Si el peer es un proxy local confiable (127.0.0.1) se usa la entrada que ese proxy
+        # añadió (la más a la derecha), no la primera: "198.51.100.1" la pudo escribir el cliente
+        # y "10.0.0.1" es quien realmente se conectó al proxy de confianza.
         req_trusted = MagicMock()
         req_trusted.client.host = "127.0.0.1"
         req_trusted.headers = {"X-Forwarded-For": "198.51.100.1, 10.0.0.1"}
         resolved_trusted = get_client_ip(req_trusted)
-        assert resolved_trusted == "198.51.100.1", f"Debe aceptar X-Forwarded-For solo de proxy confiable: {resolved_trusted}"
+        assert resolved_trusted == "10.0.0.1", f"Debe tomar el salto añadido por el proxy confiable: {resolved_trusted}"
 
     def test_auth_rate_limiting_by_email_and_ip_persists_in_db(self):
         """Rate limit de autenticación debe registrarse en BD y limitar tanto por email como por IP."""

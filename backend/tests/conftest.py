@@ -29,6 +29,12 @@ os.environ.setdefault("SECRET_KEY", "clave-solo-para-pruebas-automaticas-no-usar
 #    Las pruebas que necesitan una clave "presente" la fijan con patch.dict.
 os.environ["GEMINI_API_KEY"] = ""
 
+# 6b. Resolución de IP del cliente sin proxies de confianza salvo loopback, sea cual sea el .env
+#     de desarrollo (allí suele estar FORWARDED_ALLOW_IPS=*). Las pruebas de IP los fijan aparte.
+os.environ["FORWARDED_ALLOW_IPS"] = "127.0.0.1,::1"
+os.environ["TRUSTED_PROXY_HOPS"] = "0"
+os.environ["PROXY_SHARED_SECRET"] = ""
+
 # 6. PWA mínima y propia de las pruebas: frontend/dist no está en git, así que sin esto
 #    las rutas de la SPA solo existirían en máquinas donde alguien compiló el frontend.
 import tempfile
