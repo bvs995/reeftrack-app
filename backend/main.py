@@ -246,7 +246,10 @@ app.include_router(legal_router)
 # 🌐 SERVICIO DE LA PWA (SPA FALLBACK Y PROTECCIÓN TRAVERSAL P0.3)
 # ==============================================================================
 
-DIST_DIR = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))).resolve()
+DIST_DIR = Path(
+    os.getenv("FRONTEND_DIST_DIR")
+    or os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+).resolve()
 
 if DIST_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")

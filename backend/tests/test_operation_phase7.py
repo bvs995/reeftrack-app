@@ -177,7 +177,8 @@ class TestOperationPhase7:
         las llamadas externas a Gemini se bloquean proactivamente y se retorna diagnóstico por reglas determinísticas.
         """
         # Fijamos un límite bajo para la prueba (ej: 0.05 USD)
-        with patch.dict(os.environ, {"GEMINI_MONTHLY_BUDGET_USD": "0.05"}):
+        # Clave falsa: el bloqueo por presupuesto ocurre antes de cualquier llamada a Gemini.
+        with patch.dict(os.environ, {"GEMINI_MONTHLY_BUDGET_USD": "0.05", "GEMINI_API_KEY": "clave-falsa-solo-pruebas"}):
             # Simulamos gasto previo de 0.06 USD en auditoría
             record_diagnostic_audit(
                 db=self.db,

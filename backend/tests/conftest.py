@@ -24,3 +24,17 @@ if not _db_url.startswith("sqlite"):
 
 # 4. Clave de firma solo para pruebas si no se definió una.
 os.environ.setdefault("SECRET_KEY", "clave-solo-para-pruebas-automaticas-no-usar-en-produccion")
+
+# 5. Nunca se llama a Gemini real desde las pruebas (ni se gasta con tu clave de desarrollo).
+#    Las pruebas que necesitan una clave "presente" la fijan con patch.dict.
+os.environ["GEMINI_API_KEY"] = ""
+
+# 6. PWA mínima y propia de las pruebas: frontend/dist no está en git, así que sin esto
+#    las rutas de la SPA solo existirían en máquinas donde alguien compiló el frontend.
+import tempfile
+from pathlib import Path
+
+_dist = Path(tempfile.mkdtemp(prefix="aquapulse-dist-"))
+(_dist / "assets").mkdir()
+(_dist / "index.html").write_text("<!doctype html><title>AquaPulse test</title>", encoding="utf-8")
+os.environ["FRONTEND_DIST_DIR"] = str(_dist)
