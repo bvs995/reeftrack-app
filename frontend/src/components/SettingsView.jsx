@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import PushNotificationSettings from './PushNotificationSettings';
+import { exportUserData, deleteUserAccount } from '../api';
+import { buildReportMailto } from '../utils/reportProblem';
 import {
   User,
   Mail,
@@ -42,6 +44,55 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendFeedback, setResendFeedback] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [dataFeedback, setDataFeedback] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  // Derecho de acceso y portabilidad: descarga un JSON con todos tus datos.
+  const handleExportData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setDataFeedback(null);
+    try {
+      const data = await exportUserData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `aquareef-mis-datos-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDataFeedback({ type: 'success', message: 'Descargamos un archivo JSON con tus datos.' });
+    } catch (err) {
+      setDataFeedback({ type: 'error', message: err.message || 'No se pudieron exportar tus datos.' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Derecho de supresión: borrado inmediato y permanente (el backend exige la contraseña).
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    if (deleting || deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR' || !deletePassword) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteUserAccount(deletePassword);
+      setShowDeleteModal(false);
+      await logout();
+    } catch (err) {
+      setDeleteError(err.message || 'No se pudo eliminar la cuenta.');
+    } finally {
+      setDeleting(false);
+      setDeletePassword('');
+    }
+  };
 
   const handleResendVerificationInSettings = async () => {
     if (!user?.email || resendingEmail) return;
@@ -303,6 +354,47 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
             <span className="flex items-center">🔒 Privacidad y Términos de Uso</span>
             <span className="text-gray-400">{'>'}</span>
           </button>
+
+          {/* Reportar un problema (fase de prueba) */}
+          <a
+            href={buildReportMailto({ userId: user?.id })}
+            onClick={() => triggerHaptic()}
+            className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer"
+          >
+            <span className="flex items-center">🐞 Reportar un problema</span>
+            <span className="text-gray-400">Beta {'>'}</span>
+          </a>
+
+          {isAuthenticated && (
+            <>
+              {/* Exportar mis datos (acceso y portabilidad) */}
+              <button
+                type="button"
+                onClick={() => { triggerHaptic(); handleExportData(); }}
+                disabled={exporting}
+                className="w-full flex justify-between items-center p-4 text-left text-white hover:bg-slate-700/50 transition cursor-pointer disabled:opacity-60"
+              >
+                <span className="flex items-center">📦 Descargar mis datos</span>
+                <span className="text-gray-400">{exporting ? 'Preparando…' : 'JSON >'}</span>
+              </button>
+
+              {/* Eliminar cuenta (derecho de supresión) */}
+              <button
+                type="button"
+                onClick={() => { triggerHaptic(); setDeleteError(null); setDeleteConfirmText(''); setDeletePassword(''); setShowDeleteModal(true); }}
+                className="w-full flex justify-between items-center p-4 text-left text-red-400 hover:bg-slate-700/50 transition cursor-pointer"
+              >
+                <span className="flex items-center">🗑️ Eliminar mi cuenta</span>
+                <span className="text-gray-400">{'>'}</span>
+              </button>
+
+              {dataFeedback && (
+                <p className={`px-4 py-3 text-xs ${dataFeedback.type === 'success' ? 'text-emerald-300' : 'text-red-300'}`}>
+                  {dataFeedback.message}
+                </p>
+              )}
+            </>
+          )}
 
           {/* Opción Panel Admin (Solo visible si es admin) */}
           {user?.is_admin && (
@@ -684,6 +776,67 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
           </button>
         </div>
       </section>
+      {/* Modal de eliminación de cuenta */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-marine-950/80 backdrop-blur-md animate-fadeIn">
+          <form
+            onSubmit={handleDeleteAccount}
+            className="bg-marine-900 border border-red-500/40 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden"
+          >
+            <div className="p-5 border-b border-marine-800 flex items-center justify-between">
+              <h3 className="text-base font-black text-white">Eliminar mi cuenta</h3>
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-marine-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-sm text-slate-300">
+              <p className="p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-xs leading-relaxed">
+                Se borrarán <strong>de inmediato y para siempre</strong> tu cuenta, tus acuarios, mediciones, tareas de mantenimiento, diagnósticos y suscripciones de notificaciones. No se puede deshacer. Si quieres conservar una copia, usa antes "Descargar mis datos".
+              </p>
+              <label className="block">
+                <span className="text-xs font-bold text-slate-400">Tu contraseña</span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="mt-1 w-full rounded-xl bg-marine-950 border border-marine-700 px-3 py-2 text-white focus:outline-none focus:border-red-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-slate-400">Escribe ELIMINAR para confirmar</span>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="mt-1 w-full rounded-xl bg-marine-950 border border-marine-700 px-3 py-2 text-white focus:outline-none focus:border-red-400"
+                />
+              </label>
+              {deleteError && <p className="text-xs text-red-300">{deleteError}</p>}
+            </div>
+            <div className="p-5 pt-0 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-xl bg-marine-800 hover:bg-marine-700 text-slate-200 text-xs font-bold transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={deleting || !deletePassword || deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR'}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Eliminando…' : 'Eliminar para siempre'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {/* Modal de Privacidad y Términos de Uso */}
       {showLegalModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-marine-950/80 backdrop-blur-md animate-fadeIn">
@@ -718,9 +871,9 @@ export default function SettingsView({ onOpenAuthModal, onOpenAdmin }) {
               </div>
 
               <div>
-                <h4 className="font-bold text-white text-sm mb-1">🛡️ Derechos del Usuario (GDPR / CCPA)</h4>
+                <h4 className="font-bold text-white text-sm mb-1">🛡️ Tus derechos sobre tus datos</h4>
                 <p className="text-xs text-slate-400">
-                  Tienes derecho a acceder a tus datos, rectificar mediciones y solicitar el borrado permanente total de tu cuenta ("Derecho al Olvido") en cualquier momento desde esta pantalla de Ajustes.
+                  Desde esta pantalla de Ajustes puedes descargar una copia de tus datos ("Descargar mis datos"), corregir tus mediciones y eliminar tu cuenta de forma inmediata y permanente ("Eliminar mi cuenta").
                 </p>
               </div>
 

@@ -215,6 +215,30 @@ export async function updateUserProfile(profileData) {
 
 // ----------------- ENDPOINTS DIRECTOS SOLICITADOS -----------------
 
+// ----------------- DERECHOS SOBRE TUS DATOS (exportar / eliminar cuenta) -----------------
+
+export async function exportUserData() {
+  const res = await authFetch('/user/export');
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'No se pudieron exportar tus datos');
+  }
+  return res.json();
+}
+
+export async function deleteUserAccount(password) {
+  const res = await authFetch('/user/account', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, grace_period_days: 0 }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(typeof errData.detail === 'string' ? errData.detail : 'No se pudo eliminar la cuenta');
+  }
+  return res.json();
+}
+
 // Usa el mismo camino que recordMeasurement para que la pestaña de tarjetas también
 // funcione sin conexión (cola en IndexedDB con client_uuid idempotente).
 export async function saveMeasurement(data) {

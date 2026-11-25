@@ -299,7 +299,8 @@ class TestAuditP2Point16:
 
     def test_delete_account_with_wrong_password_fails(self):
         res = client.request("DELETE", "/api/user/account", headers=self.headers, json={"password": "WrongPassword123!"})
-        assert res.status_code in [400, 401]
+        # 403, nunca 401: el frontend cierra la sesión ante cualquier 401.
+        assert res.status_code == 403
 
     def test_delete_account_immediate_cascades_audits_feedback_and_push(self):
         res = client.request("DELETE", "/api/user/account", headers=self.headers, json={"password": self.password, "grace_period_days": 0})

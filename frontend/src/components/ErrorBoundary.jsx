@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw, Home, ShieldAlert } from 'lucide-react';
+import { buildReportMailto } from '../utils/reportProblem';
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -78,6 +79,13 @@ export default class ErrorBoundary extends React.Component {
                 <span>Recargar Aplicación</span>
               </button>
             </div>
+
+            <a
+              href={buildReportMailto({ error: this.state.error })}
+              className="inline-block text-xs font-semibold text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+            >
+              Reportar este error
+            </a>
           </div>
         </div>
       );

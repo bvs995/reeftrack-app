@@ -58,6 +58,33 @@ class TestAuditP3Point18:
         for name in ("PRIVACY.md", "TERMS.md"):
             assert any(name in l for l in copy_lines), f"El Dockerfile debe copiar {name} a /app"
 
+    def test_privacy_matches_what_the_app_does(self):
+        """La política debe nombrar a todos los proveedores que tratan datos y los derechos
+        que promete deben existir de verdad en Ajustes (exportar y eliminar cuenta)."""
+        privacy = (REPO_ROOT / "PRIVACY.md").read_text(encoding="utf-8")
+        for provider in ("Supabase", "Render", "Vercel", "Resend", "Cloudflare", "Gemini"):
+            assert provider in privacy, f"PRIVACY.md debe mencionar a {provider}"
+        assert "IP" in privacy, "PRIVACY.md debe informar que se guardan IPs para seguridad"
+
+        settings = (REPO_ROOT / "frontend" / "src" / "components" / "SettingsView.jsx").read_text(encoding="utf-8")
+        assert "exportUserData" in settings and "Descargar mis datos" in settings
+        assert "deleteUserAccount" in settings and "Eliminar mi cuenta" in settings
+        for doc in ("PRIVACY.md", "TERMS.md"):
+            text = (REPO_ROOT / doc).read_text(encoding="utf-8")
+            assert "Descargar mis datos" in text and "Eliminar mi cuenta" in text, f"{doc} debe indicar dónde exportar y eliminar"
+
+    def test_beta_terms_and_problem_reporting(self):
+        """Durante la prueba pública: los términos avisan que es beta (errores, datos que pueden
+        perderse) y la app ofrece "Reportar un problema" en Ajustes y en la pantalla de error."""
+        terms = (REPO_ROOT / "TERMS.md").read_text(encoding="utf-8")
+        assert "Versión de prueba" in terms and "perderse" in terms
+        assert "Reportar un problema" in terms
+
+        src = REPO_ROOT / "frontend" / "src"
+        assert "support@aquareef.app" in (src / "utils" / "reportProblem.js").read_text(encoding="utf-8")
+        assert "buildReportMailto" in (src / "components" / "SettingsView.jsx").read_text(encoding="utf-8")
+        assert "buildReportMailto" in (src / "components" / "ErrorBoundary.jsx").read_text(encoding="utf-8")
+
     def test_auth_modal_links_to_public_legal_pages(self):
         """El aviso del registro debe enlazar a las páginas públicas, no ser texto plano."""
         auth = (REPO_ROOT / "frontend" / "src" / "components" / "AuthModal.jsx").read_text(encoding="utf-8")

@@ -652,7 +652,8 @@ export default function AuthModal({ isOpen, onClose }) {
               Al registrarte aceptas los{' '}
               <a href="/terminos" target="_blank" rel="noopener noreferrer" className="text-cyan-400 font-semibold underline underline-offset-2 hover:text-cyan-300">Términos de Uso</a>
               {' '}y la{' '}
-              <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-cyan-400 font-semibold underline underline-offset-2 hover:text-cyan-300">Política de Privacidad</a>. Los diagnósticos emitidos por el sistema e IA son de carácter estrictamente orientativo.
+              <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-cyan-400 font-semibold underline underline-offset-2 hover:text-cyan-300">Política de Privacidad</a>.
+              {' '}AquaReef está en <strong className="text-slate-300">versión de prueba</strong>: puede tener errores y tus datos podrían reiniciarse. Los diagnósticos emitidos por el sistema e IA son de carácter estrictamente orientativo.
             </p>
           )}
         </form>
