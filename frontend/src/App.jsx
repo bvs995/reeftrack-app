@@ -169,7 +169,9 @@ function AppContent() {
   };
 
   // Sincronización automática de cola offline de mediciones (PWA Fase 5)
+  // Solo con sesión: sin token, el envío daría 401 y dispararía un cierre de sesión.
   useEffect(() => {
+    if (!isAuthenticated) return;
     import('./utils/offlineQueue').then(({ flushOfflineQueue }) => {
       flushOfflineQueue();
     }).catch(() => {});

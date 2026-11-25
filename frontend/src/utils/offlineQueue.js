@@ -75,16 +75,15 @@ export async function enqueueOfflineMeasurement(tankId, measurementData) {
 
     console.info(`[AquaPulse PWA] Medición encolada offline (ID: ${clientUuid})`);
 
-    // Intentar registrar Background Sync en el Service Worker si está soportado
+    // Intentar registrar Background Sync en el Service Worker si está soportado. Sin await:
+    // serviceWorker.ready no se resuelve nunca si no hay SW registrado (primera visita,
+    // desarrollo, registro fallido) y bloquearía el guardado. El evento 'online' es el respaldo.
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
-      try {
-        const reg = await navigator.serviceWorker.ready;
-        if (reg && reg.sync) {
-          await reg.sync.register('sync-offline-measurements');
-        }
-      } catch (syncErr) {
-        console.debug('[AquaPulse PWA] Background Sync no registrado (fallback a evento online):', syncErr);
-      }
+      navigator.serviceWorker.ready
+        .then((reg) => (reg && reg.sync ? reg.sync.register('sync-offline-measurements') : null))
+        .catch((syncErr) => {
+          console.debug('[AquaPulse PWA] Background Sync no registrado (fallback a evento online):', syncErr);
+        });
     }
 
     notifyQueueUpdated();
@@ -134,6 +133,23 @@ export async function removeOfflineMeasurement(clientUuid) {
 }
 
 /**
+ * Guarda (o reemplaza) un registro de la cola, p. ej. para persistir retry_count.
+ */
+async function saveQueueRecord(record) {
+  try {
+    const db = await openOfflineDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const req = tx.objectStore(STORE_NAME).put(record);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.error(`[AquaPulse PWA] Error al actualizar medición en cola (${record.client_uuid}):`, err);
+  }
+}
+
+/**
  * Notifica a los componentes visuales mediante un CustomEvent.
  */
 async function notifyQueueUpdated() {
@@ -158,29 +174,32 @@ export async function flushOfflineQueue(sendFn) {
   console.info(`[AquaPulse PWA] Vaciando cola offline (${queue.length} mediciones pendientes)...`);
   let syncedCount = 0;
 
+  // Importación dinámica para evitar ciclos de import. sendQueuedMeasurement no vuelve a
+  // encolar si falla: así un error de red no se confunde con un envío exitoso.
+  const { sendQueuedMeasurement, isNetworkError } = await import('../api');
+  const send = sendFn || sendQueuedMeasurement;
+
   for (const item of queue) {
     try {
-      if (sendFn) {
-        await sendFn(item.tank_id, item.payload);
-      } else {
-        // Importación dinámica para evitar ciclos de import
-        const { recordTankMeasurement } = await import('../api');
-        await recordTankMeasurement(item.tank_id, item.payload);
-      }
+      await send(item.tank_id, item.payload);
       await removeOfflineMeasurement(item.client_uuid);
       syncedCount++;
       console.info(`[AquaPulse PWA] Medición sincronizada con éxito (${item.client_uuid})`);
     } catch (err) {
       console.warn(`[AquaPulse PWA] Error al sincronizar medición ${item.client_uuid}:`, err);
-      // Si el error no es de red (ej. tanque no existe 404), evitar bucle infinito aumentando retry
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('Network')) {
-        item.retry_count = (item.retry_count || 0) + 1;
-        if (item.retry_count > 5) {
-          console.error(`[AquaPulse PWA] Descartando medición corrupta tras 5 reintentos (${item.client_uuid})`);
-          await removeOfflineMeasurement(item.client_uuid);
-        }
+      // Sin red o sesión vencida: detener y reintentar en el próximo evento online / login.
+      if (isNetworkError(err) || err.status === 401) {
+        break;
       }
-      break; // Detener bucle si se detecta falla de conectividad
+      // El servidor la rechazó (p. ej. 404 o 422): contar el reintento y guardarlo, y
+      // descartarla tras 5 para no bloquear el resto de la cola.
+      item.retry_count = (item.retry_count || 0) + 1;
+      if (item.retry_count > 5) {
+        console.error(`[AquaPulse PWA] Descartando medición rechazada tras 5 reintentos (${item.client_uuid})`);
+        await removeOfflineMeasurement(item.client_uuid);
+      } else {
+        await saveQueueRecord(item);
+      }
     }
   }
 
