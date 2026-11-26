@@ -1,0 +1,43 @@
+name: Keep-alive (Render + Supabase)
+
+# Durante la prueba pública: el plan gratuito de Render duerme el servicio tras ~15 min sin
+# tráfico (el primer visitante esperaría ~50 s) y Supabase gratuito pausa el proyecto tras una
+# semana sin actividad. /api/health consulta la base, así que este ping mantiene despiertos a ambos.
+#
+# Notas:
+# - GitHub puede retrasar los cron unos minutos en horas de carga; casi siempre basta.
+# - En repos públicos GitHub desactiva los workflows programados tras 60 días sin actividad en el
+#   repo; si pasa, se reactiva desde la pestaña Actions.
+# - Si el ping falla 3 veces seguidas, el job falla y GitHub te avisa por correo: sirve también
+#   como alerta de caída.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /api/health
+        run: |
+          url="https://reeftrack-api.onrender.com/api/health"
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 90 "$url" || true)
+            if [ "$code" = "200" ]; then
+              echo "OK ($code) en el intento $i"
+              exit 0
+            fi
+            echo "Intento $i: HTTP $code"
+            sleep 15
+          done
+          echo "::error::$url no respondió 200 tras 3 intentos"
+          exit 1
