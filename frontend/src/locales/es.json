@@ -223,7 +223,7 @@
     "headerSubtitle": "Gestión predictiva y biometría para acuarios de arrecife",
     "loginTab": "Iniciar Sesión",
     "registerTab": "Crear Cuenta",
-    "nameLabel": "Nombre de Acuarista",
+    "nameLabel": "Nombre de Acuarista (opcional)",
     "namePlaceholder": "Ej: Alex Valadez",
     "emailLabel": "Correo Electrónico",
     "passLabel": "Contraseña",
