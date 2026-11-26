@@ -1,5 +1,5 @@
-const CACHE_NAME = 'aquapulse-cache-v7';
-const APP_SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE_NAME = 'aquapulse-cache-v8';
+const APP_SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
   // Guardar el esqueleto de la app para poder abrirla sin conexión.
