@@ -4,9 +4,14 @@ import React, { useEffect, useState } from 'react';
 // El texto vive en PRIVACY.md y TERMS.md y lo sirve el backend en /api/legal/*.
 // Sirve también como URL pública de privacidad para Google Play.
 
+// Incluida en el frontend (no se pide al backend) para que abra al instante aunque el servidor
+// esté dormido: es la "URL de eliminación de cuenta" que Google Play muestra en la ficha.
+import deletionMarkdown from '../legal/eliminar-cuenta.md?raw';
+
 const DOCS = {
   privacy: { endpoint: '/api/legal/privacy', title: 'Política de Privacidad' },
   terms: { endpoint: '/api/legal/terms', title: 'Términos de Uso' },
+  deletion: { content: deletionMarkdown, title: 'Eliminar tu cuenta' },
 };
 
 const LEGAL_PATHS = {
@@ -14,6 +19,8 @@ const LEGAL_PATHS = {
   '/privacy': 'privacy',
   '/terminos': 'terms',
   '/terms': 'terms',
+  '/eliminar-cuenta': 'deletion',
+  '/delete-account': 'deletion',
 };
 
 export function legalDocForPath(pathname) {
@@ -148,17 +155,21 @@ export default function LegalPage({ doc }) {
 
   useEffect(() => {
     document.title = `${meta.title} | AquaReef`;
+    if (meta.content !== undefined) {
+      setContent(meta.content);
+      return undefined;
+    }
     let cancelled = false;
     fetch(meta.endpoint)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data) => { if (!cancelled) setContent(data.content || ''); })
       .catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; };
-  }, [meta.endpoint, meta.title]);
+  }, [meta.endpoint, meta.content, meta.title]);
 
-  const other = doc === 'terms'
-    ? { href: '/privacidad', label: 'Política de Privacidad' }
-    : { href: '/terminos', label: 'Términos de Uso' };
+  const other = doc === 'privacy'
+    ? { href: '/terminos', label: 'Términos de Uso' }
+    : { href: '/privacidad', label: 'Política de Privacidad' };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">

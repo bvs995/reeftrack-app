@@ -85,6 +85,17 @@ class TestAuditP3Point18:
         assert "buildReportMailto" in (src / "components" / "SettingsView.jsx").read_text(encoding="utf-8")
         assert "buildReportMailto" in (src / "components" / "ErrorBoundary.jsx").read_text(encoding="utf-8")
 
+    def test_account_deletion_page_meets_play_requirements(self):
+        """Google Play exige una URL que nombre la app/desarrollador, explique los pasos para
+        borrar la cuenta y diga qué datos se borran o conservan y por cuánto tiempo."""
+        src = REPO_ROOT / "frontend" / "src"
+        page = (src / "legal" / "eliminar-cuenta.md").read_text(encoding="utf-8")
+        for needle in ("AquaReef", "Pixel Reef Studio", "Eliminar mi cuenta", "privacy@aquareef.app",
+                       "Qué datos se eliminan", "Qué datos se conservan", "2 horas"):
+            assert needle in page, f"eliminar-cuenta.md debe incluir: {needle}"
+        legal = (src / "components" / "LegalPage.jsx").read_text(encoding="utf-8")
+        assert "'/eliminar-cuenta': 'deletion'" in legal
+
     def test_auth_modal_links_to_public_legal_pages(self):
         """El aviso del registro debe enlazar a las páginas públicas, no ser texto plano."""
         auth = (REPO_ROOT / "frontend" / "src" / "components" / "AuthModal.jsx").read_text(encoding="utf-8")
