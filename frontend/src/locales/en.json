@@ -223,7 +223,7 @@
     "headerSubtitle": "Predictive biometrics & telemetry for reef aquariums",
     "loginTab": "Log In",
     "registerTab": "Create Account",
-    "nameLabel": "Aquarist Name",
+    "nameLabel": "Aquarist Name (optional)",
     "namePlaceholder": "e.g., Alex Valadez",
     "emailLabel": "Email Address",
     "passLabel": "Password",
