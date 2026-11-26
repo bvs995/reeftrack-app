@@ -109,6 +109,8 @@ Tienes derecho de **acceso, rectificación, cancelación (borrado) y oposición*
 3. **Cancelación (borrado)**: en **Ajustes → Eliminar mi cuenta** borras de forma **inmediata y permanente** tu cuenta y todos tus datos asociados (acuarios, mediciones, tareas, diagnósticos, reportes, sesiones y suscripciones push). Se pide tu contraseña para confirmar. Técnicamente, la app usa la operación `DELETE /api/user/account`.
 4. **Oposición y retiro del consentimiento**: puedes desactivar las notificaciones push en cualquier momento, no usar el escaneo con cámara, o escribirnos.
 
+Los pasos detallados para borrar tu cuenta o parte de tus datos están en [Eliminar tu cuenta](/eliminar-cuenta).
+
 Para cualquier solicitud que no puedas hacer desde la app, escribe a `privacy@aquareef.app` desde el correo de tu cuenta, indicando qué derecho quieres ejercer. Te responderemos en los plazos que marca la ley.
 
 <!-- NOTA PARA REVISIÓN LEGAL: precisar plazos de respuesta ARCO y requisitos de identificación según la LFPDPPP vigente. -->
